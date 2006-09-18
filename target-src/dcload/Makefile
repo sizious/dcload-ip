@@ -16,7 +16,7 @@ EXCOBJECTS	= exception.o
 %.o : %.S
 	$(CC) $(CFLAGS) $(INCLUDE) -o $@ -c $< 
 %.bin: %
-	$(OBJCOPY) -O binary $< $@    
+	$(OBJCOPY) -R .stack -O binary $< $@    
 
 all: dcload.bin exception.bin
 

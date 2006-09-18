@@ -446,13 +446,13 @@ unsigned int upload(unsigned char *filename, unsigned int address)
 		if ((section->flags & SEC_HAS_CONTENTS) && (section->flags & SEC_LOAD)) {
 		    printf("Section %s, ",section->name);
 		    printf("lma 0x%x, ",section->lma);
-		    printf("size %d\n",section->size);
-		    if (section->size) {
-			size += section->size;
-			inbuf = malloc(section->size);
-			bfd_get_section_contents(somebfd, section, inbuf, 0, section->size);
+		    printf("size %d\n",section->_raw_size);
+		    if (section->_raw_size) {
+			size += section->_raw_size;
+			inbuf = malloc(section->_raw_size);
+			bfd_get_section_contents(somebfd, section, inbuf, 0, section->_raw_size);
 
-			send_data(inbuf, section->lma, section->size);
+			send_data(inbuf, section->lma, section->_raw_size);
 
 			free(inbuf);
 		    }
