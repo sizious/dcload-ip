@@ -6,7 +6,7 @@ INCLUDE	= -I$(BFDINCLUDE)
 
 DCTOOL	= dc-tool$(EXECUTABLEEXTENSION)
 
-OBJECTS	= dc-tool.o syscalls.o
+OBJECTS	= dc-tool.o syscalls.o unlink.o
 
 .c.o:
 	$(CC) $(CFLAGS) $(INCLUDE) -o $@ -c $< 
