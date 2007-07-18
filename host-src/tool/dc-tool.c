@@ -24,8 +24,8 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef _WIN32
 #include <string.h>
+#ifdef _WIN32
 #include <windows.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -446,13 +446,13 @@ unsigned int upload(unsigned char *filename, unsigned int address)
 		if ((section->flags & SEC_HAS_CONTENTS) && (section->flags & SEC_LOAD)) {
 		    printf("Section %s, ",section->name);
 		    printf("lma 0x%x, ",section->lma);
-		    printf("size %d\n",section->_raw_size);
-		    if (section->_raw_size) {
-			size += section->_raw_size;
-			inbuf = malloc(section->_raw_size);
-			bfd_get_section_contents(somebfd, section, inbuf, 0, section->_raw_size);
+		    printf("size %d\n",bfd_section_size(somebfd, section));
+		    if (bfd_section_size(somebfd, section)) {
+			size += bfd_section_size(somebfd, section);
+			inbuf = malloc(bfd_section_size(somebfd, section));
+			bfd_get_section_contents(somebfd, section, inbuf, 0, bfd_section_size(somebfd, section));
 
-			send_data(inbuf, section->lma, section->_raw_size);
+			send_data(inbuf, section->lma, bfd_section_size(somebfd, section));
 
 			free(inbuf);
 		    }

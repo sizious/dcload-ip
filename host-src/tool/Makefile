@@ -18,6 +18,7 @@ $(DCTOOL): $(OBJECTS)
 
 .PHONY : install
 install: $(DCTOOL)
+	-mkdir $(TOOLINSTALLDIR)
 	cp $(DCTOOL) $(TOOLINSTALLDIR)
 
 .PHONY : clean
