@@ -35,10 +35,15 @@
 #include <unistd.h>
 #include <utime.h>
 #endif
+#ifdef __MINGW32__
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#endif
 
 #include "syscalls.h"
 #include "dc-io.h"
@@ -350,7 +355,9 @@ void usage(void)
     printf("-t <ip>       Communicate with <ip> (default is: %s)\n",DREAMCAST_IP);
     printf("-n            Do not attach console and fileserver\n");
     printf("-q            Do not clear screen before download\n");
+#ifndef __MINGW32__
     printf("-c <path>     Chroot to <path> (must be super-user)\n");
+#endif
     printf("-i <isofile>  Enable cdfs redirection using iso image <isofile>\n");
     printf("-r            Reset (only works when dcload is in control)\n");
     printf("-g            Start a GDB server\n");
@@ -388,7 +395,12 @@ int open_socket(unsigned char *hostname)
 	return -1;
     }
 
+#ifdef __MINGW32__
+    unsigned long flags = 1;
+    ioctlsocket(dcsocket, FIONBIO, &flags);
+#else
     fcntl(dcsocket, F_SETFL, O_NONBLOCK);
+#endif
 }
 
 int recv_response(unsigned char *buffer, int timeout)
@@ -561,10 +573,12 @@ void do_console(unsigned char *path, unsigned char *isofile)
 	if (isofd < 0)
 	    perror(isofile);
     }
-	
+
+#ifndef __MINGW32__	
     if (path)
 	if (chroot(path))
 	    perror(path);
+#endif
 
     while (1) {
 	fflush(stdout);
@@ -657,7 +671,11 @@ int main(int argc, char *argv[])
     if (argc < 2)
 	usage();
 
+#ifdef __MINGW32__
+    someopt = getopt(argc, argv, "x:u:d:a:s:t:i:npqhrg");
+#else
     someopt = getopt(argc, argv, "x:u:d:a:s:t:c:i:npqhrg");
+#endif
     while (someopt > 0) {
 	switch (someopt) {
 	case 'x':
@@ -687,10 +705,12 @@ int main(int argc, char *argv[])
 	    filename = malloc(strlen(optarg) + 1);
 	    strcpy(filename, optarg);
 	    break;
+#ifndef __MINGW32__
 	case 'c':
 	    path = malloc(strlen(optarg) + 1);
 	    strcpy(path, optarg);
 	    break;
+#endif
 	case 'i':
 	    cdfs_redir = 1;
 	    isofile = malloc(strlen(optarg) + 1);
@@ -729,7 +749,11 @@ int main(int argc, char *argv[])
 	default:
 	    break;
 	}
+#ifdef __MINGW32__
+	someopt = getopt(argc, argv, "x:u:d:a:s:t:i:nqhr");
+#else
 	someopt = getopt(argc, argv, "x:u:d:a:s:t:c:i:nqhr");
+#endif
     }
 
     if (cdfs_redir & (!console))
@@ -741,8 +765,10 @@ int main(int argc, char *argv[])
     if (quiet)
 	printf("Quiet download\n");
 
+#ifndef __MINGW32__
     if (path)
 	printf("Chroot enabled\n");
+#endif
 
     if (cdfs_redir & command=='x')
 	printf("Cdfs redirection enabled\n");

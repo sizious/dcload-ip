@@ -28,6 +28,9 @@
 #include <unistd.h>
 #include <utime.h>
 #include <dirent.h>
+#ifdef __MINGW32__
+#include <windows.h>
+#endif
 #include "syscalls.h"
 #include "dc-io.h"
 #include "dcload-types.h"
@@ -71,8 +74,10 @@ void dc_fstat(unsigned char * buffer)
     dcstat.st_gid = dc_order(filestat.st_gid);
     dcstat.st_rdev = dc_order(filestat.st_rdev);
     dcstat.st_size = dc_order(filestat.st_size);
+#ifndef __MINGW32__
     dcstat.st_blksize = dc_order(filestat.st_blksize);
     dcstat.st_blocks = dc_order(filestat.st_blocks);
+#endif
     dcstat.st_atime_priv = dc_order(filestat.st_atime);
     dcstat.st_mtime_priv = dc_order(filestat.st_mtime);
     dcstat.st_ctime_priv = dc_order(filestat.st_ctime);
@@ -178,7 +183,12 @@ void dc_link(unsigned char * buffer)
     pathname1 = command->string;
     pathname2 = &command->string[strlen(command->string)+1];
 
+#ifdef __MINGW32__
+    /* Copy the file on Windows */
+    retval = CopyFileA(pathname1, pathname2, 0);
+#else
     retval = link(pathname1, pathname2);
+#endif
 
     send_command(CMD_RETVAL, retval, retval, NULL, 0);
 }
@@ -252,8 +262,10 @@ void dc_stat(unsigned char * buffer)
     dcstat.st_gid = dc_order(filestat.st_gid);
     dcstat.st_rdev = dc_order(filestat.st_rdev);
     dcstat.st_size = dc_order(filestat.st_size);
+#ifndef __MINGW32__
     dcstat.st_blksize = dc_order(filestat.st_blksize);
     dcstat.st_blocks = dc_order(filestat.st_blocks);
+#endif
     dcstat.st_atime_priv = dc_order(filestat.st_atime);
     dcstat.st_mtime_priv = dc_order(filestat.st_mtime);
     dcstat.st_ctime_priv = dc_order(filestat.st_ctime);
