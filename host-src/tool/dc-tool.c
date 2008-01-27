@@ -574,7 +574,7 @@ void do_console(unsigned char *path, unsigned char *isofile)
 	    perror(isofile);
     }
 
-#ifndef __MINGW32__	
+#ifndef __MINGW32__
     if (path)
 	if (chroot(path))
 	    perror(path);
