@@ -13,7 +13,7 @@ typedef struct {
 
 /* dcload stat */
 
-typedef struct { 
+typedef struct {
   unsigned short st_dev;
   unsigned short st_ino;
   int st_mode;
@@ -34,5 +34,4 @@ typedef struct {
 } dcload_stat_t;
 
 #endif
-
 

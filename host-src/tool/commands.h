@@ -1,12 +1,14 @@
 #ifndef __COMMANDS_H__
 #define __COMMANDS_H__
 
-typedef struct {
-  unsigned char id[4] __attribute__ ((packed));
-  unsigned int address __attribute__ ((packed));
-  unsigned int size __attribute__ ((packed));
-  unsigned char data[1] __attribute__ ((packed));
-} command_t;
+struct _command_t {
+	unsigned char id[4];
+	unsigned int address;
+	unsigned int size;
+	unsigned char data[1];
+} __attribute__ ((packed));
+
+typedef struct _command_t command_t;
 
 #define CMD_EXECUTE  "EXEC" /* execute */
 #define CMD_LOADBIN  "LBIN" /* begin receiving binary */
@@ -23,3 +25,4 @@ typedef struct {
 #define COMMAND_LEN  12
 
 #endif
+

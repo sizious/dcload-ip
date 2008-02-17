@@ -1,4 +1,4 @@
-/* 
+/*
  * dc-tool, a tool for use with the dcload ethernet loader
  *
  * Copyright (C) 2001 Andrew Kieschnick <andrewk@austin.rr.com>
@@ -10,7 +10,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -27,18 +27,12 @@
 #include <string.h>
 #ifdef _WIN32
 #include <windows.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <utime.h>
-#else
-#include <sys/time.h>
-#include <unistd.h>
-#include <utime.h>
 #endif
-#ifdef __MINGW32__
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
+#include <sys/time.h>
+#include <unistd.h>
+#include <utime.h>
+#ifndef __MINGW32__
+#include <errno.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -50,7 +44,10 @@
 #include "commands.h"
 
 int _nl_msg_cat_cntr;
-int gdb_server_socket = -1;
+
+#define DEBUG(x, ...) fprintf(stderr, "DEBUG: "); fprintf(stderr, x, __VA_ARGS__)
+
+#define CatchError(x) if(x) return -1;
 
 #define VERSION DCLOAD_VERSION
 
@@ -66,7 +63,7 @@ int gdb_server_socket = -1;
 
 /*
  * Copyright (c) 1987, 1993, 1994
- *      The Regents of the University of California.  All rights reserved.
+ * The Regents of the University of California. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -78,8 +75,8 @@ int gdb_server_socket = -1;
  *    documentation and/or other materials provided with the distribution.
  * 3. All advertising materials mentioning features or use of this software
  *    must display the following acknowledgement:
- *      This product includes software developed by the University of
- *      California, Berkeley and its contributors.
+ *    This product includes software developed by the University of
+ *    California, Berkeley and its contributors.
  * 4. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
@@ -87,7 +84,7 @@ int gdb_server_socket = -1;
  * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -99,7 +96,7 @@ int gdb_server_socket = -1;
 
 #if defined(LIBC_SCCS) && !defined(lint)
 #if 0
-static char sccsid[] = "@(#)getopt.c    8.3 (Berkeley) 4/27/95";
+static char sccsid[] = "@(#)getopt.c 8.3 (Berkeley) 4/27/95";
 #endif
 static const char rcsid[] = "$FreeBSD$";
 #endif /* LIBC_SCCS and not lint */
@@ -114,17 +111,12 @@ char    *optarg;                /* argument associated with option */
 #define BADARG  (int)':'
 #define EMSG    ""
 
-char *__progname="prboom_server";
+char *__progname="dc-tool";
 
 /*
- * getopt --
- *      Parse argc/argv argument vector.
+ * getopt -- Parse argc/argv argument vector.
  */
-int
-getopt(nargc, nargv, ostr)
-        int nargc;
-        char * const *nargv;
-        const char *ostr;
+int getopt(int nargc, char * const *nargv, const char *ostr)
 {
         extern char *__progname;
         static char *place = EMSG;              /* option letter processing */
@@ -157,7 +149,7 @@ getopt(nargc, nargv, ostr)
                         (void)fprintf(stderr,
                             "%s: illegal option -- %c\n", __progname, optopt);
                 return (BADCH);
-        }
+       }
         if (*++oli != ':') {                    /* don't need argument */
                 optarg = NULL;
                 if (!*place)
@@ -171,7 +163,7 @@ getopt(nargc, nargv, ostr)
                         if (*ostr == ':')
                                 ret = BADARG;
                         else
-                                ret = BADCH;
+                               ret = BADCH;
                         if (opterr)
                                 (void)fprintf(stderr,
                                     "%s: option requires an argument -- %c\n",
@@ -185,9 +177,32 @@ getopt(nargc, nargv, ostr)
         }
         return (optopt);                        /* dump back option letter */
 }
-#else
-#include <unistd.h>
 #endif
+
+#ifndef __MINGW32__
+int dcsocket = 0;
+int gdb_server_socket = -1;
+#else
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
+SOCKET dcsocket = 0;
+SOCKET gdb_server_socket = -1;
+#endif
+
+void cleanup(char **fnames)
+{
+    int counter = 0;
+
+    for(; counter < 4; counter++)
+	if(fnames[counter] != 0)
+	    free(fnames[counter]);
+    if(dcsocket)
+#ifndef __MINGW32__
+    close(dcsocket);
+#else
+    closesocket(dcsocket);
+    WSACleanup();
+#endif
+}
 
 extern char *optarg;
 
@@ -200,13 +215,11 @@ unsigned int time_in_usec()
     return (unsigned int)(thetime.tv_sec * 1000000) + (unsigned int)thetime.tv_usec;
 }
 
-int dcsocket;
-
 /* 250000 = 0.25 seconds */
 #define PACKET_TIMEOUT 250000
 
 /* receive total bytes from dc and store in data */
-void recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int quiet)
+int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int quiet)
 {
     unsigned char buffer[2048];
     unsigned char *i;
@@ -218,24 +231,31 @@ void recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int
 
     memset(map, 0, (total+1023)/1024);
 
-    if (!quiet)
-	send_command(CMD_SENDBIN, dcaddr, total, NULL, 0);
-    else
-	send_command(CMD_SENDBINQ, dcaddr, total, NULL, 0);
-    
+    if (!quiet) {
+	send_cmd(CMD_SENDBIN, dcaddr, total, NULL, 0);
+    }
+    else {
+	send_cmd(CMD_SENDBINQ, dcaddr, total, NULL, 0);
+    }
+
     start = time_in_usec();
 
     while (((time_in_usec() - start) < PACKET_TIMEOUT)&&(packets < ((total+1023)/1024 + 1))) {
 	memset(buffer, 0, 2048);
-	while(((retval = read(dcsocket, buffer, 2048)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+	
+	while(((retval = recv(dcsocket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+	
 	if (retval > 0) {
 	    start = time_in_usec();
 	    if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4)) {
 		if ( ((ntohl(((command_t *)buffer)->address) - dcaddr)/1024) >= ((total + 1024)/1024) ) {
-		    printf("Obviously bad packet, avoiding segfault\n"); fflush(stdout);
-		} else {
+		    printf("Obviously bad packet, avoiding segfault\n");
+		    fflush(stdout);
+		}
+		else {
 		    map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1024 ] = 1;
 		    i = data + (ntohl(((command_t *)buffer)->address) - dcaddr);
+
 		    memcpy(i, buffer + 12, ntohl(((command_t *)buffer)->size));
 	        }
 	    }
@@ -245,60 +265,74 @@ void recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int
 
     for(c = 0; c < (total+1023)/1024; c++)
 	if (!map[c]) {
-	    if ( (total - c*1024) >= 1024)
-		send_command(CMD_SENDBINQ, dcaddr + c*1024, 1024, NULL, 0);
-	    else
-		send_command(CMD_SENDBINQ, dcaddr + c*1024, total - c*1024, NULL, 0);
+	    if ( (total - c*1024) >= 1024) {
+		send_cmd(CMD_SENDBINQ, dcaddr + c*1024, 1024, NULL, 0);
+	    }
+	    else {
+		send_cmd(CMD_SENDBINQ, dcaddr + c*1024, total - c*1024, NULL, 0);
+	    }
+	    
 	    start = time_in_usec();
-	    while(((retval = read(dcsocket, buffer, 2048)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+	    while(((retval = recv(dcsocket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+	    
 	    if (retval > 0) {
 		start = time_in_usec();
+		
 		if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4)) {
 		    map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1024 ] = 1;
 		    /* printf("recv_data: got chunk for %p, %d bytes\n",
-		      (void *)ntohl(((command_t *)buffer)->address), ntohl(((command_t *)buffer)->size)); */
+			(void *)ntohl(((command_t *)buffer)->address), ntohl(((command_t *)buffer)->size)); */
 		    i = data + (ntohl(((command_t *)buffer)->address) - dcaddr);
+
 		    memcpy(i, buffer + 12, ntohl(((command_t *)buffer)->size));
 		}
 
 		// Get the DONEBIN
-		while(((retval = read(dcsocket, buffer, 2048)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+		while(((retval = recv(dcsocket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
 	    }
 
 	    // Force us to go back and recheck
 	    // XXX This should be improved after recv_data can return errors.
 	    c = -1;
 	}
+
+    free(map);
+    
+    return 0;
 }
 
 /* send size bytes to dc from addr to dcaddr*/
-void send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
+int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
 {
-    unsigned char buffer[2048];
-    unsigned char * i;
+    unsigned char buffer[2048] = {0};
+    unsigned char * i = 0;
     unsigned int a = dcaddr;
-    unsigned int start;
+    unsigned int start = 0;
     int count = 0;
 
     if (!size)
-	return;
+	return -1;
 
     do
-	send_command(CMD_LOADBIN, dcaddr, size, NULL, 0);
+    {
+	send_cmd(CMD_LOADBIN, dcaddr, size, NULL, 0);
+    }
     while(recv_response(buffer, PACKET_TIMEOUT) == -1);
 
     while(memcmp(((command_t *)buffer)->id, CMD_LOADBIN, 4)) {
 	printf("send_data: error in response to CMD_LOADBIN, retrying... %c%c%c%c\n",buffer[0],buffer[1],buffer[2],buffer[3]);
 	do
-	    send_command(CMD_LOADBIN, dcaddr, size, NULL, 0);
+	    send_cmd(CMD_LOADBIN, dcaddr, size, NULL, 0);
 	while (recv_response(buffer, PACKET_TIMEOUT) == -1);
     }
 
     for(i = addr; i < addr + size; i += 1024) {
-	if (((addr + size) - i) >= 1024)
-	    send_command(CMD_PARTBIN, dcaddr, 1024, i, 1024);
-	else
-	    send_command(CMD_PARTBIN, dcaddr, (addr + size) - i, i, (addr + size) - i);
+	if ((addr + size - i) >= 1024) {
+	    send_cmd(CMD_PARTBIN, dcaddr, 1024, i, 1024);
+	}
+	else {
+	    send_cmd(CMD_PARTBIN, dcaddr, (addr + size) - i, i, (addr + size) - i);
+	}
 	dcaddr += 1024;
 
 	/* give the DC a chance to empty its rx fifo
@@ -308,8 +342,8 @@ void send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
 	if (count == 15) {
 	    start = time_in_usec();
 	    while ((time_in_usec() - start) < PACKET_TIMEOUT/51);
-	    count = 0;
-	}
+		count = 0;
+	    }
     }
 
     start = time_in_usec();
@@ -317,31 +351,35 @@ void send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
     while ((time_in_usec() - start) < PACKET_TIMEOUT/10);
 
     do
-	send_command(CMD_DONEBIN, 0, 0, NULL, 0);
+	send_cmd(CMD_DONEBIN, 0, 0, NULL, 0);
     while (recv_response(buffer, PACKET_TIMEOUT) == -1);
 
     while(memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4)) {
 	printf("send_data: error in response to CMD_DONEBIN, retrying...\n");
+
 	do
-	    send_command(CMD_LOADBIN, dcaddr, size, NULL, 0);
+	    send_cmd(CMD_LOADBIN, dcaddr, size, NULL, 0);
 	while (recv_response(buffer, PACKET_TIMEOUT) == -1);
     }
 
     while ( ntohl(((command_t *)buffer)->size) != 0) {
-/*	printf("%d bytes at 0x%x were missing, resending\n", ntohl(((command_t *)buffer)->size),ntohl(((command_t *)buffer)->address));  */
-	send_command(CMD_PARTBIN, ntohl(((command_t *)buffer)->address), ntohl(((command_t *)buffer)->size), addr + (ntohl(((command_t *)buffer)->address) - a), ntohl(((command_t *)buffer)->size));
+/*	printf("%d bytes at 0x%x were missing, resending\n", ntohl(((command_t *)buffer)->size),ntohl(((command_t *)buffer)->address)); */
+	send_cmd(CMD_PARTBIN, ntohl(((command_t *)buffer)->address), ntohl(((command_t *)buffer)->size), addr + (ntohl(((command_t *)buffer)->address) - a), ntohl(((command_t *)buffer)->size));
 
 	do
-	    send_command(CMD_DONEBIN, 0, 0, NULL, 0);
+	    send_cmd(CMD_DONEBIN, 0, 0, NULL, 0);
 	while (recv_response(buffer, PACKET_TIMEOUT) == -1);
-	
+
 	while(memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4)) {
 	    printf("send_data: error in response to CMD_DONEBIN, retrying...\n");
+	    
 	    do
-		send_command(CMD_LOADBIN, dcaddr, size, NULL, 0);
+		send_cmd(CMD_LOADBIN, dcaddr, size, NULL, 0);
 	    while (recv_response(buffer, PACKET_TIMEOUT) == -1);
 	}
     }
+    
+    return 0;
 }
 
 void usage(void)
@@ -362,17 +400,36 @@ void usage(void)
     printf("-r            Reset (only works when dcload is in control)\n");
     printf("-g            Start a GDB server\n");
     printf("-h            Usage information (you\'re looking at it)\n\n");
-    exit(0);
 }
 
-int open_socket(unsigned char *hostname)
+/* Got to make sure WinSock is initalized */
+#ifdef __MINGW32__
+int start_ws()
+{
+    WSADATA wsaData;
+    int failed = 0;
+    failed = WSAStartup(MAKEWORD(2,2), &wsaData);
+    if ( failed != NO_ERROR ) {
+	perror("WSAStartup");
+	return 1;
+    }
+	
+	return 0;
+}
+#endif
+
+int open_socket(char *hostname)
 {
     struct sockaddr_in sin;
-    struct hostent * host;
+    struct hostent *host = 0;
 
-    dcsocket = socket(AF_INET, SOCK_DGRAM, 0);
+    dcsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
 
+#ifndef __MINGW32__
     if (dcsocket < 0) {
+#else
+    if (dcsocket == INVALID_SOCKET) {
+#endif
 	perror("socket");
 	return -1;
     }
@@ -397,10 +454,17 @@ int open_socket(unsigned char *hostname)
 
 #ifdef __MINGW32__
     unsigned long flags = 1;
-    ioctlsocket(dcsocket, FIONBIO, &flags);
+	int failed = 0;
+    failed = ioctlsocket(dcsocket, FIONBIO, &flags);
+    if ( failed == SOCKET_ERROR ) {
+	perror("ioctlsocket");
+	return -1;
+    }
 #else
     fcntl(dcsocket, F_SETFL, O_NONBLOCK);
 #endif
+
+    return 0;
 }
 
 int recv_response(unsigned char *buffer, int timeout)
@@ -409,15 +473,16 @@ int recv_response(unsigned char *buffer, int timeout)
     int rv = -1;
 
     while( ((time_in_usec() - start) < timeout) && (rv == -1))
-	rv = read(dcsocket, buffer, 2048);
+	rv = recv(dcsocket, (void *)buffer, 2048, 0);
 
     return rv;
 }
 
-void send_command(unsigned char *command, unsigned int addr, unsigned int size, unsigned char *data, unsigned int dsize)
+int send_command(char *command, unsigned int addr, unsigned int size, unsigned char *data, unsigned int dsize)
 {
     unsigned char c_buff[2048];
     unsigned int tmp;
+    int error = 0;
 
     memcpy(c_buff, command, 4);
     tmp = htonl(addr);
@@ -427,26 +492,45 @@ void send_command(unsigned char *command, unsigned int addr, unsigned int size, 
     if (data != 0)
 	memcpy(c_buff + 12, data, dsize);
 
-    write(dcsocket, c_buff, 12 + dsize);
+    error = send(dcsocket, (void *)c_buff, 12+dsize, 0);
+    
+    if(error == -1) {
+#ifndef __MINGW32__
+	if(errno == EAGAIN)
+		return 0;
+	fprintf(stderr, "error: %s\n", strerror(errno));
+#else
+	/* WSAEWOULDBLOCK is a non-fatal error,  so continue */
+	if(WSAGetLastError() == WSAEWOULDBLOCK)
+	    return 0;
+
+	fprintf(stderr, "error: %d\n", WSAGetLastError());
+#endif
+
+	return -1;
+    }
+    
+    return 0;
 }
 
-unsigned int upload(unsigned char *filename, unsigned int address)
+unsigned int upload(char *filename, unsigned int address)
 {
     int inputfd;
-    int size;
+    int size = 0;
+    int sectsize;
     unsigned char *inbuf;
     struct timeval starttime, endtime;
 
-    unsigned char c;
     double stime, etime;
     bfd *somebfd;
 
     somebfd = bfd_openr(filename, 0);
 
-    if (somebfd) { /* try bfd first */
+    if (somebfd) { 
 	if (bfd_check_format(somebfd, bfd_object)) {
+	/* try bfd first */
 	    asection *section;
-	    
+
 	    printf("File format is %s, ", somebfd->xvec->name);
 	    address = somebfd->start_address;
 	    size = 0;
@@ -454,68 +538,69 @@ unsigned int upload(unsigned char *filename, unsigned int address)
 
 	    gettimeofday(&starttime, 0);
 
-	    for (section = somebfd->sections; section != NULL; section = section->next)
+	    for (section = somebfd->sections; section != NULL; section = section->next) {
 		if ((section->flags & SEC_HAS_CONTENTS) && (section->flags & SEC_LOAD)) {
+		    sectsize = bfd_section_size(somebfd, section);
 		    printf("Section %s, ",section->name);
-		    printf("lma 0x%x, ",section->lma);
-		    printf("size %d\n",bfd_section_size(somebfd, section));
-		    if (bfd_section_size(somebfd, section)) {
-			size += bfd_section_size(somebfd, section);
-			inbuf = malloc(bfd_section_size(somebfd, section));
-			bfd_get_section_contents(somebfd, section, inbuf, 0, bfd_section_size(somebfd, section));
+		    printf("lma 0x%x, ", (unsigned int)section->lma);
+		    printf("size %d\n",sectsize);
 
-			send_data(inbuf, section->lma, bfd_section_size(somebfd, section));
+		    if (sectsize) {
+			size += sectsize;
+			inbuf = malloc(sectsize);
+			bfd_get_section_contents(somebfd, section, inbuf, 0, sectsize);
+
+			if(send_data(inbuf, section->lma, sectsize) == -1)
+			    return -1;
 
 			free(inbuf);
 		    }
-		}   
-	    bfd_close(somebfd);
-	} else {
-
-/* if that fails, send raw bin */
-		    
-	    printf("File format is raw binary, start address is 0x%x\n", address);
-    	    inputfd = open(filename, O_RDONLY | O_BINARY);
-	    
-	    if (inputfd < 0) {
-		perror(filename);
-		exit(-1);
+		}
 	    }
 	    
+	    bfd_close(somebfd);
+	} else {
+	/* if that fails, send raw bin */
+	    //! Close the bfd here too?
+	    inputfd = open(filename, O_RDONLY | O_BINARY);
+
+	    if (inputfd < 0) {
+		perror(filename);
+		return -1;
+	    }
+
+	    printf("File format is raw binary, start address is 0x%x\n", address);
+
 	    size = lseek(inputfd, 0, SEEK_END);
 	    lseek(inputfd, 0, SEEK_SET);
-	    
+
 	    inbuf = malloc(size);
-	    
 	    read(inputfd, inbuf, size);
-	    
 	    close(inputfd);
-	    
+
 	    gettimeofday(&starttime, 0);
 
-	    send_data(inbuf, address, size);
-
+	    if(send_data(inbuf, address, size) == -1)
+		return -1;
 	}
+    }
 
     gettimeofday(&endtime, 0);
 
     stime = starttime.tv_sec + starttime.tv_usec / 1000000.0;
     etime = endtime.tv_sec + endtime.tv_usec / 1000000.0;
 
-    printf("transferred at %f bytes / sec\n", (double) size / (etime - stime));
+    printf("transferred %d bytes at %f bytes / sec\n", size, (double) size / (etime - stime));
     fflush(stdout);
 
-    }
     return address;
 }
 
-void download(unsigned char *filename, unsigned int address,
+int download(char *filename, unsigned int address,
 	      unsigned int size, unsigned int quiet)
 {
     int outputfd;
 
-    unsigned char c;
-    unsigned int wrkmem = 0x8cff0000;
     unsigned char *data;
     struct timeval starttime, endtime;
     double stime, etime;
@@ -524,7 +609,7 @@ void download(unsigned char *filename, unsigned int address,
 
     if (outputfd < 0) {
 	perror(filename);
-	exit(-1);
+	return -1;
     }
 
     data = malloc(size);
@@ -542,30 +627,32 @@ void download(unsigned char *filename, unsigned int address,
 
     printf("transferred at %f bytes / sec\n", (double) size / (etime - stime));
     fflush(stdout);
-    
+
     write(outputfd, data, size);
 
     close(outputfd);
+    free(data);
 
+    return 0;
 }
 
-void execute(unsigned int address, unsigned int console, unsigned int cdfsredir)
+int execute(unsigned int address, unsigned int console, unsigned int cdfsredir)
 {
     unsigned char buffer[2048];
 
     printf("Sending execute command (0x%x, console=%d, cdfsredir=%d)...",address,console,cdfsredir);
 
     do
-	send_command(CMD_EXECUTE, address, (cdfsredir << 1) | console, NULL, 0);
+	send_cmd(CMD_EXECUTE, address, (cdfsredir << 1) | console, NULL, 0);
     while (recv_response(buffer, PACKET_TIMEOUT) == -1);
 
     printf("executing\n");
+    return 0;
 }
 
-void do_console(unsigned char *path, unsigned char *isofile)
+int do_console(char *path, char *isofile)
 {
-    unsigned char command;
-    int isofd;
+    int isofd = 0;
     unsigned char buffer[2048];
 
     if (isofile) {
@@ -584,95 +671,123 @@ void do_console(unsigned char *path, unsigned char *isofile)
 	fflush(stdout);
 
 	while(recv_response(buffer, PACKET_TIMEOUT) == -1);
-
+	 
 	if (!(memcmp(buffer, CMD_EXIT, 4)))
-	    exit(0);
+	    return -1;
 	if (!(memcmp(buffer, CMD_FSTAT, 4)))
-	    dc_fstat(buffer);
+	    CatchError(dc_fstat(buffer));
 	if (!(memcmp(buffer, CMD_WRITE, 4)))
-	    dc_write(buffer);
+	    CatchError(dc_write(buffer));
 	if (!(memcmp(buffer, CMD_READ, 4)))
-	    dc_read(buffer);
+	    CatchError(dc_read(buffer));
 	if (!(memcmp(buffer, CMD_OPEN, 4)))
-	    dc_open(buffer);
+	    CatchError(dc_open(buffer));
 	if (!(memcmp(buffer, CMD_CLOSE, 4)))
-	    dc_close(buffer);
+	    CatchError(dc_close(buffer));
 	if (!(memcmp(buffer, CMD_CREAT, 4)))
-	    dc_creat(buffer);
+	    CatchError(dc_creat(buffer));
 	if (!(memcmp(buffer, CMD_LINK, 4)))
-	    dc_link(buffer);
+	    CatchError(dc_link(buffer));
 	if (!(memcmp(buffer, CMD_UNLINK, 4)))
-	    dc_unlink(buffer);
+	    CatchError(dc_unlink(buffer));
 	if (!(memcmp(buffer, CMD_CHDIR, 4)))
-	    dc_chdir(buffer);
+	    CatchError(dc_chdir(buffer));
 	if (!(memcmp(buffer, CMD_CHMOD, 4)))
-	    dc_chmod(buffer);
+	    CatchError(dc_chmod(buffer));
 	if (!(memcmp(buffer, CMD_LSEEK, 4)))
-	    dc_lseek(buffer);
+	    CatchError(dc_lseek(buffer));
 	if (!(memcmp(buffer, CMD_TIME, 4)))
-	    dc_time(buffer);
+	    CatchError(dc_time(buffer));
 	if (!(memcmp(buffer, CMD_STAT, 4)))
-	    dc_stat(buffer);
+	    CatchError(dc_stat(buffer));
 	if (!(memcmp(buffer, CMD_UTIME, 4)))
-	    dc_utime(buffer);
+	    CatchError(dc_utime(buffer));
 	if (!(memcmp(buffer, CMD_BAD, 4)))
-	    printf("command 15 should not happen... (but it did)\n");
+	    fprintf(stderr, "command 15 should not happen... (but it did)\n");
 	if (!(memcmp(buffer, CMD_OPENDIR, 4)))
-	    dc_opendir(buffer);
+	    CatchError(dc_opendir(buffer));
 	if (!(memcmp(buffer, CMD_CLOSEDIR, 4)))
-	    dc_closedir(buffer);
+	    CatchError(dc_closedir(buffer));
 	if (!(memcmp(buffer, CMD_READDIR, 4)))
-	    dc_readdir(buffer);
+	    CatchError(dc_readdir(buffer));
 	if (!(memcmp(buffer, CMD_CDFSREAD, 4)))
-	    dc_cdfs_redir_read_sectors(isofd, buffer);
+	    CatchError(dc_cdfs_redir_read_sectors(isofd, buffer));
 	if (!(memcmp(buffer, CMD_GDBPACKET, 4)))
-	    dc_gdbpacket(buffer);
+	    CatchError(dc_gdbpacket(buffer));
     }
+
+    return 0;
 }
 
 int open_gdb_socket(int port)
 {
   struct sockaddr_in server_addr;
-
+ 
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons( port );
   server_addr.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
 
-  if ( (gdb_server_socket = socket( PF_INET, SOCK_STREAM, IPPROTO_TCP )) < 0 ) {
+  gdb_server_socket = socket( PF_INET, SOCK_STREAM, IPPROTO_TCP );
+#ifdef __MINGW32__
+	if ( gdb_server_socket == INVALID_SOCKET) {
+#else
+  if ( gdb_server_socket < 0 ) {
+#endif
 	perror( "error creating gdb server socket" );
 	return -1;
   }
 
-  if ( bind( gdb_server_socket, (struct sockaddr*)&server_addr, sizeof( server_addr ) ) < 0 ) {
+  int checkbind = bind( gdb_server_socket, (struct sockaddr*)&server_addr, sizeof( server_addr ) );
+#ifdef __MINGW32__
+	if( checkbind == SOCKET_ERROR ) {
+#else
+  if ( checkbind < 0 ) {
+#endif
 	perror( "error binding gdb server socket" );
 	return -1;
   }
 
-  if ( listen( gdb_server_socket, 0 ) < 0 ) {
+  int checklisten = listen( gdb_server_socket, 0 );
+#ifdef __MINGW32__
+	if ( checklisten == SOCKET_ERROR ) {
+#else
+  if ( checklisten < 0 ) {
+#endif
 	perror( "error listening to gdb server socket" );
 	return -1;
     }
+
+    return 0;
 }
 
 int main(int argc, char *argv[])
 {
     unsigned int address = 0x8c010000;
     unsigned int size = 0;
-    unsigned char *filename = 0;
-    unsigned char *path = 0;
     unsigned int console = 1;
     unsigned int quiet = 0;
     unsigned char command = 0;
-    char *hostname = DREAMCAST_IP;
     unsigned int cdfs_redir = 0;
-    unsigned char *isofile = 0;
     int someopt;
 
-    if (argc < 2)
-	usage();
+    /* Dynamically allocated, so it should be freed */
+    char *filename = 0;
+    char *isofile = 0;
+    char *path = 0;
+    char *hostname = DREAMCAST_IP;
+    char *cleanlist[4] = { 0, 0, 0, 0 };
 
+    if (argc < 2) {
+	usage();
+	return 0;
+    }
+
+	
 #ifdef __MINGW32__
-    someopt = getopt(argc, argv, "x:u:d:a:s:t:i:npqhrg");
+	if(start_ws())
+		return -1;
+
+	someopt = getopt(argc, argv, "x:u:d:a:s:t:i:npqhrg");
 #else
     someopt = getopt(argc, argv, "x:u:d:a:s:t:c:i:npqhrg");
 #endif
@@ -680,40 +795,45 @@ int main(int argc, char *argv[])
 	switch (someopt) {
 	case 'x':
 	    if (command) {
-		printf("You can only specify one of -x, -u, -d, and -r\n");
-		exit(0);
+		fprintf(stderr, "You can only specify one of -x, -u, -d, and -r\n");
+		goto doclean;
 	    }
 	    command = 'x';
 	    filename = malloc(strlen(optarg) + 1);
+	    cleanlist[0] = filename;
 	    strcpy(filename, optarg);
 	    break;
 	case 'u':
 	    if (command) {
-		printf("You can only specify one of -x, -u, -d, and -r\n");
-		exit(0);
+		fprintf(stderr, "You can only specify one of -x, -u, -d, and -r\n");
+		goto doclean;
 	    }
 	    command = 'u';
 	    filename = malloc(strlen(optarg) + 1);
+	    cleanlist[0] = filename;
 	    strcpy(filename, optarg);
 	    break;
 	case 'd':
 	    if (command) {
-		printf("You can only specify one of -x, -u, -d, and -r\n");
-		exit(0);
+		fprintf(stderr, "You can only specify one of -x, -u, -d, and -r\n");
+		goto doclean;
 	    }
 	    command = 'd';
 	    filename = malloc(strlen(optarg) + 1);
+	    cleanlist[0] = filename;
 	    strcpy(filename, optarg);
 	    break;
 #ifndef __MINGW32__
 	case 'c':
 	    path = malloc(strlen(optarg) + 1);
+	    cleanlist[1] = path;
 	    strcpy(path, optarg);
 	    break;
 #endif
 	case 'i':
 	    cdfs_redir = 1;
 	    isofile = malloc(strlen(optarg) + 1);
+	    cleanlist[2] = isofile;
 	    strcpy(isofile, optarg);
 	    break;
 	case 'a':
@@ -724,6 +844,7 @@ int main(int argc, char *argv[])
 	    break;
 	case 't':
 	    hostname = malloc(strlen(optarg) + 1);
+	    cleanlist[3] = hostname;
 	    strcpy(hostname, optarg);
 	    break;
 	case 'n':
@@ -734,11 +855,13 @@ int main(int argc, char *argv[])
 	    break;
 	case 'h':
 	    usage();
+	    cleanup(cleanlist);
+	    return 0;
 	    break;
 	case 'r':
 	    if (command) {
-		printf("You can only specify one of -x, -u, -d, and -r\n");
-		exit(0);
+		fprintf(stderr, "You can only specify one of -x, -u, -d, and -r\n");
+		goto doclean;
 	    }
 	    command = 'r';
 	    break;
@@ -747,6 +870,9 @@ int main(int argc, char *argv[])
 	    open_gdb_socket(2159);
 	    break;
 	default:
+	/* The user obviously mistyped something */
+	    usage();
+	    goto doclean;
 	    break;
 	}
 #ifdef __MINGW32__
@@ -756,58 +882,73 @@ int main(int argc, char *argv[])
 #endif
     }
 
+    if (quiet)
+	printf("Quiet download\n");
+
     if (cdfs_redir & (!console))
 	console = 1;
 
-    if (console & command=='x')
+    if (console & (command=='x'))
 	printf("Console enabled\n");
-
-    if (quiet)
-	printf("Quiet download\n");
 
 #ifndef __MINGW32__
     if (path)
 	printf("Chroot enabled\n");
 #endif
 
-    if (cdfs_redir & command=='x')
+    if (cdfs_redir & (command=='x'))
 	printf("Cdfs redirection enabled\n");
 
   if (open_socket(hostname)<0)
   {
-    return 1;
+    fprintf(stderr, "Error opening socket\n");
+    goto doclean;
   }
 
     switch (command) {
     case 'x':
 	printf("Upload <%s>\n", filename);
 	address = upload(filename, address);
+
+	if (address == -1)
+	    goto doclean;
+
 	printf("Executing at <0x%x>\n", address);
-	execute(address, console, cdfs_redir);
+	if(execute(address, console, cdfs_redir))
+	    goto doclean;
 	if (console)
 	    do_console(path, isofile);
 	break;
     case 'u':
 	printf("Upload <%s> at <0x%x>\n", filename, address);
-	upload(filename, address);
+	if(upload(filename, address))
+	    goto doclean;
 	break;
     case 'd':
 	if (!size) {
-	    printf
-		("You must specify a size (-s <size>) with download (-d <filename>)\n");
-	    exit(0);
+	    fprintf(stderr, "You must specify a size (-s <size>) with download (-d <filename>)\n");
+	    goto doclean;
 	}
-	printf("Download %d bytes at <0x%x> to <%s>\n", size, address,
-	       filename);
-	download(filename, address, size, quiet);
+	printf("Download %d bytes at <0x%x> to <%s>\n", size, address, filename);
+	if(download(filename, address, size, quiet) == -1)
+	    goto doclean;
 	break;
     case 'r':
 	printf("Reseting...\n");
-	send_command(CMD_REBOOT, 0, 0, NULL, 0);
+	if(send_command(CMD_REBOOT, 0, 0, NULL, 0) == -1)
+	    goto doclean;
 	break;
     default:
 	usage();
 	break;
     }
-    exit(0);
+
+    cleanup(cleanlist);
+    return 0;
+
+/* Failed (I hate gotos...) */
+doclean:
+    cleanup(cleanlist);
+    return -1;
 }
+

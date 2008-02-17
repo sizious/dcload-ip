@@ -10,7 +10,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -22,28 +22,28 @@
 #ifndef __SYSCALLS_H__
 #define __SYSCALLS_H__
 
-void dc_fstat(unsigned char * buffer);
-void dc_write(unsigned char * buffer);
-void dc_read(unsigned char * buffer);
-void dc_open(unsigned char * buffer);
-void dc_close(unsigned char * buffer);
-void dc_creat(unsigned char * buffer);
-void dc_link(unsigned char * buffer);
-void dc_unlink(unsigned char * buffer);
-void dc_chdir(unsigned char * buffer);
-void dc_chmod(unsigned char * buffer);
-void dc_lseek(unsigned char * buffer);
-void dc_time(unsigned char * buffer);
-void dc_stat(unsigned char * buffer);
-void dc_utime(unsigned char * buffer);
+int dc_fstat(unsigned char * buffer);
+int dc_write(unsigned char * buffer);
+int dc_read(unsigned char * buffer);
+int dc_open(unsigned char * buffer);
+int dc_close(unsigned char * buffer);
+int dc_creat(unsigned char * buffer);
+int dc_link(unsigned char * buffer);
+int dc_unlink(unsigned char * buffer);
+int dc_chdir(unsigned char * buffer);
+int dc_chmod(unsigned char * buffer);
+int dc_lseek(unsigned char * buffer);
+int dc_time(unsigned char * buffer);
+int dc_stat(unsigned char * buffer);
+int dc_utime(unsigned char * buffer);
 
-void dc_opendir(unsigned char * buffer);
-void dc_readdir(unsigned char * buffer);
-void dc_closedir(unsigned char * buffer);
+int dc_opendir(unsigned char * buffer);
+int dc_readdir(unsigned char * buffer);
+int dc_closedir(unsigned char * buffer);
 
-void dc_cdfs_redir_read_sectors(int isofd, unsigned char * buffer);
+int dc_cdfs_redir_read_sectors(int isofd, unsigned char * buffer);
 
-void dc_gdbpacket(unsigned char * buffer);
+int dc_gdbpacket(unsigned char * buffer);
 
 #define CMD_EXIT     "DC00"
 #define CMD_FSTAT    "DC01"
@@ -67,43 +67,50 @@ void dc_gdbpacket(unsigned char * buffer);
 #define CMD_CDFSREAD "DC19"
 #define CMD_GDBPACKET "DC20"
 
-typedef struct {
-  unsigned char id[4] __attribute__ ((packed));
-  unsigned int value0 __attribute__ ((packed));
-  unsigned int value1 __attribute__ ((packed));
-  unsigned int value2 __attribute__ ((packed));
-} command_3int_t;
+struct _command_3int_t {
+	unsigned char id[4];
+	unsigned int value0;
+	unsigned int value1;
+	unsigned int value2;
+} __attribute__ ((__packed__));
 
-typedef struct {
-  unsigned char id[4] __attribute__ ((packed));
-  unsigned int value0 __attribute__ ((packed));
-  unsigned int value1 __attribute__ ((packed));
-  unsigned char string[1] __attribute__ ((packed));
-} command_2int_string_t;
+struct _command_2int_string_t {
+	unsigned char id[4];
+	unsigned int value0;
+	unsigned int value1;
+	char string[1];
+} __attribute__ ((__packed__));
 
-typedef struct {
-  unsigned char id[4] __attribute__ ((packed));
-  unsigned int value0 __attribute__ ((packed));
-} command_int_t;
+struct _command_int_t {
+	unsigned char id[4];
+	unsigned int value0;
+} __attribute__ ((__packed__));
 
-typedef struct {
-  unsigned char id[4] __attribute__ ((packed));
-  unsigned int value0 __attribute__ ((packed));
-  unsigned char string[1] __attribute__ ((packed));
-} command_int_string_t;
+struct _command_int_string_t {
+	unsigned char id[4];
+	unsigned int value0;
+	char string[1];
+} __attribute__ ((__packed__));
 
-typedef struct {
-  unsigned char id[4] __attribute__ ((packed));
-  unsigned char string[1] __attribute__ ((packed));
-} command_string_t;
+struct _command_string_t {
+	unsigned char id[4];
+	char string[1];
+} __attribute__ ((__packed__));
 
-typedef struct {
-  unsigned char id[4] __attribute__ ((packed));
-  unsigned int value0 __attribute__ ((packed));
-  unsigned int value1 __attribute__ ((packed));
-  unsigned int value2 __attribute__ ((packed));
-  unsigned char string[1] __attribute__ ((packed));
-} command_3int_string_t;
+struct _command_3int_string_t {
+	unsigned char id[4];
+	unsigned int value0;
+	unsigned int value1;
+	unsigned int value2;
+	char string[1];
+} __attribute__ ((__packed__));
+
+typedef struct _command_3int_t command_3int_t;
+typedef struct _command_2int_string_t command_2int_string_t;
+typedef struct _command_int_t command_int_t;
+typedef struct _command_int_string_t command_int_string_t;
+typedef struct _command_string_t command_string_t;
+typedef struct _command_3int_string_t command_3int_string_t;
 
 /* fstat    fd, addr, size
  * write    fd, addr, size
@@ -127,3 +134,4 @@ typedef struct {
  */
 
 #endif
+
