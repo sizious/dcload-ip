@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -654,6 +655,7 @@ int do_console(char *path, char *isofile)
 {
     int isofd = 0;
     unsigned char buffer[2048];
+	struct timespec time = {0},  remain = {0};
 
     if (isofile) {
 	isofd = open(isofile, O_RDONLY | O_BINARY);
@@ -670,8 +672,9 @@ int do_console(char *path, char *isofile)
     while (1) {
 	fflush(stdout);
 
-	while(recv_response(buffer, PACKET_TIMEOUT) == -1);
-	 
+	while(recv_response(buffer, PACKET_TIMEOUT) == -1)
+		nanosleep(&time, &remain);
+
 	if (!(memcmp(buffer, CMD_EXIT, 4)))
 	    return -1;
 	if (!(memcmp(buffer, CMD_FSTAT, 4)))
@@ -714,6 +717,9 @@ int do_console(char *path, char *isofile)
 	    CatchError(dc_cdfs_redir_read_sectors(isofd, buffer));
 	if (!(memcmp(buffer, CMD_GDBPACKET, 4)))
 	    CatchError(dc_gdbpacket(buffer));
+
+		// reset the timer
+		time.tv_nsec = 500000000; 
     }
 
     return 0;
