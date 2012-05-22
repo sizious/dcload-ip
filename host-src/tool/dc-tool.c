@@ -18,6 +18,7 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
+
 #ifdef WITH_BFD
 #include <bfd.h>
 #else
@@ -541,7 +542,7 @@ unsigned int upload(char *filename, unsigned int address)
 #endif
 
 #ifdef WITH_BFD
-    if ((somebfd = bfd_openr(filename, 0))) { 
+    if ((somebfd = bfd_openr(filename, 0))) {
         if (bfd_check_format(somebfd, bfd_object)) {
             /* try bfd first */
             asection *section;
@@ -572,7 +573,8 @@ unsigned int upload(char *filename, unsigned int address)
                     }
                 }
             }
-	    
+
+            bfd_close(somebfd);
             goto done_transfer;
         }
 
@@ -649,8 +651,7 @@ unsigned int upload(char *filename, unsigned int address)
         close(inputfd);
     }
 #endif /* WITH_BFD */
-	/* if all else fails, send raw bin */
-    //! Close the bfd here too?
+    /* if all else fails, send raw bin */
     inputfd = open(filename, O_RDONLY | O_BINARY);
 
     if (inputfd < 0) {
