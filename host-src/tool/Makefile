@@ -4,6 +4,13 @@ CC	= $(HOSTCC)
 CFLAGS	= $(HOSTCFLAGS) -DDREAMCAST_IP=\"$(DREAMCAST_IP)\" -DHAVE_GETOPT
 INCLUDE	= -I$(BFDINCLUDE)
 
+ifdef WITH_BFD
+	CFLAGS	+= -DWITH_BFD
+	LDFLAGS	= $(HOSTLDFLAGS) $(BFDLIB)
+else
+	LDFLAGS	= $(HOSTLDFLAGS) -lelf
+endif
+
 DCTOOL	= dc-tool$(EXECUTABLEEXTENSION)
 
 OBJECTS	= dc-tool.o syscalls.o unlink.o
@@ -14,7 +21,7 @@ OBJECTS	= dc-tool.o syscalls.o unlink.o
 all: $(DCTOOL)
 
 $(DCTOOL): $(OBJECTS)
-	$(CC) -o $@ $(OBJECTS) $(BFDLIB)
+	$(CC) -o $@ $(OBJECTS) $(LDFLAGS)
 
 .PHONY : install
 install: $(DCTOOL)
