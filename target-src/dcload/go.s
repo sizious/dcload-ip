@@ -1,6 +1,6 @@
 	.section .text
 	.global _go
-	
+
 _go:
 	mov.l	stack_addr_k,r0
 	mov.l	@r0,r15
@@ -54,4 +54,3 @@ fpscr_data_k:
 	.long	fpscr_data
 fpscr_data:
 	.long	0x40001
-	

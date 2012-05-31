@@ -3,7 +3,7 @@
 	.global _cdfs_redir_disable
 	.global _cdfs_redir_save
 .align 2
-	
+
 _cdfs_redir_save:
 	mov.l cdfs_saved_k, r0
 	mov.l @r0, r0
@@ -13,10 +13,10 @@ _cdfs_redir_save:
 	mov.l @r0,r0
 	mov.l cdfs_saved_k, r1
 	mov.l r0, @r1
-already_saved:	
+already_saved:
 	rts
 	nop
-	
+
 _cdfs_redir_disable:
 	mov.l cdfs_saved_k, r0
 	mov.l @r0, r0
@@ -31,7 +31,7 @@ _cdfs_redir_enable:
 	mov.l r1, @r0
 	rts
 	nop
-	
+
 .align 4
 cdfs_entry_k:
 	.long 0x8c0000bc

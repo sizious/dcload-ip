@@ -5,7 +5,7 @@
 	! r4 = dest
 
 _bswap16:
-	rts	
+	rts
 	swap.b	r4,r0
 
 _bswap32:
@@ -13,6 +13,6 @@ _bswap32:
 	swap.w	r0,r4
 	rts
 	swap.b	r4,r0
-	
+
 	.end
 

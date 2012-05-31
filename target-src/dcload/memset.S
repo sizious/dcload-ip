@@ -31,7 +31,7 @@ L_align_loop:
 	tst	#3,r0
 	bf	L_align_loop
 
-L_dup_bytes:	
+L_dup_bytes:
 	swap.b	r5,r2	! Duplicate bytes across longword
 	or	r2,r5
 	swap.w	r5,r2

@@ -4,7 +4,7 @@
 
 	.globl	_draw_string, _clrscr, _init_video, _check_cable
 	.globl	_get_font_address
-		
+
 	.text
 
 
@@ -38,7 +38,7 @@ ds_loop:
 	mov	r13,r7
 	bra	ds_loop
 	add	#12,r10
-ds_done:			
+ds_done:
 	mov.l	@r15+,r10
 	mov.l	@r15+,r11
 	mov.l	@r15+,r12
@@ -111,9 +111,9 @@ decided:
 	mov	r1,r2
 	add	#32,r2
 	pref	@r2
-	
+
 	mov	#24,r2	! char is 24 lines high
-drawy:	
+drawy:
 	! Each pixel line is stored as 1½ bytes, so we'll load
 	! 3 bytes into r4 and draw two lines in one go
 	mov.b	@r1+,r4
@@ -128,7 +128,7 @@ drawy:
 	shll8	r4
 	! Even line
 	mov	#12,r3
-drawx1:	
+drawx1:
 	rotl	r4
 	bf/s	nopixel1
 	dt	r3
@@ -141,7 +141,7 @@ nopixel1:
 	add	r3,r0
 	! Odd line
 	mov	#12,r3
-drawx2:	
+drawx2:
 	rotl	r4
 	bf/s	nopixel2
 	dt	r3
@@ -166,7 +166,7 @@ drawmod:
 	! Assumes a 640*480 screen with RGB555 or RGB565 pixels
 
 	! r4 = pixel colour
-_clrscr:	
+_clrscr:
 	mov.l	vrambase,r0
 	mov.l	clrcount,r1
 clrloop:
@@ -184,7 +184,7 @@ clrcount:
 	.long	640*480
 
 
-	
+
 	! Set up video registers to the desired
 	! video mode (only 640*480 supported right now)
 	!
@@ -193,7 +193,7 @@ clrcount:
 	!	has set up reasonable defaults for syncs etc.
 	!
 	! TODO:	PAL
-	
+
 	! r4 = cabletype (0=VGA, 2=RGB, 3=Composite)
 	! r5 = pixel mode (0=RGB555, 1=RGB565, 3=RGB888)
 _init_video:
@@ -224,7 +224,7 @@ _init_video:
 	rotr	r2
 	shlr8	r2
 	or	r2,r1
-khz15:	
+khz15:
 	mov.l	r1,@(4,r0)
 	! Set video base address
 	mov	#0,r1
@@ -272,7 +272,7 @@ nonlace:
 	! Horizontal pos
 	mov.w	hpos,r1
 	mov.l	r1,@(0x30,r0)
-	
+
 	! Select RGB/CVBS
 	mov.l	cvbsbase,r1
 	rotr	r4
@@ -282,10 +282,10 @@ nonlace:
 rgbmode:
 	shll8	r0
 	mov.l	r0,@r1
-	
+
 	rts
 	nop
-	
+
 	.align	4
 videobase:
 	.long	0xa05f8000
@@ -296,7 +296,7 @@ bppshifttab:
 hpos:
 	.word	0xa4
 
-	
+
 
 	! Check type of A/V cable connected
 	!
@@ -328,7 +328,7 @@ pctra_clr:
 pctra_set:
 	.long	0x000a0000
 
-	
+
 	! Return base address of ROM font
 	!
 
@@ -339,10 +339,8 @@ _get_font_address:
 	mov	#0,r1
 
 	.align	4
-syscall_b4:	
+syscall_b4:
 	.long	0x8c0000b4
 
-	
-	.end
-	
 
+	.end

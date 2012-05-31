@@ -1,4 +1,4 @@
-/* 
+/*
  * This file is part of the dcload Dreamcast serial loader
  *
  * Copyright (C) 2000 Andrew Kieschnick <andrewk@austin.rr.com>

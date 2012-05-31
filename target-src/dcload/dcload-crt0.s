@@ -1,5 +1,5 @@
 ! crt0.s for dcload
-	
+
 	.section .text
 	.global	start
 	.global _atexit
@@ -9,19 +9,19 @@ start:
 	nop
 
 ! for checking if dcload is present
-	
+
 dcloadmagic:
 	.long 0xdeadbeef
 
 ! normal programs use this call
-	
-dcloadsyscall_k:	
+
+dcloadsyscall_k:
 	.long _dcloadsyscall
-		
+
 ! exception handler uses these calls
 
-setup_video_k:	
-	.long _setup_video	
+setup_video_k:
+	.long _setup_video
 clrscr_k:
 	.long _clrscr
 draw_string_k:
@@ -30,25 +30,25 @@ uint_to_string_k:
 	.long _uint_to_string
 exc_to_string_k:
 	.long _exception_code_to_string
-					
+
 realstart:
 	stc	sr,r0
 	mov.l	sr_mask,r1
-	and	r1,r0	
-	or	#0xf0,r0	
+	and	r1,r0
+	or	#0xf0,r0
 	ldc	r0,sr
 	mov.l	setup_cache_k,r0
 	mov.l	p2_mask,r1
 	or	r1,r0
 	jmp	@r0
 	nop
-	
+
 setup_cache:
 	mov.l	ccr_addr,r0
 	mov.w	ccr_data,r1
 	mov.l	r1,@r0
 	mov.l	start_2_k,r0
-	mov	#0,r1	
+	mov	#0,r1
 	nop
 	nop
 	nop
@@ -56,7 +56,7 @@ setup_cache:
 	nop
 	nop
 	jmp	@r0
-	mov	r1,r0	
+	mov	r1,r0
 
 start_2:
 	mov.l	stack_k,r15
@@ -76,7 +76,7 @@ start_l:
 	mov #0,r4
 	lds r3,fpscr
 
-	! call main	
+	! call main
 	mov.l	main_k,r0
 	jsr	@r0
 	or	r0,r0
@@ -95,7 +95,7 @@ sr_mask:
 set_fpscr_k:
 	.long	___set_fpscr
 stack_k:
-	.long	_stack	
+	.long	_stack
 edata_k:
 	.long	_edata
 end_k:
@@ -104,8 +104,8 @@ main_k:
 	.long	_main
 setup_cache_k:
 	.long	setup_cache
-start_2_k:	
-	.long	start_2	
+start_2_k:
+	.long	start_2
 p2_mask:
 	.long	0xa0000000
 ccr_addr:
@@ -119,7 +119,7 @@ _dcloadsyscall:
 	mov.l	correctmagic,r0
 	cmp/eq	r0,r1
 	bf	badsyscall
-	
+
 	mov	r4,r0
 	mov	r5,r4
 	mov	r6,r5
@@ -134,8 +134,8 @@ _dcloadsyscall:
 	mov.l	@(r0,r1),r0
 	jmp	@r0
 	nop
-	
-badsyscall:	
+
+badsyscall:
 	mov	#-1,r0
 	rts
 	nop
@@ -144,7 +144,7 @@ badsyscall:
 dcloadmagic_k:
 	.long dcloadmagic
 correctmagic:
-	.long 0xdeadbeef 
+	.long 0xdeadbeef
 first_syscall:
 	.long read_k
 read_k:
@@ -163,7 +163,7 @@ unlink_k:
         .long _unlink
 chdir_k:
         .long _chdir
-chmod_k:        
+chmod_k:
         .long _chmod
 lseek_k:
         .long _lseek
@@ -185,7 +185,7 @@ closedir_k:
 	.long _closedir
 readdir_k:
 	.long _readdir
-hostinfo_k:	
+hostinfo_k:
 	.long _gethostinfo
 gdbpacket_k:
 	.long _gdbpacket

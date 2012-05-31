@@ -1,6 +1,6 @@
 /*
    DC "Lan Adapter" driver for dc-load-ip
-   
+
    Copyright (C)2002,2003 Dan Potter (NEW BSD LICENSE)
  */
 
@@ -29,7 +29,7 @@ static vuint16 *xps = REGS(0xa0600000);
 static vuint32 *xpl = REGL(0xa0600000);
 #define REG(x) ( xpl[(x) + 0x400/4] & 0xff )
 #define REGW(x) ( xpc[(x)*4 + 0x400] )
-	
+
 /* This is based on the JLI EEPROM reader from FreeBSD. EEPROM in the
    Sega adapter is a bit simpler than what is described in the Fujitsu
    manual -- it appears to contain only the MAC address and not a base
@@ -129,7 +129,7 @@ static int bb_detect() {
 		for (;;)
 			;
 	}
-	
+
 	/* Reset the interface */
 	xpc[0x0480] = 0;
 	xpc[0x0480] = 1;
@@ -162,14 +162,14 @@ static int bb_init() {
 		DEBUG("bb_init exited, already done\r\n");
 		return 0;
 	}
-		
+
 	if (bb_started == 0) {
 		if (!bb_detect()) {
 			DEBUG("bb_init exited, bb_detect() failed\r\n");
 			return -1;
 		}
 	}
-	
+
 	/* Clear interrupt status */
 	REGW(0) = 0xff;
 	REGW(1) = 0xff;
@@ -208,7 +208,7 @@ static int bb_init() {
 
 	/* Copy it into the adapter structure for dcload */
 	memcpy(adapter_la.mac, mac, 6);
-	
+
 	/* Clear the multicast address */
 	SETBANK(1);
 	for (i=0; i<6; i++)
@@ -253,7 +253,7 @@ void bb_start() {
 /* Stop lan adapter */
 void bb_stop() {
 	DEBUG("bb_stop entered\r\n");
-	
+
 	if (bb_started != 2) {
 		DEBUG("bb_stop exited, state != 2\r\n");
 		return;
@@ -265,7 +265,7 @@ void bb_stop() {
 
 	/* Disable all receive */
 	REGW(5) = (REG(5) & ~0x03);
-	
+
 	bb_started = 3;
 	DEBUG("bb_stop exited\r\n");
 }
@@ -287,7 +287,7 @@ static int total_pkts_rx = 0, total_pkts_tx = 0;
 } */
 
 /* Transmit a packet */
-/* Note that it's technically possible to queue up more than one packet 
+/* Note that it's technically possible to queue up more than one packet
    at a time for transmission, but this is the simple way. */
 static int bb_tx(unsigned char *pkt, int len) {
 	int i;
@@ -346,7 +346,7 @@ static int bb_rx() {
 		for (;;)
 			;
 	}
-	
+
 	for (count = 0; ; count++) {
 		/* Is the buffer empty? */
 		if (REG(5) & 0x40) {
@@ -393,7 +393,7 @@ static void bb_loop() {
 	int result;
 
 	DEBUG("bb_loop entered\r\n");
-		
+
 	while (!escape_loop) {
 		/* Check for received packets */
 		result = bb_rx();

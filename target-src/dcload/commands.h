@@ -2,10 +2,10 @@
 #define __COMMANDS_H__
 
 typedef struct {
-  unsigned char id[4] __attribute__ ((packed));
-  unsigned int address __attribute__ ((packed));
-  unsigned int size __attribute__ ((packed));
-  unsigned char data[1] __attribute__ ((packed));
+	unsigned char id[4] __attribute__ ((packed));
+	unsigned int address __attribute__ ((packed));
+	unsigned int size __attribute__ ((packed));
+	unsigned char data[1] __attribute__ ((packed));
 } command_t;
 
 #define CMD_EXECUTE  "EXEC" /* execute */

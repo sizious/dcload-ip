@@ -2,10 +2,10 @@
 !
 ! a general exception handler that displays a register dump onscreen
 ! for general exceptions (VBR + 0x100) and TLB miss exceptions (VBR + 0x400)
-!	
-				
+!
+
 	.section .text
-disp_labels:	
+disp_labels:
 
 	! r4 -> @(0,r15) = addr of labels
 	! r5 -> @(4,r15) =  number of labels
@@ -19,9 +19,9 @@ disp_labels:
 	mov.l r7,@(8,r15)
 	mov.l r6,@(12,r15)
 	mov r5,r0
-disp_loop:	
+disp_loop:
 ! display a label
-	mov.l r0,@(4,r15) 
+	mov.l r0,@(4,r15)
 	mov.l @(12,r15),r4
 	mov.l @(8,r15),r5
 	mov.l @(0,r15),r6
@@ -58,8 +58,8 @@ disp_values:
 	mov.l r7,@(8,r15)
 	mov.l r6,@(12,r15)
 	mov r5,r0
-val_loop:	
-	mov.l r0,@(4,r15) 
+val_loop:
+	mov.l r0,@(4,r15)
 	mov.l @(0,r15),r4
 	mov.l @r4,r4
 ! convert string
@@ -71,7 +71,7 @@ val_loop:
 	nop
 	mova misc_string,r0
 	mov r0,r6
-! display string	
+! display string
 	mov.l @(12,r15),r4
 	mov.l @(8,r15),r5
 	mov #0xff,r7
@@ -93,10 +93,10 @@ val_loop:
 	lds.l @r15+,pr
 	rts
 	nop
-		
+
 .balign 0x100
 
-! VBR + 0x100	
+! VBR + 0x100
 ! general exceptions
 general_1:
 ! assume the stack may be fux0red
@@ -109,7 +109,7 @@ general_1:
 	sts.l pr,@-r15
 	mov.l r0,@-r15
 	mov.l r1,@-r15
-	mova regdump,r0	
+	mova regdump,r0
 	jsr @r0
 	nop
 	add #12,r15
@@ -117,7 +117,7 @@ general_1:
 	add #66,r15
 	add #66,r15
 	add #66,r15
-! display exception identifier string		
+! display exception identifier string
 	mov.l expevt,r4
 	mov.l @r4,r4
 	mov.l exc_to_string_k,r0
@@ -132,7 +132,7 @@ general_1:
 	mov.l @r0,r0
 	jsr @r0
 	nop
-!	display "EXPEVT"		
+!	display "EXPEVT"
 	mov #0,r4
 	mov #48,r5
 	mova expevt_string,r0
@@ -142,7 +142,7 @@ general_1:
 	mov.l @r0,r0
 	jsr @r0
 	nop
-! convert expevt to string	
+! convert expevt to string
 	mov.l expevt,r4
 	mov.l @r4,r4
 	mova misc_string,r0
@@ -151,7 +151,7 @@ general_1:
 	mov.l @r0,r0
 	jsr @r0
 	nop
-! display expevt			
+! display expevt
 	mov #84,r4
 	extu.b r4,r4
 	mov #48,r5
@@ -171,7 +171,7 @@ stack_addr:
 	.long 0x8d000000
 exc_to_string_k:
 	.long 0x8c00401c
-		
+
 regdump:
 ! save registers for display
 ! caller has allocated 264 bytes on stack for regs
@@ -229,7 +229,7 @@ regdump:
 	stc r7_bank,r1
 	mov.l r1,@r0
 	add #4,r0
-! r0-r7 bank 1	
+! r0-r7 bank 1
 	mov.l @(8,r15),r1
 	mov.l r1,@r0
 	add #4,r0
@@ -263,7 +263,7 @@ regdump:
 	add #4,r0
 	mov.l r14,@r0
 	add #4,r0
-! sgr (r15)	
+! sgr (r15)
 	stc sgr,r1
 	mov.l r1,@r0
 	add #4,r0
@@ -456,7 +456,7 @@ regdump:
 ! return
 	lds.l @r15+,pr
 	rts
-	nop	
+	nop
 .align 4
 fpscr_val_fr:
 	.long 0x00040001
@@ -482,7 +482,7 @@ labels3_k:
 	.long labels3
 labels4_k:
 	.long labels4
-setup_video_k:	
+setup_video_k:
 	.long 0x8c00400c
 .align 2
 expevt_string:
@@ -493,12 +493,12 @@ misc_string:
 
 .balign 0x400
 
-! VBR + 0x400	
+! VBR + 0x400
 general_2:
 	bra general_1
 	nop
 .align 2
-labels1:	
+labels1:
 	.asciz "PC  "
 	.asciz "PR  "
 	.asciz "SR  "
@@ -516,7 +516,7 @@ labels1:
 	.asciz "R6B0"
 	.asciz "R7B0"
 .align 2
-labels2:	
+labels2:
 	.asciz "R0B1"
 	.asciz "R1B1"
 	.asciz "R2B1"
@@ -534,7 +534,7 @@ labels2:
 	.asciz "R14 "
 	.asciz "R15 "
 .align 2
-labels3:	
+labels3:
 	.asciz "FPSC" ! FPSCR
 	.asciz "FR0 "
 	.asciz "FR1 "
@@ -553,7 +553,7 @@ labels3:
 	.asciz "FR14"
 	.asciz "FR15"
 .align 2
-labels4:	
+labels4:
 	.asciz "FPUL"
 	.asciz "XF0 "
 	.asciz "XF1 "
