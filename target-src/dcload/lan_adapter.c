@@ -4,6 +4,7 @@
    Copyright (C)2002,2003 Dan Potter (NEW BSD LICENSE)
  */
 
+#include <string.h>
 #include "packet.h"
 #include "net.h"
 #include "adapter.h"

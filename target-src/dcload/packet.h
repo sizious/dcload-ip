@@ -8,57 +8,57 @@ typedef struct {
 	unsigned char type[2];
 } ether_header_t;
 
-typedef struct {
-	unsigned char version_ihl __attribute__ ((packed));
-	unsigned char tos __attribute__ ((packed));
-	unsigned short length __attribute__ ((packed));
-	unsigned short packet_id __attribute__ ((packed));
-	unsigned short flags_frag_offset __attribute__ ((packed));
-	unsigned char ttl __attribute__ ((packed));
-	unsigned char protocol __attribute__ ((packed));
-	unsigned short checksum __attribute__ ((packed));
-	unsigned int src __attribute__ ((packed));
-	unsigned int dest __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned char version_ihl;
+	unsigned char tos;
+	unsigned short length;
+	unsigned short packet_id;
+	unsigned short flags_frag_offset;
+	unsigned char ttl;
+	unsigned char protocol;
+	unsigned short checksum;
+	unsigned int src;
+	unsigned int dest;
 } ip_header_t;
 
-typedef struct {
-	unsigned short src __attribute__ ((packed));
-	unsigned short dest __attribute__ ((packed));
-	unsigned short length __attribute__ ((packed));
-	unsigned short checksum __attribute__ ((packed));
-	unsigned char  data[1] __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned short src;
+	unsigned short dest;
+	unsigned short length;
+	unsigned short checksum;
+	unsigned char  data[1];
 } udp_header_t;
 
-typedef struct {
-	unsigned char type __attribute__ ((packed));
-	unsigned char code __attribute__ ((packed));
-	unsigned short checksum __attribute__ ((packed));
-	unsigned int misc __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned char type;
+	unsigned char code;
+	unsigned short checksum;
+	unsigned int misc;
 } icmp_header_t;
 
-typedef struct {
-	unsigned short hw_addr_space __attribute__ ((packed));
-	unsigned short proto_addr_space __attribute__ ((packed));
-	unsigned char hw_addr_len __attribute__ ((packed));
-	unsigned char proto_addr_len __attribute__ ((packed));
-	unsigned short opcode __attribute__ ((packed));
-	unsigned char hw_sender[6] __attribute__ ((packed));
-	unsigned char proto_sender[4] __attribute__ ((packed));
-	unsigned char hw_target[6] __attribute__ ((packed));
-	unsigned char proto_target[4] __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned short hw_addr_space;
+	unsigned short proto_addr_space;
+	unsigned char hw_addr_len;
+	unsigned char proto_addr_len;
+	unsigned short opcode;
+	unsigned char hw_sender[6];
+	unsigned char proto_sender[4];
+	unsigned char hw_target[6];
+	unsigned char proto_target[4];
 } arp_header_t;
 
-typedef struct {
-	unsigned int src_ip __attribute__ ((packed));
-	unsigned int dest_ip __attribute__ ((packed));
-	unsigned char zero __attribute__ ((packed));
-	unsigned char protocol __attribute__ ((packed));
-	unsigned short udp_length __attribute__ ((packed));
-	unsigned short src_port __attribute__ ((packed));
-	unsigned short dest_port __attribute__ ((packed));
-	unsigned short length __attribute__ ((packed));
-	unsigned short checksum __attribute__ ((packed));
-	unsigned char data[1] __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned int src_ip;
+	unsigned int dest_ip;
+	unsigned char zero;
+	unsigned char protocol;
+	unsigned short udp_length;
+	unsigned short src_port;
+	unsigned short dest_port;
+	unsigned short length;
+	unsigned short checksum;
+	unsigned char data[1];
 } ip_udp_pseudo_header_t;
 
 unsigned short checksum(unsigned short *buf, int count);

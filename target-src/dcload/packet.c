@@ -1,3 +1,4 @@
+#include <string.h>
 #include "packet.h"
 
 unsigned short checksum(unsigned short *buf, int count)

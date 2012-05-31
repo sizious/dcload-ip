@@ -47,42 +47,42 @@
 extern unsigned int syscall_retval;
 extern unsigned char* syscall_data;
 
-typedef struct {
-	unsigned char id[4] __attribute__ ((packed));
-	unsigned int value0 __attribute__ ((packed));
-	unsigned int value1 __attribute__ ((packed));
-	unsigned int value2 __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned char id[4];
+	unsigned int value0;
+	unsigned int value1;
+	unsigned int value2;
 } command_3int_t;
 
-typedef struct {
-	unsigned char id[4] __attribute__ ((packed));
-	unsigned int value0 __attribute__ ((packed));
-	unsigned int value1 __attribute__ ((packed));
-	unsigned char string[1] __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned char id[4];
+	unsigned int value0;
+	unsigned int value1;
+	unsigned char string[1];
 } command_2int_string_t;
 
-typedef struct {
-	unsigned char id[4] __attribute__ ((packed));
-	unsigned int value0 __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned char id[4];
+	unsigned int value0;
 } command_int_t;
 
-typedef struct {
-	unsigned char id[4] __attribute__ ((packed));
-	unsigned int value0 __attribute__ ((packed));
-	unsigned char string[1] __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned char id[4];
+	unsigned int value0;
+	unsigned char string[1];
 } command_int_string_t;
 
-typedef struct {
-	unsigned char id[4] __attribute__ ((packed));
-	unsigned char string[1] __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned char id[4];
+	unsigned char string[1];
 } command_string_t;
 
-typedef struct {
-	unsigned char id[4] __attribute__ ((packed));
-	unsigned int value0 __attribute__ ((packed));
-	unsigned int value1 __attribute__ ((packed));
-	unsigned int value2 __attribute__ ((packed));
-	unsigned char string[1] __attribute__ ((packed));
+typedef struct __attribute__ ((packed)) {
+	unsigned char id[4];
+	unsigned int value0;
+	unsigned int value1;
+	unsigned int value2;
+	unsigned char string[1];
 } command_3int_string_t;
 
 void build_send_packet(int command_len);

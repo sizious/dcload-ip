@@ -11,7 +11,7 @@ setup_cache:
 	mov.l	ccr_addr,r0
 	mov.w	ccr_data,r1
 	mov.l	r1,@r0
-	mov.l	start_2_k,r0	
+	mov.l	start_2_k,r0
 	nop
 	nop
 	nop
@@ -19,9 +19,9 @@ setup_cache:
 	nop
 	nop
 	nop
-	jmp	@r0	
+	jmp	@r0
 	nop
-start_2:		
+start_2:
 	mov.l	old_stack_k,r14
 	mov.l	r15,@r14
 	mov.l	old_pr_k,r14
@@ -44,7 +44,7 @@ start_l:
 	mov #0,r4
 	lds r3,fpscr
 
-	! call the mainline	
+	! call the mainline
 	mov.l	main_k,r0
 	jsr	@r0
 	nop
@@ -58,12 +58,12 @@ start_l:
 _atexit:
 	rts
 	nop
-	
+
 	.align 4
 set_fpscr_k:
 	.long	___set_fpscr
 stack_k:
-	.long	_stack	
+	.long	_stack
 edata_k:
 	.long	_edata
 end_k:
@@ -80,8 +80,8 @@ _old_pr:
 	.long	0
 setup_cache_k:
 	.long	setup_cache
-start_2_k:	
-	.long	start_2	
+start_2_k:
+	.long	start_2
 p2_mask:
 	.long	0xa0000000
 ccr_addr:
@@ -90,7 +90,7 @@ ccr_data:
 	.word	0x090b
 
 	.align 4
-		
+
 #ifdef __ELF__
 	.section .stack,"aw"
 #else

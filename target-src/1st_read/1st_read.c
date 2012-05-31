@@ -1,4 +1,4 @@
-/* 
+/*
  * This file is part of the dcload Dreamcast ethernet loader
  *
  * Copyright (C) 2001 Andrew Kieschnick <andrewk@austin.rr.com>
@@ -19,6 +19,8 @@
  *
  */
 
+#include <string.h>
+
 #define TARGET1 (unsigned int *)0x8c004000
 #define TARGET2 (unsigned int *)0x8c00f400
 
@@ -31,10 +33,9 @@ extern unsigned int binary_exception_bin_size;
 
 int main(void)
 {
-    memcpy(TARGET1, &binary_dcload_bin_start, &binary_dcload_bin_size);
-    memcpy(TARGET2, &binary_exception_bin_start, &binary_exception_bin_size);
+	memcpy(TARGET1, &binary_dcload_bin_start, binary_dcload_bin_size);
+	memcpy(TARGET2, &binary_exception_bin_start, binary_exception_bin_size);
 
-    disable_cache();
-    (*(void (*)()) 0x8c004000) ();
-
+	disable_cache();
+	(*(void (*)()) 0x8c004000) ();
 }

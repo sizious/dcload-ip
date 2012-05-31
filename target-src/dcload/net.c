@@ -1,3 +1,4 @@
+#include <string.h>
 #include "commands.h"
 #include "packet.h"
 #include "adapter.h"
@@ -79,7 +80,7 @@ void process_icmp(ether_header_t *ether, ip_header_t *ip, icmp_header_t *icmp)
 		icmp->checksum = 0;
 		icmp->checksum = checksum((unsigned short *)icmp, ntohs(ip->length)/2 - 2*(ip->version_ihl & 0x0f));
 		/* transmit */
-		bb->tx(ether, ETHER_H_LEN + ntohs(ip->length));
+		bb->tx((unsigned char *)ether, ETHER_H_LEN + ntohs(ip->length));
 	}
 }
 

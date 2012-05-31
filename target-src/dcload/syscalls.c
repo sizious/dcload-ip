@@ -26,6 +26,7 @@
 #include <utime.h>
 #include <stdarg.h>
 #include <dirent.h>
+#include <string.h>
 #include "syscalls.h"
 #include "packet.h"
 #include "net.h"
@@ -42,7 +43,7 @@ udp_header_t * udp = (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN);
 
 /* send command, enable bb, bb_loop(), then return */
 
-int strlen(const char *s)
+size_t strlen(const char *s)
 {
 	int c = 0;
 

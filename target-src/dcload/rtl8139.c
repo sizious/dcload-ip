@@ -1,3 +1,4 @@
+#include <string.h>
 #include "packet.h"
 #include "net.h"
 #include "rtl8139.h"

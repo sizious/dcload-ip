@@ -19,6 +19,7 @@
  *
  */
 
+#include <string.h>
 #include "syscalls.h"
 #include "packet.h"
 #include "net.h"
