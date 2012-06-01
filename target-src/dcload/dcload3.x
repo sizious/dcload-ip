@@ -88,8 +88,8 @@ SECTIONS
   .rela.bss      : { *(.rela.bss)		}
   .rel.plt       : { *(.rel.plt)		}
   .rela.plt      : { *(.rela.plt)		}
-  .init          : 
-  { 
+  .init          :
+  {
     KEEP (*(.init))
   } =0
   .plt      : { *(.plt)	}
@@ -123,7 +123,7 @@ SECTIONS
   .data1   : { *(.data1) }
   .eh_frame : { *(.eh_frame) }
   .gcc_except_table : { *(.gcc_except_table) }
-  .ctors   ALIGN(4): 
+  .ctors   ALIGN(4):
   {
     ___ctors = .;
     /* gcc uses crtbegin.o to find the start of
@@ -159,9 +159,9 @@ SECTIONS
   /* We want the small data sections together, so single-instruction offsets
      can access them all, and initialized data all before uninitialized, so
      we can shorten the on-disk segment size.  */
-  .sdata     : 
+  .sdata     :
   {
-    *(.sdata) 
+    *(.sdata)
     *(.sdata.*)
     *(.gnu.linkonce.s.*)
   }
