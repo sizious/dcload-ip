@@ -602,7 +602,8 @@ unsigned int upload(char *filename, unsigned int address)
             return -1;
         }
 
-        printf("File format is ELF, start address is 0x%x\n", ehdr->e_entry);
+        address = ehdr->e_entry;
+        printf("File format is ELF, start address is 0x%x\n", address);
 
         /* Retrieve the index of the ELF section containing the string table of
            section names */
