@@ -2,6 +2,7 @@
  * This file is part of the dcload Dreamcast ethernet loader
  *
  * Copyright (C) 2001 Andrew Kieschnick <andrewk@austin.rr.com>
+ * Copyright (C) 2013 Lawrence Sebald
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,6 +44,16 @@
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
+
+#ifndef MAX_OPEN_DIRS
+#define MAX_OPEN_DIRS   16
+#endif
+
+/* Sigh... KOS treats anything under 100 as invalid for a dirent from dcload, so
+   we need to offset by a bit. This aught to do. */
+#define DIRENT_OFFSET   1337
+
+static DIR *opendirs[MAX_OPEN_DIRS];
 
 /* syscalls for dcload-ip
  *
@@ -324,10 +335,25 @@ int dc_opendir(unsigned char * buffer)
 {
     DIR *somedir;
     command_string_t *command = (command_string_t *)buffer;
+    int i;
 
-    somedir = opendir(command->string);
+    /* Find an open entry */
+    for(i = 0; i < MAX_OPEN_DIRS; ++i) {
+        if(!opendirs[i])
+            break;
+    }
 
-    send_cmd(CMD_RETVAL, (unsigned int)somedir, (unsigned int)somedir, NULL, 0);
+    if(i < MAX_OPEN_DIRS) {
+        if(!(opendirs[i] = opendir(command->string)))
+            i = 0;
+        else
+            i += DIRENT_OFFSET;
+    }
+    else {
+        i = 0;
+    }
+
+    send_cmd(CMD_RETVAL, (unsigned int)i, (unsigned int)i, NULL, 0);
 
     return 0;
 }
@@ -336,8 +362,16 @@ int dc_closedir(unsigned char * buffer)
 {
     int retval;
     command_int_t *command = (command_int_t *)buffer;
+    uint32_t i = ntohl(command->value0);
 
-    retval = closedir((DIR *) ntohl(command->value0));
+
+    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
+        retval = closedir(opendirs[i - DIRENT_OFFSET]);
+        opendirs[i - DIRENT_OFFSET] = NULL;
+    }
+    else {
+        retval = -1;
+    }
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -349,8 +383,12 @@ int dc_readdir(unsigned char * buffer)
     struct dirent *somedirent;
     dcload_dirent_t dcdirent;
     command_3int_t *command = (command_3int_t *)buffer;
-
-    somedirent = readdir((DIR *)ntohl(command->value0));
+    uint32_t i = ntohl(command->value0);
+    
+    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
+        somedirent = readdir(opendirs[i - DIRENT_OFFSET]);
+    else
+        somedirent = NULL;
 
     if (somedirent) {
 #ifdef __APPLE__
@@ -373,9 +411,11 @@ int dc_readdir(unsigned char * buffer)
 	strcpy(dcdirent.d_name, somedirent->d_name);
 
 	send_data((unsigned char *)&dcdirent, ntohl(command->value1), ntohl(command->value2));
+	send_cmd(CMD_RETVAL, 1, 1, NULL, 0);
+	return 0;
     }
 
-    send_cmd(CMD_RETVAL, (unsigned int)somedirent, (unsigned int)somedirent, NULL, 0);
+    send_cmd(CMD_RETVAL, 0, 0, NULL, 0);
 
     return 0;
 }
