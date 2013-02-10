@@ -127,7 +127,7 @@ void draw_progress(unsigned int current, unsigned int total)
 
 	uint_to_string(total, total_string);
 	uint_to_string(current, current_string);
-	clear_lines(120, 24, 0x0100);
+	clear_lines(120, 24, 0x0010);
 	draw_string(30, 174, "(", 0xffff);
 	draw_string(42, 174, current_string, 0xffff);
 	draw_string(138, 174, "/", 0xffff);
@@ -157,7 +157,7 @@ void disp_info(void)
 	int c;
 	unsigned char *ip = (unsigned char *)&our_ip;
 
-	setup_video(0,0x0100);
+	setup_video(0,0x0010);
 	draw_string(30, 54, NAME, 0xffff);
 	draw_string(30, 78, bb->name, 0xffff);
 	draw_string(30, 102, mac_string, 0xffff);
@@ -168,7 +168,7 @@ void disp_info(void)
 }
 
 void disp_status(const char * status) {
-	clear_lines(150, 24, 0x0100);
+	clear_lines(150, 24, 0x0010);
 	draw_string(30, 150, status, 0xffff);
 }
 

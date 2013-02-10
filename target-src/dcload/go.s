@@ -45,7 +45,7 @@ entry_addr:
 sr_data_k:
 	.long	sr_data
 sr_data:
-	.long	0x600000f0
+	.long	0x500000f0
 vbr_data_k:
 	.long	vbr_data
 vbr_data:

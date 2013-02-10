@@ -21,7 +21,7 @@ EXCOBJECTS	= exception.o
 all: dcload.bin exception.bin
 
 dcload: $(DCLOBJECTS)
-	$(CC) $(CFLAGS) -Wl,-Tdcload$(TARGETCCVER).x -nostartfiles -nostdlib $^ -o $@ -lgcc
+	$(CC) $(CFLAGS) -Wl,-Tdcload.x -nostartfiles -nostdlib $^ -o $@ -lgcc
 
 exception: $(EXCOBJECTS)
 	$(CC) $(CFLAGS) -Wl,-Ttext=0x8c00f400 -nostartfiles -nostdlib $^ -o $@
