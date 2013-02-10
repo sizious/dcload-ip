@@ -1,8 +1,8 @@
-CDRECORD	= cdrecord dev=0,0,0 speed=8
+CDRECORD	= wodim dev=0,0,0 speed=8
 SCRAMBLE	= scramble
 DD		= dd
 CP		= cp
-MKISOFS		= mkisofs
+MKISOFS		= genisoimage
 CAT		= cat
 TOUCH		= touch
 1ST_READ	= ../target-src/1st_read/1st_read.bin
@@ -13,7 +13,7 @@ audio.raw:
 	$(DD) if=/dev/zero of=audio.raw bs=2352 count=300
 
 burn-audio: audio.raw
-	$(CDRECORD) -multi -audio audio.raw
+	$(CDRECORD) -multi -audio -tao audio.raw
 	touch burn-audio
 
 1st_read.bin: $(1ST_READ)
@@ -26,7 +26,7 @@ tmp.iso: 1st_read.bin burn-audio
 	$(MKISOFS) -C `$(CDRECORD) -msinfo` -o tmp.iso 1st_read.bin
 
 burn-data: data.raw
-	$(CDRECORD) -xa1 data.raw
+	$(CDRECORD) -xa -tao -multi data.raw
 	rm -f audio.raw data.raw burn-audio
 
 .PHONY : clean
