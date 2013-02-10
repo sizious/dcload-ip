@@ -1,49 +1,23 @@
 include ../../Makefile.cfg
 
-CC	= $(TARGETCC)
-CFLAGS	= $(TARGETCFLAGS)
-INCLUDE = -I../../target-inc
-OBJCOPY	= $(TARGETOBJCOPY)
-LD	= $(TARGETLD)
+TARGET = 1st_read.bin
 
-OBJECTS	= crt0.o 1st_read.o disable.o memcpy.o dcload.o exception.o
-
-.c.o:
-	$(CC) $(CFLAGS) $(INCLUDE) -o $@ -c $<
-
-.S.o:
-	$(CC) $(CFLAGS) $(INCLUDE) -o $@ -c $<
-
-.s.o:
-	$(CC) $(CFLAGS) $(INCLUDE) -o $@ -c $<
-
-all: 1st_read.bin 1st_read.srec
-
-dcload.bin: ../dcload/dcload.bin
-	cp $< $@
-
-exception.bin: ../dcload/exception.bin
-	cp $< $@
-
-dcload.o: dcload.bin
-	$(LD) -A sh -b binary --oformat elf32-shl $< -o $@ -r -EL --no-warn-mismatch
-
-exception.o: exception.bin
-	$(LD) -A sh -b binary --oformat elf32-shl $< -o $@ -r -EL --no-warn-mismatch
-
-1st_read.bin: 1st_read
-	$(OBJCOPY) -O binary $< $@
-
-1st_read.srec: 1st_read
-	$(OBJCOPY) -O srec $< $@
-
-1st_read: $(OBJECTS)
-	$(CC) $(CFLAGS) -Wl,-Tdc$(TARGETCCVER).x -nostartfiles -nostdlib $^ -o $@ -lgcc
+all: rm-elf $(TARGET)
 
 .PHONY : clean
 clean:
-	rm -f $(OBJECTS) 1st_read dcload.bin exception.bin
+	-rm -f $(TARGET) 1st_read.bin loader.elf
 
 .PHONY : distclean
 distclean: clean
-	rm -f 1st_read.bin 1st_read.srec
+
+.PHONY : rm-elf
+rm-elf:
+	-rm -f $(TARGET) loader.elf
+
+loader.elf: loader.s disable.s ../dcload/dcload.bin ../dcload/exception.bin
+	$(TARGETCC) $(TARGETCFLAGS) -o $@ loader.s disable.s -nostartfiles \
+	    -nostdlib -Ttext=0x8c010000 -Wa,-I../dcload
+
+1st_read.bin: loader.elf
+	$(TARGETOBJCOPY) -R .stack -O binary $^ $@
