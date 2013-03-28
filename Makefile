@@ -1,7 +1,7 @@
 include Makefile.cfg
 
 SUBDIRS = host-src target-src example-src
-MAKE	= make
+MAKE	?= make
 
 all: subdirs
 

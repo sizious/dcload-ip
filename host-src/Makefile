@@ -1,5 +1,5 @@
 SUBDIRS = tool
-MAKE	= make
+MAKE	?= make
 
 .PHONY : subdirs $(SUBDIRS)
 
