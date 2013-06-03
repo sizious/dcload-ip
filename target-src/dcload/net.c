@@ -164,6 +164,10 @@ void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp)
 	if (!memcmp(command->id, CMD_REBOOT, 4)) {
 		cmd_reboot(ip, udp, command);
 	}
+
+    if (!memcmp(command->id, CMD_MAPLE, 4)) {
+        cmd_maple(ip, udp, command);
+    }
 }
 
 void process_mine(unsigned char *pkt, int len)

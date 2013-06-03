@@ -1,4 +1,5 @@
-dcload-ip 1.0.4 - a Dreamcast ethernet loader by <andrewk@napalm-x.com>
+dcload-ip 1.0.5
+A Dreamcast ethernet loader originally by <andrewk@napalm-x.com>
 
 Features
 
@@ -36,7 +37,7 @@ On-screen display
   c0.a8.00.04                   <- dc ip address (in hex)
   idle...                       <- status
 
-  The background of the screen will be green.
+  The background of the screen will be blue.
 
 * For the Broadband Adapter only: if the status line reports "link
   change..." and does not change back to "idle..." within a short period
@@ -46,7 +47,7 @@ On-screen display
   when you execute dc-tool -r, and when you disconnect the ethernet cable.
 
 * If an exception is caught while a loaded program is running, the screen
-  will turn blue and display the exception info. dcload-ip should be
+  will turn lighter blue and display the exception info. dcload-ip should be
   active again after that point.
 
 Testing
@@ -67,24 +68,44 @@ To run a GNU debugger session over the dcload connection:
 3. Build your program with the '-g' GCC switch to include debugging info
 4. Launch your program using 'dc-tool -g -x <prog.elf>'
 5. Launch sh-elf-gdb and connect to the dc-tool using 'target remote :2159'
-6. Squash bugs 
+6. Squash bugs
+
+Maple Passthrough
+
+You can send packets to various maple devices attached to the Dreamcast by
+sending using the MAPL command. Simply send a command packet to the Dreamcast
+that is formatted as follows:
+
+command id: 'MAPL'
+command address: 0 (ignored)
+command size: length of maple packet, in bytes
+command data:
+    Maple Command (1 byte)
+    Maple Port # (1 byte)
+    Maple Slot # (1 byte)
+    Maple data in 4-byte increments (1 byte)
+    Any data to be sent with the command (multiple of 4 bytes)
+
+You will get a similarly formatted response in return.
 
 Notes
 
 * You can use arp instead of setting the dreamcast's ip in Makefile.cfg
 * Tested systems: Debian GNU/Linux 2.2-3.0, Cygwin
 * There are almost certainly bugs
-* Patches and improvements are welcome; please send to bard@allusion.net
+* Patches and improvements are welcome; please send to the cadcdev tracker
+  on SourceForge
 
 Credits
 * rtl8139 code based on code by Dan Potter
 * Lan Adapter driver is pulled from an early version of the KOS LA driver
 * There are some various files from newlib-1.8.2 here
-* video.s was written by Marcus Comstedt
+* video.s, maple.c, and maple.h were written by Marcus Comstedt
 * initial win32 porting and implementation of -t by Florian 'Proff' Schulze
 * win32 bugfix by The Gypsy
 * fixes for cygwin by Florian 'Proff' Schulze
 * rx config bug pointed out by Slant
 * horridly buggy nature of 1.0.1 + 1.0.2 pointed out by Dan Potter
 * Fixes for libbfd segfaults by Atani
+* Inspiration for MAPL packet by Tim Hentenaar
 

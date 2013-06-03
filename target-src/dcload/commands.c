@@ -10,6 +10,7 @@
 #include "go.h"
 #include "disable.h"
 #include "scif.h"
+#include "maple.h"
 
 unsigned int our_ip;
 unsigned int tool_ip;
@@ -205,4 +206,24 @@ void cmd_retval(ip_header_t * ip, udp_header_t * udp, command_t * command)
 		syscall_data = command->data;
 		escape_loop = 1;
 	}
+}
+
+void cmd_maple(ip_header_t * ip, udp_header_t * udp, command_t * command) {
+	char *res;
+	char *buf = (char *)(udp->data + 4);
+	int i;
+
+	memcpy(response, command, COMMAND_LEN);
+
+	do {
+		res = maple_docmd(command->data[0], command->data[1], command->data[2], command->data[3], command->data + 4);
+	} while (*res == MAPLE_RESPONSE_AGAIN);
+
+	/* Send response back over socket */
+	i = ((res[0] < 0) ? 4 : ((res[3] + 1) << 2));
+	response->size = htonl(i);
+	memcpy(response->data, res, i);
+	make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN + i, 17, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
+	make_udp(ntohs(udp->src), ntohs(udp->dest), (unsigned char *)response, COMMAND_LEN + i, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN));
+	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN + i);
 }

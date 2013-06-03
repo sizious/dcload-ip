@@ -15,10 +15,9 @@ typedef struct __attribute__ ((packed)) {
 #define CMD_SENDBIN  "SBIN" /* send a binary */
 #define CMD_SENDBINQ "SBIQ" /* send a binary, quiet */
 #define CMD_VERSION  "VERS" /* send version info */
-
 #define CMD_RETVAL   "RETV" /* return value */
-
-#define CMD_REBOOT   "RBOT"  /* reboot */
+#define CMD_REBOOT   "RBOT" /* reboot */
+#define CMD_MAPLE    "MAPL" /* Maple packet */
 
 #define COMMAND_LEN  12
 
