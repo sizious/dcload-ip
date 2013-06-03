@@ -1,5 +1,5 @@
 SUBDIRS = 1st_read dcload
-MAKE	= make
+MAKE	?= make
 
 .PHONY : subdirs $(SUBDIRS)
 

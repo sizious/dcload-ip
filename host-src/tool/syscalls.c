@@ -391,7 +391,7 @@ int dc_readdir(unsigned char * buffer)
         somedirent = NULL;
 
     if (somedirent) {
-#ifdef __APPLE__
+#if defined (__APPLE__) || defined (__NetBSD__) || defined (__FreeBSD__) || defined (__OpenBSD__)
 	dcdirent.d_ino = dc_order(somedirent->d_fileno);
 	dcdirent.d_off = dc_order(0);
 	dcdirent.d_reclen = dc_order(somedirent->d_reclen);
