@@ -275,11 +275,13 @@ nonlace:
 
 	! Select RGB/CVBS
 	mov.l	cvbsbase,r1
-	rotr	r4
-	bf/s	rgbmode
-	mov	#0,r0
-	mov	#3,r0
-rgbmode:
+	mov	r4,r0
+	and	#3,r0
+	!rotr	r4
+	!bf/s	rgbmode
+	!mov	#0,r0
+	!mov	#3,r0
+!rgbmode:
 	shll8	r0
 	mov.l	r0,@r1
 
