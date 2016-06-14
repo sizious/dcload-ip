@@ -100,7 +100,7 @@ int dc_fstat(unsigned char * buffer)
     send_data((unsigned char *)&dcstat, ntohl(command->value1), ntohl(command->value2));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
-    
+
     return 0;
 }
 
@@ -184,7 +184,7 @@ int dc_close(unsigned char * buffer)
     retval = close(ntohl(command->value0));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
-    
+
     return 0;
 }
 
@@ -196,7 +196,7 @@ int dc_creat(unsigned char * buffer)
     retval = creat(command->string, ntohl(command->value0));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
-    
+
     return 0;
 }
 
@@ -217,7 +217,7 @@ int dc_link(unsigned char * buffer)
 #endif
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
-    
+
     return 0;
 }
 
@@ -229,7 +229,7 @@ int dc_unlink(unsigned char * buffer)
     retval = unlink(command->string);
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
-    
+
     return 0;
 }
 
@@ -384,7 +384,7 @@ int dc_readdir(unsigned char * buffer)
     dcload_dirent_t dcdirent;
     command_3int_t *command = (command_3int_t *)buffer;
     uint32_t i = ntohl(command->value0);
-    
+
     if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
         somedirent = readdir(opendirs[i - DIRENT_OFFSET]);
     else
@@ -398,7 +398,7 @@ int dc_readdir(unsigned char * buffer)
 	dcdirent.d_type = dc_order(somedirent->d_type);
 #else
 	dcdirent.d_ino = dc_order(somedirent->d_ino);
-# ifdef _WIN32
+# if defined(_WIN32) || defined(__CYGWIN__)
 	dcdirent.d_off = dc_order(0);
 	dcdirent.d_reclen = dc_order(0);
 	dcdirent.d_type = dc_order(0);
@@ -416,6 +416,27 @@ int dc_readdir(unsigned char * buffer)
     }
 
     send_cmd(CMD_RETVAL, 0, 0, NULL, 0);
+
+    return 0;
+}
+
+int dc_rewinddir(unsigned char * buffer)
+{
+    int retval;
+    command_int_t *command = (command_int_t *)buffer;
+    uint32_t i = ntohl(command->value0);
+
+
+    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
+        rewinddir(opendirs[i - DIRENT_OFFSET]);
+        opendirs[i - DIRENT_OFFSET] = NULL;
+        retval = 0;
+    }
+    else {
+        retval = -1;
+    }
+
+    send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
     return 0;
 }
@@ -438,6 +459,7 @@ int dc_cdfs_redir_read_sectors(int isofd, unsigned char * buffer)
 
     send_cmd(CMD_RETVAL, 0, 0, NULL, 0);
 
+    free(buf);
     return 0;
 }
 
@@ -500,6 +522,6 @@ int dc_gdbpacket(unsigned char * buffer)
 	}
 #endif
     send_cmd(CMD_RETVAL, retval, retval, (unsigned char *)gdb_buf, retval);
-    
+
     return 0;
 }

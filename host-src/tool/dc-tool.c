@@ -249,9 +249,9 @@ int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int 
 
     while (((time_in_usec() - start) < PACKET_TIMEOUT)&&(packets < ((total+1023)/1024 + 1))) {
 	memset(buffer, 0, 2048);
-	
+
 	while(((retval = recv(dcsocket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
-	
+
 	if (retval > 0) {
 	    start = time_in_usec();
 	    if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4)) {
@@ -278,13 +278,13 @@ int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int 
 	    else {
 		send_cmd(CMD_SENDBINQ, dcaddr + c*1024, total - c*1024, NULL, 0);
 	    }
-	    
+
 	    start = time_in_usec();
 	    while(((retval = recv(dcsocket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
-	    
+
 	    if (retval > 0) {
 		start = time_in_usec();
-		
+
 		if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4)) {
 		    map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1024 ] = 1;
 		    /* printf("recv_data: got chunk for %p, %d bytes\n",
@@ -304,7 +304,7 @@ int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int 
 	}
 
     free(map);
-    
+
     return 0;
 }
 
@@ -379,13 +379,13 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
 
 	while(memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4)) {
 	    printf("send_data: error in response to CMD_DONEBIN, retrying...\n");
-	    
+
 	    do
 		send_cmd(CMD_LOADBIN, dcaddr, size, NULL, 0);
 	    while (recv_response(buffer, PACKET_TIMEOUT) == -1);
 	}
     }
-    
+
     return 0;
 }
 
@@ -420,7 +420,7 @@ int start_ws()
 	perror("WSAStartup");
 	return 1;
     }
-	
+
 	return 0;
 }
 #endif
@@ -500,7 +500,7 @@ int send_command(char *command, unsigned int addr, unsigned int size, unsigned c
 	memcpy(c_buff + 12, data, dsize);
 
     error = send(dcsocket, (void *)c_buff, 12+dsize, 0);
-    
+
     if(error == -1) {
 #ifndef __MINGW32__
 	if(errno == EAGAIN)
@@ -516,7 +516,7 @@ int send_command(char *command, unsigned int addr, unsigned int size, unsigned c
 
 	return -1;
     }
-    
+
     return 0;
 }
 
@@ -808,8 +808,10 @@ int do_console(char *path, char *isofile)
 	    CatchError(dc_gdbpacket(buffer));
 
 		// reset the timer
-		time.tv_nsec = 500000000; 
+		time.tv_nsec = 500000000;
     }
+    if(!(memcmp(buffer, CMD_REWINDDIR, 4)))
+        CatchError(dc_rewinddir(buffer));
 
     return 0;
 }
@@ -817,7 +819,7 @@ int do_console(char *path, char *isofile)
 int open_gdb_socket(int port)
 {
   struct sockaddr_in server_addr;
- 
+
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons( port );
   server_addr.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
@@ -877,7 +879,7 @@ int main(int argc, char *argv[])
 	return 0;
     }
 
-	
+
 #ifdef __MINGW32__
 	if(start_ws())
 		return -1;
@@ -1046,4 +1048,3 @@ doclean:
     cleanup(cleanlist);
     return -1;
 }
-

@@ -40,6 +40,7 @@ int dc_utime(unsigned char * buffer);
 int dc_opendir(unsigned char * buffer);
 int dc_readdir(unsigned char * buffer);
 int dc_closedir(unsigned char * buffer);
+int dc_rewinddir(unsigned char * buffer);
 
 int dc_cdfs_redir_read_sectors(int isofd, unsigned char * buffer);
 
@@ -66,6 +67,7 @@ int dc_gdbpacket(unsigned char * buffer);
 #define CMD_READDIR  "DC18"
 #define CMD_CDFSREAD "DC19"
 #define CMD_GDBPACKET "DC20"
+#define CMD_REWINDDIR "DC21"
 
 struct _command_3int_t {
 	unsigned char id[4];
@@ -134,4 +136,3 @@ typedef struct _command_3int_string_t command_3int_string_t;
  */
 
 #endif
-

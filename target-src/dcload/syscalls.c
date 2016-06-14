@@ -356,6 +356,19 @@ struct dirent *readdir(DIR *dir)
 		return 0;
 }
 
+int rewinddir(DIR *dir)
+{
+	command_int_t * command = (command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+
+	memcpy(command->id, CMD_REWINDDIR, 4);
+	command->value0 = htonl(dir);
+
+	build_send_packet(sizeof(command_int_t));
+	bb->loop();
+
+	return syscall_retval;
+}
+
 int gethostinfo(unsigned int *ip, unsigned int *port)
 {
 	*ip = tool_ip;

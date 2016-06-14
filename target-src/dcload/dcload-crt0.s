@@ -125,7 +125,7 @@ _dcloadsyscall:
 	mov	r6,r5
 	mov	r7,r6
 
-	mov	#20,r1
+	mov	#21,r1
 	cmp/hs	r0,r1
 	bf	badsyscall
 
@@ -189,3 +189,5 @@ hostinfo_k:
 	.long _gethostinfo
 gdbpacket_k:
 	.long _gdbpacket
+rewinddir_k:
+	.long _rewinddir
