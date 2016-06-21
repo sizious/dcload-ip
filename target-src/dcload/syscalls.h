@@ -43,6 +43,7 @@
 #define CMD_READDIR  "DC18"
 #define CMD_CDFSREAD "DC19"
 #define CMD_GDBPACKET "DC20"
+#define CMD_REWINDDIR "DC21"
 
 extern unsigned int syscall_retval;
 extern unsigned char* syscall_data;
