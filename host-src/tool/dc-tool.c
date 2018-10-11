@@ -19,6 +19,8 @@
  *
  */
 
+#include "config.h" // needed for newer BFD library
+ 
 #ifdef WITH_BFD
 #include <bfd.h>
 #else
@@ -56,7 +58,7 @@ int _nl_msg_cat_cntr;
 
 #define CatchError(x) if(x) return -1;
 
-#define VERSION DCLOAD_VERSION
+#define VERSION PACKAGE_VERSION
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -118,7 +120,7 @@ char    *optarg;                /* argument associated with option */
 #define BADARG  (int)':'
 #define EMSG    ""
 
-char *__progname="dc-tool";
+char *__progname=PACKAGE;
 
 /*
  * getopt -- Parse argc/argv argument vector.
@@ -391,7 +393,7 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
 
 void usage(void)
 {
-    printf("\ndc-tool %s by <andrewk@napalm-x.com>\n\n",VERSION);
+    printf("\n%s %s by <andrewk@napalm-x.com>\n\n",PACKAGE,VERSION);
     printf("-x <filename> Upload and execute <filename>\n");
     printf("-u <filename> Upload <filename>\n");
     printf("-d <filename> Download to <filename>\n");

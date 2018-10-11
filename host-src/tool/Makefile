@@ -12,7 +12,11 @@ else
 	INCLUDE	= $(ELFINCLUDE)
 endif
 
-DCTOOL	= dc-tool$(EXECUTABLEEXTENSION)
+ifdef STANDALONE_BINARY
+	LDFLAGS += -static
+endif
+
+DCTOOL	= dc-tool-ip$(EXECUTABLEEXTENSION)
 
 OBJECTS	= dc-tool.o syscalls.o unlink.o
 
@@ -25,9 +29,10 @@ $(DCTOOL): $(OBJECTS)
 	$(CC) -o $@ $(OBJECTS) $(LDFLAGS)
 
 .PHONY : install
-install: $(DCTOOL)
-	-mkdir $(TOOLINSTALLDIR)
+install: $(DCTOOL) | $(TOOLINSTALLDIR)	
 	cp $(DCTOOL) $(TOOLINSTALLDIR)
+$(TOOLINSTALLDIR):
+	-mkdir $(TOOLINSTALLDIR)
 
 .PHONY : clean
 clean:
