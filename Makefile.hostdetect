@@ -1,0 +1,26 @@
+# Determine on what platform we are running
+
+# This is much more simpler than using "config.guess", but it will be sufficient
+# for this little program.
+
+HOST = $(shell uname -s)
+
+# BSD
+ifneq ($(shell echo $(HOST) | grep -i 'BSD$$'),)
+  BSD := 1
+endif
+
+# macOS
+ifeq ($(shell echo $(HOST)),Darwin)
+  MACOS := 1
+endif
+
+# MinGW/MSYS
+ifeq ($(shell echo $(HOST) | cut -c-7),MINGW32)
+  MINGW32 := 1
+endif
+
+# Cygwin
+ifeq ($(shell echo $(HOST) | cut -c-6),CYGWIN)
+  CYGWIN := 1
+endif

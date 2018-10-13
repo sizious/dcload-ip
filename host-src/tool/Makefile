@@ -1,15 +1,22 @@
 include ../../Makefile.cfg
 
-CC	= $(HOSTCC)
-CFLAGS	= $(HOSTCFLAGS) -DDREAMCAST_IP=\"$(DREAMCAST_IP)\" -DHAVE_GETOPT
+CC		= $(HOSTCC)
+CFLAGS	= $(HOSTCFLAGS) -DDCLOAD_VERSION=\"$(VERSION)\" -DDREAMCAST_IP=\"$(DREAMCAST_IP)\" -DHAVE_GETOPT
+LDFLAGS = $(HOSTLDFLAGS)
+INCLUDE =
 
-ifdef WITH_BFD
+ifeq ($(WITH_BFD),1)
   CFLAGS	+= -DWITH_BFD
-  LDFLAGS	= $(HOSTLDFLAGS) $(BFDLIB)
-  INCLUDE	= $(BFDINCLUDE)
+  LDFLAGS	= -L$(BFDLIB) -lbfd -liberty -lintl -lz
+  INCLUDE	+= -I$(BFDINCLUDE)
 else
-  LDFLAGS	= $(HOSTLDFLAGS) $(ELFLIB) -lelf
-  INCLUDE	= $(ELFINCLUDE)
+  LDFLAGS	= -L$(ELFLIB) -lelf
+  INCLUDE	+= -I$(ELFINCLUDE)
+endif
+
+# Additional libraries for MinGW/MSYS
+ifdef MINGW32
+  BFDLIB	+= -lws2_32 -lwsock32 -liconv
 endif
 
 ifdef STANDALONE_BINARY
