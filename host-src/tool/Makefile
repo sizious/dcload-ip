@@ -16,11 +16,11 @@ endif
 
 # Additional libraries for MinGW/MSYS
 ifdef MINGW32
-  BFDLIB	+= -lws2_32 -lwsock32 -liconv
+  LDFLAGS 	+= -lws2_32 -lwsock32 -liconv
 endif
 
 ifdef STANDALONE_BINARY
-  LDFLAGS += -static
+  LDFLAGS 	+= -static
 endif
 
 DCTOOL	= dc-tool-ip$(EXECUTABLEEXTENSION)
