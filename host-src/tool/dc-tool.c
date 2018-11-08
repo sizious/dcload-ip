@@ -859,6 +859,12 @@ int open_gdb_socket(int port)
     return 0;
 }
 
+#ifdef __MINGW32__
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:i:npqhrg"
+#else
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:c:i:npqhrg"
+#endif
+
 int main(int argc, char *argv[])
 {
     unsigned int address = 0x8c010000;
@@ -885,11 +891,9 @@ int main(int argc, char *argv[])
 #ifdef __MINGW32__
 	if(start_ws())
 		return -1;
-
-	someopt = getopt(argc, argv, "x:u:d:a:s:t:i:npqhrg");
-#else
-    someopt = getopt(argc, argv, "x:u:d:a:s:t:c:i:npqhrg");
 #endif
+
+	someopt = getopt(argc, argv, AVAILABLE_OPTIONS);
     while (someopt > 0) {
 	switch (someopt) {
 	case 'x':
@@ -974,11 +978,7 @@ int main(int argc, char *argv[])
 	    goto doclean;
 	    break;
 	}
-#ifdef __MINGW32__
-	someopt = getopt(argc, argv, "x:u:d:a:s:t:i:nqhr");
-#else
-	someopt = getopt(argc, argv, "x:u:d:a:s:t:c:i:nqhr");
-#endif
+	someopt = getopt(argc, argv, AVAILABLE_OPTIONS);
     }
 
     if (quiet)
