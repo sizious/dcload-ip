@@ -466,8 +466,10 @@ int dc_cdfs_redir_read_sectors(int isofd, unsigned char * buffer)
 #define GDBBUFSIZE 1024
 #ifdef __MINGW32__
 extern SOCKET gdb_server_socket;
+extern SOCKET socket_fd;
 #else
 extern int gdb_server_socket;
+extern int socket_fd;
 #endif
 
 int dc_gdbpacket(unsigned char * buffer)
@@ -475,14 +477,10 @@ int dc_gdbpacket(unsigned char * buffer)
     size_t in_size, out_size;
     static char gdb_buf[GDBBUFSIZE];
     int retval = 0;
-#ifdef __MINGW32__
-	/* Winsock SOCKET is defined as an unsigned int, so -1 won't work here */
-	static SOCKET socket_fd = 0;
-
+	
+#ifdef __MINGW32__	
 	if (gdb_server_socket == INVALID_SOCKET) {
 #else
-    static int socket_fd = 0;
-
 	if (gdb_server_socket < 0) {
 #endif
         send_cmd(CMD_RETVAL, -1, -1, NULL, 0);
