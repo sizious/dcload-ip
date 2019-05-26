@@ -13,13 +13,14 @@ Features
 
 Building
 
-1. Edit Makefile.cfg for your system and network, and then run make
+1. Edit Makefile.cfg for your system and network, and then run `make`
 
 Installation
 
 1. PC - run make install (installs dc-tool)
 2. DC
-   a. cd make-cd, edit Makefile, insert blank cd-r, run make
+   a. `cd make-cd`, edit Makefile, insert blank cd-r, run `make`. If
+   1st_read.bin hasn't been built yet, this Makefile will build it
  or 
    b. take target-src/1st_read/1st_read.bin and stuff it on a cd yourself
       (please use the IP.BIN from the make-cd directory if you are going
@@ -31,11 +32,11 @@ On-screen display
   gone wrong. The background of the screen will be red.
 
 * The correct display is something like:
-  dcload-ip 1.0.4               <- name/version
-  Broadband Adapter (HIT-0400)  <- adapter driver in use
-  00:d0:f1:02:ab:dd             <- dc hardware address
-  c0.a8.00.04                   <- dc ip address (in hex)
-  idle...                       <- status
+  `dcload-ip 1.0.4             `  <- name/version
+  `Broadband Adapter (HIT-0400)`  <- adapter driver in use
+  `00:d0:f1:02:ab:dd           `  <- dc hardware address
+  `c0.a8.00.04                 `  <- dc ip address (in hex)
+  `idle...                     `  <- status
 
   The background of the screen will be blue.
 
@@ -52,10 +53,10 @@ On-screen display
 
 Testing
 
-1. cd example-src
-2. dc-tool -x console-test (tests some PC I/O)
-3. dc-tool -x exception-test (generates an exception)
-4. dc-tool -x gethostinfo (displays the Dreamcast's ip, and the ip and port of
+1. `cd example-src`
+2. `dc-tool -x console-test` (tests some PC I/O)
+3. `dc-tool -x exception-test` (generates an exception)
+4. `dc-tool -x gethostinfo` (displays the Dreamcast's ip, and the ip and port of
    the dc-tool host)
 
 KOS GDB-over-dcload
