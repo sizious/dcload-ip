@@ -35,7 +35,7 @@ A Dreamcast ethernet loader originally by <andrewk@napalm-x.com>
 
 * The correct display is something like:
 
-  `dcload-ip 1.0.4`  <- name/version  
+  `dcload-ip 1.0.5`  <- name/version  
   `Broadband Adapter (HIT-0400)`  <- adapter driver in use  
   `00:d0:f1:02:ab:dd`  <- dc hardware address  
   `c0.a8.00.04`  <- dc ip address (in hex)  
