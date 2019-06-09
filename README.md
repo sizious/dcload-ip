@@ -1,7 +1,8 @@
-dcload-ip 1.0.5
+# dcload-ip 1.0.5
+
 A Dreamcast ethernet loader originally by <andrewk@napalm-x.com>
 
-Features
+### Features
 
 * Load elf, srec, and bin
 * PC I/O (read, write, etc to PC - compatible with original dcload)
@@ -11,31 +12,34 @@ Features
 * Supports both the Broadband Adapter (HIT-0400) and Lan Adapter (HIT-0300)
   in a single binary
 
-Building
+### Building
 
-1. Edit Makefile.cfg for your system and network, and then run make
+1. Edit Makefile.cfg for your system and network, and then run `make`
 
-Installation
+### Installation
 
 1. PC - run make install (installs dc-tool)
 2. DC
-   a. cd make-cd, edit Makefile, insert blank cd-r, run make
- or 
-   b. take target-src/1st_read/1st_read.bin and stuff it on a cd yourself
+
+ a. `cd make-cd`, edit Makefile, insert blank cd-r, run `make`. If
+   `1st_read.bin` hasn't been built yet, this Makefile will build it  
+ or  
+ b. take `target-src/1st_read/1st_read.bin` and stuff it on a cd yourself
       (please use the IP.BIN from the make-cd directory if you are going
        to distribute either cds or cd images)
   
-On-screen display
+### On-screen display
 
 * If you see the message "NO ETHERNET ADAPTER DETECTED!", something has
   gone wrong. The background of the screen will be red.
 
 * The correct display is something like:
-  dcload-ip 1.0.4               <- name/version
-  Broadband Adapter (HIT-0400)  <- adapter driver in use
-  00:d0:f1:02:ab:dd             <- dc hardware address
-  c0.a8.00.04                   <- dc ip address (in hex)
-  idle...                       <- status
+
+  `dcload-ip 1.0.5`  <- name/version  
+  `Broadband Adapter (HIT-0400)`  <- adapter driver in use  
+  `00:d0:f1:02:ab:dd`  <- dc hardware address  
+  `c0.a8.00.04`  <- dc ip address (in hex)  
+  `idle...`  <- status  
 
   The background of the screen will be blue.
 
@@ -50,15 +54,15 @@ On-screen display
   will turn lighter blue and display the exception info. dcload-ip should be
   active again after that point.
 
-Testing
+### Testing
 
-1. cd example-src
-2. dc-tool -x console-test (tests some PC I/O)
-3. dc-tool -x exception-test (generates an exception)
-4. dc-tool -x gethostinfo (displays the Dreamcast's ip, and the ip and port of
+1. `cd example-src`
+2. `dc-tool -x console-test` (tests some PC I/O)
+3. `dc-tool -x exception-test` (generates an exception)
+4. `dc-tool -x gethostinfo` (displays the Dreamcast's ip, and the ip and port of
    the dc-tool host)
 
-KOS GDB-over-dcload
+### KOS GDB-over-dcload
 
 To run a GNU debugger session over the dcload connection:
 
@@ -66,29 +70,30 @@ To run a GNU debugger session over the dcload connection:
 2. Put a 'gdb_init()' call somewhere in the startup area of your
    KOS-based program
 3. Build your program with the '-g' GCC switch to include debugging info
-4. Launch your program using 'dc-tool -g -x <prog.elf>'
-5. Launch sh-elf-gdb and connect to the dc-tool using 'target remote :2159'
+4. Launch your program using `dc-tool -g -x <prog.elf>`
+5. Launch sh-elf-gdb and connect to the dc-tool using `target remote :2159`
 6. Squash bugs
 
-Maple Passthrough
+### Maple Passthrough
 
 You can send packets to various maple devices attached to the Dreamcast by
 sending using the MAPL command. Simply send a command packet to the Dreamcast
 that is formatted as follows:
 
-command id: 'MAPL'
-command address: 0 (ignored)
-command size: length of maple packet, in bytes
+command id: `MAPL`  
+command address: 0 (ignored)  
+command size: length of maple packet, in bytes  
 command data:
-    Maple Command (1 byte)
-    Maple Port # (1 byte)
-    Maple Slot # (1 byte)
-    Maple data in 4-byte increments (1 byte)
-    Any data to be sent with the command (multiple of 4 bytes)
+
+- Maple Command (1 byte)  
+- Maple Port # (1 byte)  
+- Maple Slot # (1 byte)  
+- Maple data in 4-byte increments (1 byte)  
+- Any data to be sent with the command (multiple of 4 bytes)  
 
 You will get a similarly formatted response in return.
 
-Notes
+### Notes
 
 * You can use arp instead of setting the dreamcast's ip in Makefile.cfg
 * Tested systems: Debian GNU/Linux 2.2-3.0, Cygwin
@@ -96,7 +101,7 @@ Notes
 * Patches and improvements are welcome; please send to the cadcdev tracker
   on SourceForge
 
-Credits
+### Credits
 * rtl8139 code based on code by Dan Potter
 * Lan Adapter driver is pulled from an early version of the KOS LA driver
 * There are some various files from newlib-1.8.2 here
