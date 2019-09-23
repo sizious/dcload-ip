@@ -52,6 +52,8 @@
 #include "dc-io.h"
 #include "commands.h"
 
+#include "utils.h"
+
 int _nl_msg_cat_cntr;
 
 #define DEBUG(x, ...) fprintf(stderr, "DEBUG: "); fprintf(stderr, x, __VA_ARGS__)
@@ -447,7 +449,7 @@ int start_ws()
     int failed = 0;
     failed = WSAStartup(MAKEWORD(2,2), &wsaData);
     if ( failed != NO_ERROR ) {
-	perror("WSAStartup");
+	log("WSAStartup");
 	return 1;
     }
 
@@ -467,7 +469,7 @@ int open_socket(char *hostname)
 #else
     if (dcsocket == INVALID_SOCKET) {
 #endif
-	perror("socket");
+	log("socket");
 	return -1;
     }
 
@@ -478,14 +480,14 @@ int open_socket(char *hostname)
     host = gethostbyname(hostname);
 
     if (!host) {
-	perror("gethostbyname");
+	log("gethostbyname");
 	return -1;
     }
 
     memcpy((char *)&sin.sin_addr, host->h_addr, host->h_length);
 
     if (connect(dcsocket, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-	perror("connect");
+	log("connect");
 	return -1;
     }
 
@@ -494,7 +496,7 @@ int open_socket(char *hostname)
 	int failed = 0;
     failed = ioctlsocket(dcsocket, FIONBIO, &flags);
     if ( failed == SOCKET_ERROR ) {
-	perror("ioctlsocket");
+	log("ioctlsocket");
 	return -1;
     }
 #else
@@ -617,7 +619,7 @@ unsigned int upload(char *filename, unsigned int address)
     }
 
     if((inputfd = open(filename, O_RDONLY | O_BINARY)) < 0) {
-        perror(filename);
+        log(filename);
         return -1;
     }
 
@@ -686,7 +688,7 @@ unsigned int upload(char *filename, unsigned int address)
     inputfd = open(filename, O_RDONLY | O_BINARY);
 
     if (inputfd < 0) {
-        perror(filename);
+        log(filename);
         return -1;
     }
 
@@ -728,7 +730,7 @@ int download(char *filename, unsigned int address,
     outputfd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
 
     if (outputfd < 0) {
-	perror(filename);
+	log(filename);
 	return -1;
     }
 
@@ -779,13 +781,13 @@ int do_console(char *path, char *isofile)
     if (isofile) {
 	isofd = open(isofile, O_RDONLY | O_BINARY);
 	if (isofd < 0)
-	    perror(isofile);
+	    log(isofile);
     }
 
 #ifndef __MINGW32__
     if (path)
 	if (chroot(path))
-	    perror(path);
+	    log(path);
 #endif
 
     while (1) {
@@ -860,7 +862,7 @@ int open_gdb_socket(int port)
 #else
   if ( gdb_server_socket < 0 ) {
 #endif
-	perror( "error creating gdb server socket" );
+	log( "error creating gdb server socket" );
 	return -1;
   }
 
@@ -870,7 +872,7 @@ int open_gdb_socket(int port)
 #else
   if ( checkbind < 0 ) {
 #endif
-	perror( "error binding gdb server socket" );
+	log( "error binding gdb server socket" );
 	return -1;
   }
 
@@ -880,7 +882,7 @@ int open_gdb_socket(int port)
 #else
   if ( checklisten < 0 ) {
 #endif
-	perror( "error listening to gdb server socket" );
+	log( "error listening to gdb server socket" );
 	return -1;
     }
 
