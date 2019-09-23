@@ -495,7 +495,7 @@ int dc_gdbpacket(unsigned char * buffer)
 	if ( socket_fd != INVALID_SOCKET)
 #endif
 	if ( socket_fd == 0) {
-	    log("error accepting gdb server connection");
+	    log_error("error accepting gdb server connection");
 	    return -1;
 	}
     }

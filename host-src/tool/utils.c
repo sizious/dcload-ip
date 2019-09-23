@@ -3,7 +3,7 @@
 #include <windows.h>
 #endif
 
-void log( const char * prefix ) {
+void log_error( const char * prefix ) {
 	perror( prefix );
 	
 #ifdef __MINGW32__	
