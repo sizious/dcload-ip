@@ -9,7 +9,7 @@ void log_error( const char * prefix ) {
 #ifdef __MINGW32__	
 	DWORD dwError = WSAGetLastError();
 	if ( dwError ) {
-      printf("WSAGetLastError: %d", dwError);
+      printf("WSAGetLastError: %d\n", dwError);
 	}
 #endif
 }
