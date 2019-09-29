@@ -479,10 +479,16 @@ int open_socket(char *hostname)
 
     host = gethostbyname(hostname);
 
-    if (!host) {
-	log_error("gethostbyname");
-	return -1;
-    }
+	if (!host) {
+		// Try to remove leading zeros from hostname...
+		cleanup_ip_address(hostname);
+		host = gethostbyname(hostname);
+		if (!host) {
+			// definitely, we can't do nothing
+			log_error("gethostbyname");
+			return -1;
+		}
+	}
 
     memcpy((char *)&sin.sin_addr, host->h_addr, host->h_length);
 
