@@ -1,36 +1,37 @@
+
 # dcload-ip 1.0.5
 
-A Dreamcast ethernet loader originally by <andrewk@napalm-x.com>
+A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/).
 
 ### Features
 
-* Load elf, srec, and bin
+* Load  `elf`, `srec`, and `bin`
 * PC I/O (read, write, etc to PC - compatible with original dcload)
 * Exception handler
 * Extremely fast (at least for me - I get 1130Kbyte/sec on 10mbit half-duplex)
 * Now works on 100mbit (I get 2580Kbyte/sec on 100mbit half-duplex)
-* Supports both the Broadband Adapter (HIT-0400) and Lan Adapter (HIT-0300)
+* Supports both the **Broadband Adapter** (HIT-0400) and **LAN Adapter** (HIT-0300)
   in a single binary
 
 ### Building
 
-1. Edit Makefile.cfg for your system and network, and then run `make`
+1. Edit `Makefile.cfg` for your system and network, and then run `make`.
 
 ### Installation
 
-1. PC - run make install (installs dc-tool)
+1. PC - run `make install` (installs dc-tool)
 2. DC
 
- a. `cd make-cd`, edit Makefile, insert blank cd-r, run `make`. If
-   `1st_read.bin` hasn't been built yet, this Makefile will build it  
+ a. `cd make-cd`, edit `Makefile`, insert blank cd-r, run `make`. If
+   `1st_read.bin` hasn't been built yet, this `Makefile` will build it  
  or  
  b. take `target-src/1st_read/1st_read.bin` and stuff it on a cd yourself
-      (please use the IP.BIN from the make-cd directory if you are going
-       to distribute either cds or cd images)
+      (please use the `IP.BIN` from the `make-cd` directory if you are going
+       to distribute either cds or cd images).
   
 ### On-screen display
 
-* If you see the message "NO ETHERNET ADAPTER DETECTED!", something has
+* If you see the message `NO ETHERNET ADAPTER DETECTED!`, something has
   gone wrong. The background of the screen will be red.
 
 * The correct display is something like:
@@ -43,12 +44,12 @@ A Dreamcast ethernet loader originally by <andrewk@napalm-x.com>
 
   The background of the screen will be blue.
 
-* For the Broadband Adapter only: if the status line reports "link
-  change..." and does not change back to "idle..." within a short period
+* For the **Broadband Adapter** only: if the status line reports `link
+  change...` and does not change back to `idle...` within a short period
   of time, you may have a cable problem. dcload-ip will not work while
-  "link change..." is displayed, or before it is displayed the first time.
-  The "link change..." message normally is seen when you start dcload-ip,
-  when you execute dc-tool -r, and when you disconnect the ethernet cable.
+  `link change...` is displayed, or before it is displayed the first time.
+  The `link change...` message normally is seen when you start dcload-ip,
+  when you execute `dc-tool -r`, and when you disconnect the ethernet cable.
 
 * If an exception is caught while a loaded program is running, the screen
   will turn lighter blue and display the exception info. dcload-ip should be
@@ -67,9 +68,9 @@ A Dreamcast ethernet loader originally by <andrewk@napalm-x.com>
 To run a GNU debugger session over the dcload connection:
 
 1. Build/obtain an sh-elf targetted GNU debugger
-2. Put a 'gdb_init()' call somewhere in the startup area of your
+2. Put a `gdb_init()` call somewhere in the startup area of your
    KOS-based program
-3. Build your program with the '-g' GCC switch to include debugging info
+3. Build your program with the `-g` GCC switch to include debugging info
 4. Launch your program using `dc-tool -g -x <prog.elf>`
 5. Launch sh-elf-gdb and connect to the dc-tool using `target remote :2159`
 6. Squash bugs
@@ -95,22 +96,22 @@ You will get a similarly formatted response in return.
 
 ### Notes
 
-* You can use arp instead of setting the dreamcast's ip in Makefile.cfg
-* Tested systems: Debian GNU/Linux 2.2-3.0, Cygwin
+* You can use `arp` instead of setting the dreamcast's ip in `Makefile.cfg`. On Windows, you may use the `netsh` command which is more reliable (e.g. `netsh interface ip add neighbors "Ethernet" 192.168.10.1 AA-BB-CC-DD-EE-FF)`. In that case, don't forget to specify an IP address in the Ethernet card of your computer.
+* Tested systems: Debian GNU/Linux 2.2-3.0, Cygwin, MinGW, [DreamSDK](https://www.dreamsdk.org)
 * There are almost certainly bugs
-* Patches and improvements are welcome; please send to the cadcdev tracker
+* Patches and improvements are welcome; please send to the `cadcdev` tracker
   on SourceForge
 
 ### Credits
 * rtl8139 code based on code by Dan Potter
-* Lan Adapter driver is pulled from an early version of the KOS LA driver
-* There are some various files from newlib-1.8.2 here
-* video.s, maple.c, and maple.h were written by Marcus Comstedt
+* LAN Adapter driver is pulled from an early version of the KOS LA driver
+* There are some various files from `newlib-1.8.2` here
+* `video.s`, `maple.c`, and `maple.h` were written by Marcus Comstedt
 * initial win32 porting and implementation of -t by Florian 'Proff' Schulze
 * win32 bugfix by The Gypsy
 * fixes for cygwin by Florian 'Proff' Schulze
 * rx config bug pointed out by Slant
 * horridly buggy nature of 1.0.1 + 1.0.2 pointed out by Dan Potter
-* Fixes for libbfd segfaults by Atani
-* Inspiration for MAPL packet by Tim Hentenaar
+* Fixes for `libbfd` segfaults by Atani
+* Inspiration for `MAPL` packet by Tim Hentenaar
 
