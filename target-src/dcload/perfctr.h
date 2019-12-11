@@ -133,8 +133,6 @@
 #define PMCTR2H_REG 0xFF10000C
 #define PMCTR2L_REG 0xFF100010
 
-#define MAXIMUM_SECONDS 1407374
-
 // Performance Counter Functions
 // See perfctr.c file for more details about each function and some more usage notes.
 

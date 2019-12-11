@@ -10,7 +10,7 @@ asm_only:
 
 .PHONY : clean
 clean:
-	-rm -f $(TARGET) loader.bin loader.elf *.asm
+	-rm -f $(TARGET) loader.bin loader.elf loader.o *.asm
 
 .PHONY : distclean
 distclean: clean
