@@ -4,7 +4,11 @@
 #include "rtl8139.h"
 #include "dcload.h"
 
-static rtl_status_t rtl;
+#include "dhcp.h"
+
+static rtl_status_t rtl = {0};
+static unsigned char rtl_link_up = 0;
+static unsigned char rtl_is_copying = 0;
 
 // Defined below
 extern adapter_t adapter_bba;
@@ -68,10 +72,12 @@ static void rtl_init()
 	nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE;
 
 	/* Set Rx FIFO threashold to 16 bytes, Rx size to 16k+16, 1024 byte DMA burst */
-	nic32[RT_RXCONFIG/4] = 0x00000e00;
+	nic32[RT_RXCONFIG/4] = 0x00000e00; // (1<<7 = 0x80) for nowrap or bit 7 = 0 for wrap, 1024 byte dma burst (6<<8 = 0xe00) is undocumented in 8139C datasheet, but it's in the 8139D datasheet: https://www.cs.usfca.edu/~cruse/cs326f04/RTL8139D_DataSheet.pdf
 
 	/* Set Tx 1024 byte DMA burst */
-	nic32[RT_TXCONFIG/4] = 00000600;
+	nic32[RT_TXCONFIG/4] = 0x00000600;
+	// Found a bug: this was 00000600 before. 1024 byte DMA burst is 0x600 (hex), not 600 (dec). See pgs. 20-21 of RTL8139 datasheet: http://realtek.info/pdf/rtl8139cp.pdf
+	// Not only that, but KOS uses 0x600 for the same thing.
 
 	/* Turn off lan-wake and set the driver-loaded bit */
 	nic8[RT_CONFIG1] = (nic8[RT_CONFIG1] & ~0x30) | 0x20;
@@ -120,13 +126,12 @@ static int bb_init()
 	vul * const g232 = REGL(0xa1000000);
 
 	int i;
-	unsigned int tmp;
 
 	/* Initialize the "GAPS" PCI glue controller.
 	It ain't pretty but it works. */
 	g232[0x1418/4] = 0x5a14a501;                /* M */
 	i = 10000;
-	while (!(g232[0x1418/4] & 1) && i > 0)
+	while ((!(g232[0x1418/4] & 1)) && (i > 0))
 		i--;
 	if (!(g232[0x1418/4] & 1)) {
 		return -1;
@@ -174,35 +179,61 @@ static vuc * const txdesc[4] = {
 	REGC(0xa1847800)
 };
 
-static int bb_tx(unsigned char * pkt, int len)
-{
-while (!(nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x2000))
-	if (nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x40000000)
-	nic32[RT_TXSTATUS0/4 + rtl.cur_tx] |= 1;
+// Used for padding since doing a padding memset isn't exactly safe without G2 locking like KOS.
+// Triple buffering the data works for these small packets just fine. Small data therefore does this now:
+// source --memcpy--> small packet buffer --memcpy--> area reserved for transmit (txdesc) --DMA--> inaccessible internal Realtek buffer --MII--> network!
+// It only costs about 64 bytes to implement this (60 for buffer, 4 for function calls) after GCC's optimized it.
+static unsigned char tx_small_packet_zero_buffer[60]; // Here's a non-global array
+// ...Which is to say, if you're looking for 60 bytes, this is NOT the place to get them from, sorry!!
 
-	memcpy(txdesc[rtl.cur_tx], pkt, len);
-	if (len < 60) /* 8139 doesn't auto-pad */
+static int bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: http://realtek.info/pdf/rtl8139cp.pdf
+{
+	while (!(nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x2000)) { // While tx is not complete (checking OWN)
+		if (nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x40000000) { // Check for abort
+			nic32[RT_TXCONFIG/4] |= 0x1; // Found another bug: (nic32[RT_TXSTATUS0/4 + rtl.cur_tx] |= 1; // <-- If abort, set descriptor size to 1) should be RT_TXCONFIG register |= 1, which clears abort state and retransmits, see pg 21 of RTL8139C or pg 17 of RTL8139D datasheet
+		}
+	}
+
+	if (len < 60) { /* 8139 doesn't auto-pad */
+		// So pad it.
+		//
+		// We absolutely need to pad this, otherwise prior packets can leak into the
+		// padding. It's called "EtherLeak," and the RTL8139 is apparently a poster
+		// child chipset for the issues that come from lacking auto-pad.
+		//
+		memset(tx_small_packet_zero_buffer, 0, 60); // Zero out our small packet buffer
+		memcpy(tx_small_packet_zero_buffer, pkt, len); // Copy the data to the small packet buffer
 		len = 60;
-	nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len;
-	rtl.cur_tx = (rtl.cur_tx + 1) % 4;
+		pkt = tx_small_packet_zero_buffer; // Small packet buffer has the data and padding bytes
+		// NOTE: The reason this is hardcoded to 60 is because the minimum frame
+		// size allowed is 46 bytes + 14 byte ethernet header.
+	}
+
+	// Typecast here just removes a warning.
+	memcpy((unsigned char*)txdesc[rtl.cur_tx], pkt, len); // Copy packet to txdesc buffer for sending
+
+	nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len; // Set len (SIZE field), destructively zeroing out all other R/W settings. OWN needs to be cleared by software; it does here.
+	// Supposedly software writes don't impact the read-only bits. This zeroing also sets FIFO TX threshold to 8 bytes. Finally, writing to the status register triggers the packet send.
+	rtl.cur_tx = (rtl.cur_tx + 1) % 4; // Move to next txdesc buffer
+
+	return 1;
 }
 
 static void pktcpy(unsigned char *dest, unsigned char *src, int n)
 {
-	if (n > 1514)
+	if (n > RX_PKT_BUF_SIZE)
 		return;
 
-	if ((unsigned int)(src + n) < (unsigned int)(0xa1840000 + 16384))
+	if ((unsigned int)(src + n) < (unsigned int)(0xa1840000 + RX_BUFFER_LEN))
 		memcpy(dest, src, n);
 	else {
-		memcpy(dest, src, (0xa1840000 + 16384) - (unsigned int)src);
-		memcpy(dest + ((0xa1840000 + 16384) - (unsigned int)src), (unsigned char *)0xa1840000, (unsigned int)(src + n) - (0xa1840000 + 16384));
+		memcpy(dest, src, (0xa1840000 + RX_BUFFER_LEN) - (unsigned int)src);
+		memcpy(dest + ((0xa1840000 + RX_BUFFER_LEN) - (unsigned int)src), (unsigned char *)0xa1840000, (unsigned int)(src + n) - (0xa1840000 + RX_BUFFER_LEN));
 	}
 }
 
 static int bb_rx()
 {
-	int avail;
 	int processed;
 	unsigned int      rx_status;
 	int rx_size, pkt_size, ring_offset;
@@ -214,20 +245,22 @@ static int bb_rx()
 	/* While we have frames left to process... */
 	while (!(nic8[RT_CHIPCMD] & 1)) {
 		/* Get frame size and status */
-		ring_offset = rtl.cur_rx % 16384;
+		ring_offset = rtl.cur_rx % RX_BUFFER_LEN;
 		rx_status = mem32[0x0000/4 + ring_offset/4];
 		rx_size = (rx_status >> 16) & 0xffff;
 		pkt_size = rx_size - 4;
 
 		/* apparently this means the rtl8139 is still copying */
 		if (rx_size == 0xfff0) {
+			rtl_is_copying = 1; // Really don't want to run a DHCP renewal while data is in flight...
 			break;
 		}
+		rtl_is_copying = 0;
 
-		if ((rx_status & 1) && (pkt_size <= 1514)) {
+		if ((rx_status & 1) && (pkt_size <= RX_PKT_BUF_SIZE)) {
 			pkt = (unsigned char*)(mem8 + 0x0000 + ring_offset + 4);
 			pktcpy(current_pkt, pkt, pkt_size);
-			process_pkt(current_pkt, pkt_size);
+			process_pkt(current_pkt);
 		}
 
 		rtl.cur_rx = (rtl.cur_rx + rx_size + 4 + 3) & ~3;
@@ -243,16 +276,14 @@ static int bb_rx()
 	return processed;
 }
 
-extern void uint_to_string(unsigned int foo, unsigned char *bar);
-
-static void bb_loop()
+static void bb_loop(int is_main_loop)
 {
 	unsigned int intr;
-	int i;
-	char value[256];
+//	int i;
 
 	intr = 0;
 
+	// OMG this is polling the network adapter. Well, ok then.
 	while(!escape_loop) {
 
 		/* Check interrupt status */
@@ -263,13 +294,14 @@ static void bb_loop()
 
 		/* Did we receive some data? */
 		if (intr & RT_INT_RX_ACK) {
-			i = bb_rx();
+			//i = bb_rx(); // bb_rx() can only return a value of 1
+			bb_rx();
 		}
 
 		/* link change */
 		if (intr & RT_INT_RXFIFO_UNDERRUN) {
 
-			if (booted && !running) {
+			if (booted && (!running)) {
 				disp_status("link change...");
 			}
 
@@ -282,10 +314,11 @@ static void bb_loop()
 			while (!(nic16[RT_INTRSTATUS/2] & RT_INT_RXFIFO_UNDERRUN));
 			nic16[RT_INTRSTATUS/2] = RT_INT_RXFIFO_UNDERRUN;
 
-			if (booted && !running) {
+			if (booted && (!running)) {
 				disp_status("idle...");
 			}
 
+			rtl_link_up = 1; // Good to go!
 		}
 
 		/* Rx FIFO overflow */
@@ -311,6 +344,14 @@ static void bb_loop()
 
 			nic16[RT_INTRSTATUS/2] = 0xffff;
 		}
+
+		if(is_main_loop && rtl_link_up && (!rtl_is_copying)) // Only want this to run in main loop
+		{
+			// Do we need to renew our IP address?
+			// This will override set_ip_from_file() if the ip is in the 0.0.0.0/8 range
+			set_ip_dhcp();
+		}
+
 	}
 	escape_loop = 0;
 }

@@ -20,7 +20,7 @@
  */
 
 #include "config.h" // needed for newer BFD library
- 
+
 #ifdef WITH_BFD
 #include <bfd.h>
 #else
@@ -214,18 +214,18 @@ void cleanup(char **fnames)
 #ifndef __MINGW32__
     close(dcsocket);
 #else
-    closesocket(dcsocket);  
+    closesocket(dcsocket);
 #endif
-	
+
 	// Handle GDB
-	if (gdb_socket_started) {	
+	if (gdb_socket_started) {
 		gdb_socket_started = 0;
-		
+
 		// Send SIGTERM to the GDB Client, telling remote DC program has ended
 		char gdb_buf[16];
-		strcpy(gdb_buf, "+$X0f#ee\0");		
-		
-#ifdef __MINGW32__		
+		strcpy(gdb_buf, "+$X0f#ee\0");
+
+#ifdef __MINGW32__
 		send(socket_fd, gdb_buf, strlen(gdb_buf), 0);
 		sleep(1);
 		closesocket(socket_fd);
@@ -237,10 +237,10 @@ void cleanup(char **fnames)
 		close(gdb_server_socket);
 #endif
 	}
-	
+
 #ifdef __MINGW32__
 	WSACleanup();
-#endif	
+#endif
 }
 
 extern char *optarg;
@@ -1070,7 +1070,7 @@ int main(int argc, char *argv[])
 	    goto doclean;
 	break;
     case 'r':
-	printf("Reseting...\n");
+	printf("Resetting...\n");
 	if(send_command(CMD_REBOOT, 0, 0, NULL, 0) == -1)
 	    goto doclean;
 	break;

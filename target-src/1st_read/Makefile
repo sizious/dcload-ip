@@ -4,9 +4,13 @@ TARGET = 1st_read.bin
 
 all: rm-elf $(TARGET)
 
+.PHONY : asm_only
+asm_only:
+	$(TARGETCC) $(TARGETCFLAGS) -Wa,-I../dcload -Wa,-adghlmns=loader.asm -c loader.s
+
 .PHONY : clean
 clean:
-	-rm -f $(TARGET) loader.bin loader.elf
+	-rm -f $(TARGET) loader.bin loader.elf *.asm
 
 .PHONY : distclean
 distclean: clean

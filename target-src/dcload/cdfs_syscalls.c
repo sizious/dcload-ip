@@ -26,7 +26,8 @@
 #include "adapter.h"
 #include "commands.h"
 
-int gdStatus;
+// Leave this as an int.
+static int gdStatus = 0;
 
 struct TOC {
 	unsigned int entry[99];
@@ -48,7 +49,7 @@ int gdGdcReqCmd(int cmd, int *param)
 		command->value1 = htonl(param[2]);
 		command->value2 = htonl(param[1]*2048);
 		build_send_packet(sizeof(command_3int_t));
-		bb->loop();
+		bb->loop(0);
 
 		param[3] = 0;
 		gdStatus = 2;
@@ -86,7 +87,6 @@ int gdGdcGetCmdStat(int f, int *status)
 	if (gdStatus == 0)
 		status[0] = 0;
 	return gdStatus;
-
 }
 
 void gdGdcGetDrvStat(int *param)

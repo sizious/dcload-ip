@@ -1,6 +1,7 @@
 #ifndef __PACKET_H__
 #define __PACKET_H__
 
+#include "bswap.h"
 
 typedef struct {
 	unsigned char dest[6];
@@ -58,13 +59,13 @@ typedef struct __attribute__ ((packed)) {
 	unsigned short dest_port;
 	unsigned short length;
 	unsigned short checksum;
-	unsigned char data[1];
 } ip_udp_pseudo_header_t;
 
 unsigned short checksum(unsigned short *buf, int count);
-void make_ether(char *dest, char *src, ether_header_t *ether);
+unsigned short checksum_udp(unsigned short *buf_pseudo, unsigned short *buf_data, int datacount, int is_odd); // For is odd, pass length%2 where datacount is length/2 (remember: integer divdes)
+void make_ether(unsigned char *dest, unsigned char *src, ether_header_t *ether);
 void make_ip(int dest, int src, int length, char protocol, ip_header_t *ip);
-void make_udp(unsigned short dest, unsigned short src, unsigned char * data, int length, ip_header_t *ip, udp_header_t *udp);
+void make_udp(unsigned short dest, unsigned short src, unsigned char * data, int length, ip_header_t *ip, udp_header_t *udp, int data_already_in_packet);
 
 #define ntohl bswap32
 #define htonl bswap32

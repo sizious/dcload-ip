@@ -4,10 +4,18 @@
 #include "adapter.h"
 #include "scif.h"
 #include "net.h"
+#include "dhcp.h"
 
-unsigned char broadcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+static void process_broadcast(unsigned char *pkt);
+static void process_icmp(ether_header_t *ether, ip_header_t *ip, icmp_header_t *icmp);
+static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp);
+static void process_mine(unsigned char *pkt);
 
-void process_broadcast(unsigned char *pkt, int len)
+const unsigned char broadcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+unsigned char pkt_buf[TX_PKT_BUF_SIZE]; // Here's a global array.
+
+static void process_broadcast(unsigned char *pkt)
 {
 	ether_header_t *ether_header = (ether_header_t *)pkt;
 	arp_header_t *arp_header = (arp_header_t *)(pkt + ETHER_H_LEN);
@@ -46,9 +54,7 @@ void process_broadcast(unsigned char *pkt, int len)
 	}
 }
 
-unsigned char pkt_buf[1514];
-
-void process_icmp(ether_header_t *ether, ip_header_t *ip, icmp_header_t *icmp)
+static void process_icmp(ether_header_t *ether, ip_header_t *ip, icmp_header_t *icmp)
 {
 	unsigned int i;
 	unsigned char tmp[6];
@@ -84,15 +90,7 @@ void process_icmp(ether_header_t *ether, ip_header_t *ip, icmp_header_t *icmp)
 	}
 }
 
-typedef struct {
-	unsigned int load_address;
-	unsigned int load_size;
-	unsigned char map[16384];
-} bin_info_t;
-
-bin_info_t bin_info;
-
-void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp)
+static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp)
 {
 	ip_udp_pseudo_header_t *pseudo;
 	unsigned short i;
@@ -108,12 +106,10 @@ void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp)
 	pseudo->dest_port = udp->dest;
 	pseudo->length = udp->length;
 	pseudo->checksum = 0;
-	memset(pseudo->data, 0, ntohs(udp->length) - 8 + (ntohs(udp->length)%2));
-	memcpy(pseudo->data, udp->data, ntohs(udp->length) - 8);
 
 	/* checksum == 0 means no checksum */
 	if (udp->checksum != 0)
-		i = checksum((unsigned short *)pseudo, (sizeof(ip_udp_pseudo_header_t) + ntohs(udp->length) - 9 + 1)/2);
+		i = checksum_udp((unsigned short *)pseudo, (unsigned short *)udp->data, (ntohs(udp->length) - 8)/2, ntohs(udp->length)%2); // integer divide; need to round up to next even number
 	else
 		i = 0;
 	/* checksum == 0xffff means checksum was really 0 */
@@ -125,59 +121,75 @@ void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp)
 		return;
 	}
 
-	make_ether(ether->src, ether->dest, (ether_header_t *)pkt_buf);
-
-	command = (command_t *)udp->data;
-
-	if (!memcmp(command->id, CMD_EXECUTE, 4)) {
-		cmd_execute(ether, ip, udp, command);
+	// Handle receipt of DHCP packets that are directed to this system
+	dhcp_pkt_t *udp_pkt_data = (dhcp_pkt_t*)&udp->data;
+	if(udp_pkt_data->op == DHCP_OP_BOOTREPLY) // DHCP ACK or DHCP OFFER
+	{
+		if(!handle_dhcp_reply(ether->src, (dhcp_pkt_t*)&udp->data, ntohs(udp->length) - 8))
+		{ // -1 is true in C
+			// If we got a DHCP packet that belongs to some other mnchine, e.g. some machine requires a broadcasted address instead of a unicasted one,
+			// don't escape the loop since we didn't get the packet we needed.
+			escape_loop = 1;
+		}
 	}
+	else
+	{
+		make_ether(ether->src, ether->dest, (ether_header_t *)pkt_buf);
 
-	if (!memcmp(command->id, CMD_LOADBIN, 4)) {
-		cmd_loadbin(ip, udp, command);
+		command = (command_t *)udp->data;
+
+		if (!memcmp(command->id, CMD_EXECUTE, 4)) {
+			cmd_execute(ether, ip, udp, command);
+		}
+
+		if (!memcmp(command->id, CMD_LOADBIN, 4)) {
+			cmd_loadbin(ip, udp, command);
+		}
+
+		if (!memcmp(command->id, CMD_PARTBIN, 4)) {
+			cmd_partbin(command);
+		}
+
+		if (!memcmp(command->id, CMD_DONEBIN, 4)) {
+			cmd_donebin(ip, udp, command);
+		}
+
+		if (!memcmp(command->id, CMD_SENDBINQ, 4)) {
+			cmd_sendbinq(ip, udp, command);
+		}
+
+		if (!memcmp(command->id, CMD_SENDBIN, 4)) {
+			cmd_sendbin(ip, udp, command);
+		}
+
+		if (!memcmp(command->id, CMD_VERSION, 4)) {
+			cmd_version(ip, udp, command);
+		}
+
+		if (!memcmp(command->id, CMD_RETVAL, 4)) {
+			cmd_retval(ip, udp, command);
+		}
+
+		if (!memcmp(command->id, CMD_REBOOT, 4)) {
+			cmd_reboot();
+		}
+
+	  if (!memcmp(command->id, CMD_MAPLE, 4)) {
+	    cmd_maple(ip, udp, command);
+	  }
+
+		if (!memcmp(command->id, CMD_PMCR, 4)) {
+			cmd_pmcr(ip, udp, command);
+		}
 	}
-
-	if (!memcmp(command->id, CMD_PARTBIN, 4)) {
-		cmd_partbin(ip, udp, command);
-	}
-
-	if (!memcmp(command->id, CMD_DONEBIN, 4)) {
-		cmd_donebin(ip, udp, command);
-	}
-
-	if (!memcmp(command->id, CMD_SENDBINQ, 4)) {
-		cmd_sendbinq(ip, udp, command);
-	}
-
-	if (!memcmp(command->id, CMD_SENDBIN, 4)) {
-		cmd_sendbin(ip, udp, command);
-	}
-
-	if (!memcmp(command->id, CMD_VERSION, 4)) {
-		cmd_version(ip, udp, command);
-	}
-
-	if (!memcmp(command->id, CMD_RETVAL, 4)) {
-		cmd_retval(ip, udp, command);
-	}
-
-	if (!memcmp(command->id, CMD_REBOOT, 4)) {
-		cmd_reboot(ip, udp, command);
-	}
-
-    if (!memcmp(command->id, CMD_MAPLE, 4)) {
-        cmd_maple(ip, udp, command);
-    }
 }
 
-void process_mine(unsigned char *pkt, int len)
+static void process_mine(unsigned char *pkt)
 {
 	ether_header_t *ether_header = (ether_header_t *)pkt;
-	ip_header_t *ip_header = (ip_header_t *)(pkt + 14);
+	ip_header_t *ip_header = (ip_header_t *)(pkt + ETHER_H_LEN);
 	icmp_header_t *icmp_header;
 	udp_header_t *udp_header;
-	ip_udp_pseudo_header_t *ip_udp_pseudo_header;
-	unsigned char tmp[6];
 	int i;
 
 	if (ether_header->type[1] != 0x00)
@@ -196,19 +208,20 @@ void process_mine(unsigned char *pkt, int len)
 		return;
 
 	switch (ip_header->protocol) {
-	case 1: /* icmp */
+	case IP_ICMP_PROTOCOL: /* icmp */
 		icmp_header = (icmp_header_t *)(pkt + ETHER_H_LEN + 4*(ip_header->version_ihl & 0x0f));
 		process_icmp(ether_header, ip_header, icmp_header);
 		break;
-	case 17: /* udp */
+	case IP_UDP_PROTOCOL: /* udp */
 		udp_header = (udp_header_t *)(pkt + ETHER_H_LEN + 4*(ip_header->version_ihl & 0x0f));
 		process_udp(ether_header, ip_header, udp_header);
+		break;
 	default:
 		break;
 	}
 }
 
-void process_pkt(unsigned char *pkt, int len)
+void process_pkt(unsigned char *pkt)
 {
 	ether_header_t *ether_header = (ether_header_t *)pkt;
 
@@ -216,12 +229,12 @@ void process_pkt(unsigned char *pkt, int len)
 		return;
 
 	if (!memcmp(ether_header->dest, broadcast, 6)) {
-		process_broadcast(pkt, len);
+		process_broadcast(pkt);
 		return;
 	}
 
 	if (!memcmp(ether_header->dest, bb->mac, 6)) {
-		process_mine(pkt, len);
+		process_mine(pkt);
 		return;
 	}
 }

@@ -20,11 +20,20 @@ extern "C" {
 #define NULL 0
 #endif
 
+// Used = used by & defined in dcload-ip. They may have certain restrictions
+// (e.g. memset() defined in memset.s certainly does. See memset.s for details).
+// All the other, unmarked functions are not defined and can't be used.
+// Looks like string.h is just here for convenient prototypes or something.
+
 _PTR 	 _EXFUN(memchr,(const _PTR, int, size_t));
-int 	 _EXFUN(memcmp,(const _PTR, const _PTR, size_t));
-_PTR 	 _EXFUN(memcpy,(_PTR, const _PTR, size_t));
+
+int 	 _EXFUN(memcmp,(const _PTR, const _PTR, size_t)); // Used
+_PTR 	 _EXFUN(memcpy,(_PTR, const _PTR, size_t)); // Used
+
 _PTR	 _EXFUN(memmove,(_PTR, const _PTR, size_t));
-_PTR	 _EXFUN(memset,(_PTR, int, size_t));
+
+_PTR	 _EXFUN(memset,(_PTR, int, size_t)); // Used
+
 char 	*_EXFUN(strcat,(char *, const char *));
 char 	*_EXFUN(strchr,(const char *, int));
 int	 _EXFUN(strcmp,(const char *, const char *));
@@ -32,7 +41,9 @@ int	 _EXFUN(strcoll,(const char *, const char *));
 char 	*_EXFUN(strcpy,(char *, const char *));
 size_t	 _EXFUN(strcspn,(const char *, const char *));
 char 	*_EXFUN(strerror,(int));
-size_t	 _EXFUN(strlen,(const char *));
+
+size_t	 _EXFUN(strlen,(const char *)); // Used
+
 char 	*_EXFUN(strncat,(char *, const char *, size_t));
 int	 _EXFUN(strncmp,(const char *, const char *, size_t));
 char 	*_EXFUN(strncpy,(char *, const char *, size_t));
@@ -69,6 +80,7 @@ int     _EXFUN(strtosigno, (const char *__name));
 #endif
 
 /* These function names are used on Windows and perhaps other systems.  */
+
 #ifndef strcmpi
 #define strcmpi strcasecmp
 #endif

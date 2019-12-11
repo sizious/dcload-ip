@@ -1,3 +1,10 @@
+	.extern _gdGdcReqCmd
+	.extern _gdGdcGetCmdStat
+	.extern _gdGdcExecServer
+	.extern _gdGdcInitSystem
+	.extern _gdGdcGetDrvStat
+	.extern _gdGdcChangeDataType
+
 	.section .text
 	.global _cdfs_redir_enable
 	.global _cdfs_redir_disable
