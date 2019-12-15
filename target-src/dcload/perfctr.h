@@ -53,11 +53,15 @@
 //
 
 // These bits' functions are currently unknown. They may simply be reserved:
-#define PMCR_UNKNOWN_BIT_0200 0x0200
+#define PMCR_UNKNOWN_BIT_0200 0x0200 // <-- subroutine tracing?
 #define PMCR_UNKNOWN_BIT_0400 0x0400
 #define PMCR_UNKNOWN_BIT_0800 0x0800
 #define PMCR_UNKNOWN_BIT_1000 0x1000
 // One of them might be "Count while CPU sleep"
+
+// Mode clear just clears the event mode if its inverted with '~', and event
+// modes are listed below. Mode bits are probably just 0x00ff...
+#define PMCR_MODE_CLEAR_INVERTED 0x003f
 
 // PMCR_CLOCK_TYPE sets the counters to count clock cycles instead of CPU/bus
 // ratio cycles (where T = C x B / 24 and T is time, C is count, and B is time
@@ -69,15 +73,21 @@
 // version (set the bit to 1) when user programs mess with clock frequencies.
 // This file has some definitions later on to help with this.
 #define PMCR_CLOCK_TYPE 0x0100
+#define PMCR_CLOCK_TYPE_SHIFT 8
 
-// Note: mode clear just clears the event mode if its inverted with '~', and
-// event modes are listed below. Mode bits are probably just 0x00ff...
-#define PMCR_MODE_CLEAR_INVERTED 0x003f
+// PMCR_CLEAR_COUNTER is write-only; it always reads back as 0.
+// It also only works when the timer is disabled/stopped.
 #define PMCR_CLEAR_COUNTER 0x2000
+#define PMCR_CLEAR_COUNTER_SHIFT 13
+
+// PMST could mean PM START or PM STANDBY, not sure. It's consistently used to
+// enable the counter, though, so I guess it's PM START.
 #define PMCR_PMST_BIT 0x4000
+#define PMCR_PMST_SHIFT 14
+
+// Enable the perf counter
 #define PMCR_ENABLE_BIT 0x8000
-// PMST could mean PM START or PM STANDBY, not sure. It's consistently used to enable the counter, though, so I guess it's PM START.
-// PMCR_CLEAR_COUNTER is write-only; it always reads back as 0
+#define PMCR_ENABLE_SHIFT 15
 
 //
 // --- Performance Counter Event Code Definitions ---
@@ -108,42 +118,42 @@
 
 //                MODE DEFINITION                  VALUE   MEASURMENT TYPE & NOTES
 #define PMCR_INIT_NO_MODE                           0x00 // None; Just here to be complete
-#define PMCR_OPERAND_READ_ACCESS_MODE               0x01 // Counts; With cache
-#define PMCR_OPERAND_WRITE_ACCESS_MODE              0x02 // Counts; With cache
-#define PMCR_UTLB_MISS_MODE                         0x03 // Counts
-#define PMCR_OPERAND_CACHE_READ_MISS_MODE           0x04 // Counts
-#define PMCR_OPERAND_CACHE_WRITE_MISS_MODE          0x05 // Counts
-#define PMCR_INSTRUCTION_FETCH_MODE                 0x06 // Counts; With cache
-#define PMCR_INSTRUCTION_TLB_MISS_MODE              0x07 // Counts
-#define PMCR_INSTRUCTION_CACHE_MISS_MODE            0x08 // Counts
-#define PMCR_ALL_OPERAND_ACCESS_MODE                0x09 // Counts
-#define PMCR_ALL_INSTRUCTION_FETCH_MODE             0x0a // Counts
-#define PMCR_ON_CHIP_RAM_OPERAND_ACCESS_MODE        0x0b // Counts
-// No 0x0c
-#define PMCR_ON_CHIP_IO_ACCESS_MODE                 0x0d // Counts
-#define PMCR_OPERAND_ACCESS_MODE                    0x0e // Counts; With cache, counts both reads and writes
-#define PMCR_OPERAND_CACHE_MISS_MODE                0x0f // Counts
-#define PMCR_BRANCH_ISSUED_MODE                     0x10 // Counts; Not the same as branch taken!
-#define PMCR_BRANCH_TAKEN_MODE                      0x11 // Counts
-#define PMCR_SUBROUTINE_ISSUED_MODE                 0x12 // Counts; Issued a BSR, BSRF, JSR, JSR/N
-#define PMCR_INSTRUCTION_ISSUED_MODE                0x13 // Counts
-#define PMCR_PARALLEL_INSTRUCTION_ISSUED_MODE       0x14 // Counts
-#define PMCR_FPU_INSTRUCTION_ISSUED_MODE            0x15 // Counts
-#define PMCR_INTERRUPT_COUNTER_MODE                 0x16 // Counts
-#define PMCR_NMI_COUNTER_MODE                       0x17 // Counts
-#define PMCR_TRAPA_INSTRUCTION_COUNTER_MODE         0x18 // Counts
-#define PMCR_UBC_A_MATCH_MODE                       0x19 // Counts
-#define PMCR_UBC_B_MATCH_MODE                       0x1a // Counts
-// No 0x1b-0x20
-#define PMCR_INSTRUCTION_CACHE_FILL_MODE            0x21 // Time
-#define PMCR_OPERAND_CACHE_FILL_MODE                0x22 // Time
-#define PMCR_ELAPSED_TIME_MODE                      0x23 // Time; For 200MHz CPU: 5ns per count in 1 cycle = 1 count mode, or around 417.715ps per count (increments by 12) in CPU/bus ratio mode
-#define PMCR_PIPELINE_FREEZE_BY_ICACHE_MISS_MODE    0x24 // Time
-#define PMCR_PIPELINE_FREEZE_BY_DCACHE_MISS_MODE    0x25 // Time
-// No 0x26
-#define PMCR_PIPELINE_FREEZE_BY_BRANCH_MODE         0x27 // Time
-#define PMCR_PIPELINE_FREEZE_BY_CPU_REGISTER_MODE   0x28 // Time
-#define PMCR_PIPELINE_FREEZE_BY_FPU_MODE            0x29 // Time
+#define PMCR_OPERAND_READ_ACCESS_MODE               0x01 // Quantity; With cache
+#define PMCR_OPERAND_WRITE_ACCESS_MODE              0x02 // Quantity; With cache
+#define PMCR_UTLB_MISS_MODE                         0x03 // Quantity
+#define PMCR_OPERAND_CACHE_READ_MISS_MODE           0x04 // Quantity
+#define PMCR_OPERAND_CACHE_WRITE_MISS_MODE          0x05 // Quantity
+#define PMCR_INSTRUCTION_FETCH_MODE                 0x06 // Quantity; With cache
+#define PMCR_INSTRUCTION_TLB_MISS_MODE              0x07 // Quantity
+#define PMCR_INSTRUCTION_CACHE_MISS_MODE            0x08 // Quantity
+#define PMCR_ALL_OPERAND_ACCESS_MODE                0x09 // Quantity
+#define PMCR_ALL_INSTRUCTION_FETCH_MODE             0x0a // Quantity
+#define PMCR_ON_CHIP_RAM_OPERAND_ACCESS_MODE        0x0b // Quantity
+// No 0x0c -- Why not?
+#define PMCR_ON_CHIP_IO_ACCESS_MODE                 0x0d // Quantity
+#define PMCR_OPERAND_ACCESS_MODE                    0x0e // Quantity; With cache, counts both reads and writes
+#define PMCR_OPERAND_CACHE_MISS_MODE                0x0f // Quantity
+#define PMCR_BRANCH_ISSUED_MODE                     0x10 // Quantity; Not the same as branch taken!
+#define PMCR_BRANCH_TAKEN_MODE                      0x11 // Quantity
+#define PMCR_SUBROUTINE_ISSUED_MODE                 0x12 // Quantity; Issued a BSR, BSRF, JSR, JSR/N
+#define PMCR_INSTRUCTION_ISSUED_MODE                0x13 // Quantity
+#define PMCR_PARALLEL_INSTRUCTION_ISSUED_MODE       0x14 // Quantity
+#define PMCR_FPU_INSTRUCTION_ISSUED_MODE            0x15 // Quantity
+#define PMCR_INTERRUPT_COUNTER_MODE                 0x16 // Quantity
+#define PMCR_NMI_COUNTER_MODE                       0x17 // Quantity
+#define PMCR_TRAPA_INSTRUCTION_COUNTER_MODE         0x18 // Quantity
+#define PMCR_UBC_A_MATCH_MODE                       0x19 // Quantity
+#define PMCR_UBC_B_MATCH_MODE                       0x1a // Quantity
+// No 0x1b-0x20 -- ??
+#define PMCR_INSTRUCTION_CACHE_FILL_MODE            0x21 // Cycles
+#define PMCR_OPERAND_CACHE_FILL_MODE                0x22 // Cycles
+#define PMCR_ELAPSED_TIME_MODE                      0x23 // Cycles; For 200MHz CPU: 5ns per count in 1 cycle = 1 count mode, or around 417.715ps per count (increments by 12) in CPU/bus ratio mode
+#define PMCR_PIPELINE_FREEZE_BY_ICACHE_MISS_MODE    0x24 // Cycles
+#define PMCR_PIPELINE_FREEZE_BY_DCACHE_MISS_MODE    0x25 // Cycles
+// No 0x26 -- Why not?
+#define PMCR_PIPELINE_FREEZE_BY_BRANCH_MODE         0x27 // Cycles
+#define PMCR_PIPELINE_FREEZE_BY_CPU_REGISTER_MODE   0x28 // Cycles
+#define PMCR_PIPELINE_FREEZE_BY_FPU_MODE            0x29 // Cycles
 
 //
 // --- Performance Counter Support Definitions ---
@@ -151,9 +161,9 @@
 
 // This definition can be passed to the init/enable/restart functions to use the
 // 1 cycle = 1 count mode. This is how the timer can be made to run for 16.3 days.
-#define PMCR_COUNT_CPU_CYCLES 1
+#define PMCR_COUNT_CPU_CYCLES 0
 // Likewise this uses the CPU/bus ratio method
-#define PMCR_COUNT_RATIO_CYCLES 0
+#define PMCR_COUNT_RATIO_CYCLES 1
 
 //
 // --- Performance Counter Miscellaneous Definitions ---

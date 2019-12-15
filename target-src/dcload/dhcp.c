@@ -78,16 +78,13 @@ static volatile unsigned int time_array[2] = {0};
 
 static unsigned int get_some_time(int which)
 {
-	//unsigned long long int time_var = 0;
 
 	if(which == 1)
 	{
-		//time_var = PMCR_Read(1);
 		PMCR_Read(1, time_array);
 	}
 	else if(which == 2)
 	{
-		//time_var = PMCR_Read(2);
 		PMCR_Read(2, time_array);
 	}
 

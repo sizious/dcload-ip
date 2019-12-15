@@ -63,18 +63,13 @@ void PMCR_Enable(int which, unsigned short mode, unsigned char count_type) // Wi
 	{
 		// counter 1
 		unsigned short pmcr1_ctrl = *((volatile unsigned short*)PMCR1_CTRL_REG);
-		pmcr1_ctrl &= ~PMCR_MODE_CLEAR_INVERTED; // Clear the mode bits
 
-		if(count_type)
-		{
-			pmcr1_ctrl &= ~PMCR_CLOCK_TYPE; // Use 1 count = 1 cycle
-		}
-		else
-		{
-			pmcr1_ctrl |= PMCR_CLOCK_TYPE; // Use CPU/Bus ratio for counting
-		}
+		// Clear the mode bits, default to 1 count = 1 cycle
+		pmcr1_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_CLOCK_TYPE);
 
-		pmcr1_ctrl |= mode; // Set mode
+		// Set mode, switch to CPU/Bus ratio for counting if set (saves an if() this way)
+		pmcr1_ctrl |= mode | (count_type << PMCR_CLOCK_TYPE_SHIFT);
+
 		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr1_ctrl | PMCR_ENABLE_BIT | PMCR_PMST_BIT;
 
 		pmcr_enabled += 1;
@@ -83,43 +78,30 @@ void PMCR_Enable(int which, unsigned short mode, unsigned char count_type) // Wi
 	{
 		// counter 2
 		unsigned short pmcr2_ctrl = *((volatile unsigned short*)PMCR2_CTRL_REG);
-		pmcr2_ctrl &= ~PMCR_MODE_CLEAR_INVERTED; // Clear the mode bits
 
-		if(count_type)
-		{
-			pmcr2_ctrl &= ~PMCR_CLOCK_TYPE; // Use 1 count = 1 cycle
-		}
-		else
-		{
-			pmcr2_ctrl |= PMCR_CLOCK_TYPE; // Use CPU/Bus ratio for counting
-		}
+		// Clear the mode bits, default to 1 count = 1 cycle
+		pmcr2_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_CLOCK_TYPE);
 
-		pmcr2_ctrl |= mode; // Set mode
+		// Set mode, switch to CPU/Bus ratio for counting if set (saves an if() this way)
+		pmcr2_ctrl |= mode | (count_type << PMCR_CLOCK_TYPE_SHIFT);
+
 		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr2_ctrl | PMCR_ENABLE_BIT | PMCR_PMST_BIT;
 
 		pmcr_enabled += 2;
 	}
 	else if( (which == 3) && (!pmcr_enabled) )
-	{	// Both
+	{
+		// Both
 		unsigned short pmcr1_ctrl = *((volatile unsigned short*)PMCR1_CTRL_REG);
 		unsigned short pmcr2_ctrl = *((volatile unsigned short*)PMCR2_CTRL_REG);
 
-		pmcr1_ctrl &= ~PMCR_MODE_CLEAR_INVERTED; // Clear the mode bits
-		pmcr2_ctrl &= ~PMCR_MODE_CLEAR_INVERTED; // Clear the mode bits
+		// Clear the mode bits, default to 1 count = 1 cycle
+		pmcr1_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_CLOCK_TYPE);
+		pmcr2_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_CLOCK_TYPE);
 
-		if(count_type)
-		{
-			pmcr1_ctrl &= ~PMCR_CLOCK_TYPE; // Use 1 count = 1 cycle
-			pmcr2_ctrl &= ~PMCR_CLOCK_TYPE; // Use 1 count = 1 cycle
-		}
-		else
-		{
-			pmcr1_ctrl |= PMCR_CLOCK_TYPE; // Use CPU/Bus ratio for counting
-			pmcr2_ctrl |= PMCR_CLOCK_TYPE; // Use CPU/Bus ratio for counting
-		}
-
-		pmcr1_ctrl |= mode; // Set mode
-		pmcr2_ctrl |= mode; // Set mode
+		// Set mode, switch to CPU/Bus ratio for counting if set (saves an if() this way)
+		pmcr1_ctrl |= mode | (count_type << PMCR_CLOCK_TYPE_SHIFT);
+		pmcr2_ctrl |= mode | (count_type << PMCR_CLOCK_TYPE_SHIFT);
 
 		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr1_ctrl | PMCR_ENABLE_BIT | PMCR_PMST_BIT;
 		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr2_ctrl | PMCR_ENABLE_BIT | PMCR_PMST_BIT;
