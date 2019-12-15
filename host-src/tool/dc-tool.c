@@ -516,9 +516,21 @@ int recv_response(unsigned char *buffer, int timeout)
 {
     int start = time_in_usec();
     int rv = -1;
+#if (SAVE_MY_FANS != 0)
+    struct timespec pausetime = {0}, pauseremain = {0};
+#endif
 
     while( ((time_in_usec() - start) < timeout) && (rv == -1))
-	rv = recv(dcsocket, (void *)buffer, 2048, 0);
+	  {
+       rv = recv(dcsocket, (void *)buffer, 2048, 0);
+       // 100Mbit/s is 10 nanoseconds, but that's reportedly a little slow.
+       // 5 is better, but still a bit slow. So let's do 1 nanosecond.
+       // There's no picosecond sleep, so this is about as good as it gets.
+#if (SAVE_MY_FANS != 0)
+       pausetime.tv_nsec = SAVE_MY_FANS; // Now it's configurable from Makefile.cfg
+       nanosleep(&pausetime, &pauseremain);
+#endif
+    }
 
     return rv;
 }

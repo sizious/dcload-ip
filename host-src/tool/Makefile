@@ -1,7 +1,7 @@
 include ../../Makefile.cfg
 
 CC		= $(HOSTCC)
-CFLAGS	= $(HOSTCFLAGS) -DDCLOAD_VERSION=\"$(VERSION)\" -DDREAMCAST_IP=\"$(DREAMCAST_IP)\" -DHAVE_GETOPT
+CFLAGS	= $(HOSTCFLAGS) -DDCLOAD_VERSION=\"$(VERSION)\" -DDREAMCAST_IP=\"$(DREAMCAST_IP)\" -DHAVE_GETOPT -DSAVE_MY_FANS=$(SAVE_MY_FANS)
 LDFLAGS = $(HOSTLDFLAGS)
 INCLUDE =
 
@@ -28,7 +28,7 @@ DCTOOL	= dc-tool-ip$(EXECUTABLEEXTENSION)
 OBJECTS	= dc-tool.o syscalls.o unlink.o utils.o
 
 .c.o:
-	$(CC) $(CFLAGS) $(INCLUDE) -o $@ -c $< 
+	$(CC) $(CFLAGS) $(INCLUDE) -o $@ -c $<
 
 all: $(DCTOOL)
 
@@ -36,7 +36,7 @@ $(DCTOOL): $(OBJECTS)
 	$(CC) -o $@ $(OBJECTS) $(LDFLAGS)
 
 .PHONY : install
-install: $(DCTOOL) | $(TOOLINSTALLDIR)	
+install: $(DCTOOL) | $(TOOLINSTALLDIR)
 	cp $(DCTOOL) $(TOOLINSTALLDIR)
 $(TOOLINSTALLDIR):
 	-mkdir $(TOOLINSTALLDIR)
@@ -46,5 +46,5 @@ clean:
 	rm -f $(OBJECTS)
 
 .PHONY : distclean
-distclean: clean 
+distclean: clean
 	rm -f $(DCTOOL)

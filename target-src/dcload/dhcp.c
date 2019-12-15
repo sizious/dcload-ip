@@ -82,13 +82,13 @@ static unsigned int get_some_time(int which)
 
 	if(which == 1)
 	{
-		//time_var = read_pmctr(1);
-		read_pmctr(1, time_array);
+		//time_var = PMCR_Read(1);
+		PMCR_Read(1, time_array);
 	}
 	else if(which == 2)
 	{
-		//time_var = read_pmctr(2);
-		read_pmctr(2, time_array);
+		//time_var = PMCR_Read(2);
+		PMCR_Read(2, time_array);
 	}
 
 	// Invalid counter selection returns 0
@@ -186,8 +186,12 @@ int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t* pkt_data, unsigne
 			dhcp_lease_time = kos_net_dhcp_get_32bit(pkt_data, DHCP_OPTION_IP_LEASE_TIME, len);
 			// Set PMCR for calculating renewal
 			// Reset 48-bit perfcounter to 0; renewal is calculated by elapsed time
-			restart_pmctr(DCLOAD_PMCTR, PMCR_ELAPSED_TIME_MODE);
-
+			// BUS_RATIO_COUNTER is set in dcload.h
+#ifndef BUS_RATIO_COUNTER
+			PMCR_Restart(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_COUNT_CPU_CYCLES);
+#else
+			PMCR_Restart(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_COUNT_RATIO_CYCLES);
+#endif
 			dhcp_acked = 1;
 		}
 
@@ -342,7 +346,7 @@ static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint
 		{
 			/* Fill in the initial DHCPDISCOVER packet */
 	    //req->hops = 0;
-	    req->xid = htonl(get_some_time(DCLOAD_PMCTR) ^ 0xDEADBEEF);
+	    req->xid = htonl(get_some_time(DCLOAD_PMCR) ^ 0xDEADBEEF);
 	    //req->secs = 0;
 	    //req->flags = 0; // 0x0000 want unicast response, 0x8000 want broadcast response
 	    //req->ciaddr = 0;
@@ -367,7 +371,7 @@ static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint
 		}
 		else // Assume renewal (msgtype == 0)
 		{
-			dhcpoffer_xid = (get_some_time(DCLOAD_PMCTR) ^ 0xDEADBEEF) + renewal_increment; // It's a DHCP Request with a unique transaction ID
+			dhcpoffer_xid = (get_some_time(DCLOAD_PMCR) ^ 0xDEADBEEF) + renewal_increment; // It's a DHCP Request with a unique transaction ID
 			renewal_increment += 0x1000; // This just ensures DHCP renewal transaction IDs can't be the same within the uptime of the machine.
 			/* Fill in the DHCP renewal request */
 			//req->hops = 0;

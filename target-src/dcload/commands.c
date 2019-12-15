@@ -244,33 +244,50 @@ void cmd_maple(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 
 // The 6 perfctr functions are:
 /*
-void init_pmctr(int which, unsigned short mode); // Clear existing counter and enable
-void enable_pmctr(int which, unsigned short mode); // Enable one or both of these "undocumented" performance counters. Does not clear counter(s).
-void restart_pmctr(int which, unsigned short mode); // Disable, clear, and re-enable with new mode (or same mode)
+	// Clear counter and enable
+	void PMCR_Init(int which, unsigned short mode, unsigned char count_type);
 
-// unsigned long long int read_pmctr(int which); // 48-bit value needs a 64-bit storage unit
-void read_pmctr(int which, volatile unsigned int *out_array); // 48-bit value needs a 64-bit storage unit
+	// Enable one or both of these "undocumented" performance counters. Does not clear counter(s).
+	void PMCR_Enable(int which, unsigned short mode, unsigned char count_type);
 
-void clear_pmctr(int which); // Only when disabled
-void disable_pmctr(int which); // Remember to disable before leaving DCLOAD to execute a program. Does not clear counter(s).
+	// Disable, clear, and re-enable with new mode (or same mode)
+	void PMCR_Restart(int which, unsigned short mode, unsigned char count_type);
+
+	// Read a counter
+	// out_array is specifically uint32 out_array[2] -- 48-bit value needs a 64-bit storage unit
+	void PMCR_Read(int which, volatile unsigned int *out_array);
+
+	// Clear counter(s) -- only works when disabled!
+	void PMCR_Clear(int which);
+
+	// Disable counter(s) without clearing
+	void PMCR_Disable(int which);
 */
 // The command is the first letter of the function (capitalized) plus the counter number, plus a byte with the mode (if applicable)
 // Except restart--read is 'R', so restart is 'B' (think reBoot)
-// Sending command data of 'D' 0x1 (2 bytes) disables perf counter 1
-// Sending command data 'I' 0x3 0x23 (3 bytes) inits both perf counters to elapsed time mode
+//
+// Sending command data of 'D' 0x1 (2 bytes) disables ('D') perf counter 1 (0x1)
+// Sending command data 'I' 0x3 0x23 0x1 (4 bytes) inits ('I') both perf counters (0x3) to elapsed time mode (0x23) and count is 1 cpu cycle = 1 count (0x1)
+// Sending command data 'B' 0x2 0x23 0x0 (4 bytes) restarts ('B') perf counter 2 (0x2) to elapsed time mode (0x23) and count is CPU/bus ratio method (0x0)
 // ...
 // etc.
+//
+// Notes:
+// - Remember to disable before leaving DCLOAD to execute a program, if needed.
+// - See perfctr.h for how to calculate time using the CPU/bus ratio method.
+// - PMCR_Init() and PMCR_Enable() will do nothing if the perf counter is already running!
 
 static char * ok_message = "OK";
 static char * invalid_read_message = "PMCR read: 1 or 2 only.";
 static char * invalid_function_message = "PMCR: I, E, B, R, C, or D only.";
 static char * invalid_option_message = "PMCR: 1, 2, or 3 only.";
 static char * invalid_mode_message = "PMCR modes: 0x1-0x29.";
+static char * invalid_count_type_message = "PMCR count: 0 or 1 only.";
 static volatile unsigned int read_array[2] = {0};
 
 void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 	unsigned int i;
-	int invalid_pmcr = 0, invalid_mode = 0;
+	int invalid_pmcr = 0, invalid_mode = 0, invalid_count = 0;
 
 //	unsigned long long int read = 0;
 	unsigned char read = 0;
@@ -278,7 +295,7 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
 	command_t * response = (command_t *)buffer;
 
-	// Size is 2 or 3 bytes depending on the command. Easy!
+	// Size is 2 or 4 bytes depending on the command. Easy!
 	// No need for address, it's not used here so it can be whatever.
 	memcpy(response, command, COMMAND_LEN);
 
@@ -295,9 +312,13 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 		{
 			invalid_mode = 1;
 		}
+		else if(command->data[3] > 1)
+		{
+			invalid_count = 1;
+		}
 		else
 		{
-			init_pmctr(command->data[1], command->data[2]);
+			PMCR_Init(command->data[1], command->data[2], command->data[3]);
 		}
 	}
 	else if(command->data[0] == 'E') // Enable
@@ -306,9 +327,13 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 		{
 			invalid_mode = 1;
 		}
+		else if(command->data[3] > 1)
+		{
+			invalid_count = 1;
+		}
 		else
 		{
-			enable_pmctr(command->data[1], command->data[2]);
+			PMCR_Enable(command->data[1], command->data[2], command->data[3]);
 		}
 	}
 	else if(command->data[0] == 'B') // Restart
@@ -317,9 +342,13 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 		{
 			invalid_mode = 1;
 		}
+		else if(command->data[3] > 1)
+		{
+			invalid_count = 1;
+		}
 		else
 		{
-			restart_pmctr(command->data[1], command->data[2]);
+			PMCR_Restart(command->data[1], command->data[2], command->data[3]);
 		}
 	}
 	else if(command->data[0] == 'R') // Read
@@ -331,18 +360,18 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 		}
 		else
 		{
-			//read = read_pmctr(command->data[1]);
-			read_pmctr(command->data[1], read_array);
+			//read = PMCR_Read(command->data[1]);
+			PMCR_Read(command->data[1], read_array);
 			read = 1;
 		}
 	}
 	else if(command->data[0] == 'C') // Clear
 	{
-		clear_pmctr(command->data[1]);
+		PMCR_Clear(command->data[1]);
 	}
 	else if(command->data[0] == 'D') // Disable
 	{
-		disable_pmctr(command->data[1]);
+		PMCR_Disable(command->data[1]);
 	}
 	else // Respond with invalid perfcounter option
 	{
@@ -361,8 +390,13 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 		out_message = invalid_mode_message;
 		i = 22;
 	}
+	else if(invalid_count)
+	{
+		out_message = invalid_count_type_message;
+		i = 25;
+	}
 
-	if(read) // This will send little endian pmctr value as the response.
+	if(read) // This will send little endian perf counter value as the response.
 	{
 		i = 8; // 64-bit value is 8 bytes
 		//out_message = (char*)&read; // C lets you do this :)
@@ -406,7 +440,7 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 	}
 	else
 	{
-		disable_pmctr(command->data[1]);
+		PMCR_Disable(command->data[1]);
 	}
 
 	// Make and send response

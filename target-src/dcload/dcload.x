@@ -230,4 +230,10 @@ SECTIONS
 /*  .stack 0x8c00f400 : { _stack = .; *(.stack) }*/
   /* These must appear regardless of  .  */
 _stack = 0x8c00f400;
+
+/* ASSERT triggers when condition is FALSE */
+/* Stack calculation will wrap around if ram region overflows, so only one
+   error displays at a time :) */
+ASSERT(( (_stack - _end) > 800 ), "Error: Not enough stack space: need at least 800 bytes")
+ASSERT(( _end <= (ORIGIN(ram) + LENGTH(ram)) ), "Error: Region 'ram' overflowed: try '-Os' or shrink code size")
 }

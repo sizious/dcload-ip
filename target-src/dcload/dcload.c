@@ -41,23 +41,17 @@
 #define VIDMODEREG (volatile unsigned int *)0xa05f8044
 #define VIDBORDER (volatile unsigned int *)0xa05f8040
 
-// Virtua Fighter 3 uses a counter in elapsed time mode for something
-// See https://dcemulation.org/phpBB/viewtopic.php?f=29&t=104406
-
-// Don't touch these.
-#ifndef FAST_COUNTER
-// This would run for 16.3 days (1407374 seconds) if true
-#define PERFCOUNTER_SCALE SH4_FREQUENCY
-#else
-// But it seems to not be the case for some reason
-// Experimentally derived perf counter division value, see:
-// https://dcemulation.org/phpBB/viewtopic.php?p=1057114#p1057114
-// This would run for 1 day 8 hours and 40 minutes (117576 seconds) if true
-#define PERFCOUNTER_SCALE 2393976245
-#endif
-
 // Scale up the onscreen refresh interval
 #define ONSCREEN_REFRESH_SCALED ((unsigned long long int)ONSCREEN_DHCP_LEASE_TIME_REFRESH_INTERVAL * (unsigned long long int)PERFCOUNTER_SCALE)
+
+// CPU clock cycles need doubles in 1 count = 1 cycle mode
+#ifndef BUS_RATIO_COUNTER
+__attribute__((aligned(8))) static const unsigned int const_perf_freq[2] = {PERFCOUNTER_SCALE_DOUBLE_HIGH, PERFCOUNTER_SCALE_DOUBLE_LOW};
+__attribute__((aligned(8))) static const unsigned int const_32[2] = {0x41f00000, 0x00000000}; // 2^32 in SH4 double format
+// PERFCOUNTER_SCALE is always 32-bit, but it's a constant stored in memory so using a double is OK
+// When using doubles, the 32-bit halves need to be flipped since SH4 doesn't reoreder
+// endianness for the 32-bit halves of a 64-bit double.
+#endif
 
 // Volatile informs GCC not to cache the variable in a register.
 // Most descriptions of volatile are that the data might be modified by an
@@ -79,9 +73,18 @@ volatile unsigned char booted = 0;
 volatile unsigned char running = 0;
 
 static volatile unsigned int current_counter_array[2] = {0};
-//static volatile unsigned long long int old_dhcp_lease_updater = 0; // To update lease time display
 static volatile unsigned int old_dhcp_lease_updater_array[2] = {0}; // To update lease time display
 static volatile unsigned char dont_renew = 0;
+
+static char *mac_string = "de:ad:be:ef:ba:be";
+static char *ip_string = "000.000.000.000";
+
+static const char *waiting_string = "Waiting for IP..."; // Waiting for IP indicator. 15 visible characters to match IP address string's visible 15 characters
+static const char *dhcp_mode_string = " (DHCP Mode)"; // Indicator that DHCP is active
+static const char *dhcp_timeout_string = " (DHCP Timed Out!)"; // DHCP timeout indicator
+static const char *dhcp_lease_string = "DHCP Lease Time (sec): "; // DHCP lease time
+static char dhcp_lease_time_string[11] = {0}; // For converting lease time to seconds. 10 characters + null term. Max lease is theoretically 4294967295, but really is 1410902 due to perf counters.
+
 
 /* converts expevt value to description, used by exception handler */
 char * exception_code_to_string(unsigned int expevt)
@@ -247,9 +250,6 @@ static void error_bb(char *msg)
 	while(1);
 }
 
-static char *mac_string = "de:ad:be:ef:ba:be";
-static char *ip_string = "000.000.000.000";
-
 void disp_info(void)
 {
 	int c;
@@ -331,12 +331,6 @@ static void set_ip_from_file(void)
 	// Now it's stored ip[0] 11-0-168-192 ip[3] (this is little endian data on a little endian system), which make_ip handles when building packets.
 }
 
-static const char *waiting_string = "Waiting for IP..."; // Waiting for IP indicator. 15 visible characters to match IP address string's visible 15 characters
-static const char *dhcp_mode_string = " (DHCP Mode)"; // Indicator that DHCP is active
-static const char *dhcp_timeout_string = " (DHCP Timed Out!)"; // DHCP timeout indicator
-static const char *dhcp_lease_string = "DHCP Lease Time (sec): "; // DHCP lease time
-static char dhcp_lease_time_string[11] = {0}; // For converting lease time to seconds. 10 characters + null term. Max lease is theoretically 4294967295, but really is 1407374 due to perf counters.
-
 static void update_ip_display(unsigned char *new_ip, const char *mode_string)
 {
 	int c;
@@ -390,23 +384,16 @@ void set_ip_dhcp(void)
 	unsigned char *ip = (unsigned char *)&our_ip;
 
 	// Check renewal condition. Only matters if dhcp_lease_time has been set before.
-	// The counter is 48-bit, so the max lease time allowed is 1,407,374 seconds. That's about 16.3 days.
+	// The counter is 48-bit, so the max lease time allowed in 1 count = 1 cycle
+	// mode is around 1410902 seconds. That's about 16.3 days.
 
 	// SH4 dmulu.l is 32 bit * 32 bit --> 64 bit
 	// GCC knows to use dmulu.l based on this code.
-	// read_pmctr(DCLOAD_PMCTR) * 5 is seconds * 10^9, but that's a 64-bit multiply... Hmm...
-	unsigned long long int long_dhcp_lease_time = (unsigned long long int)dhcp_lease_time * (unsigned long long int)(PERFCOUNTER_SCALE); // Multiplying is always better than dividing if possible.
-//	unsigned long long int current_counter = read_pmctr(DCLOAD_PMCTR); // Multiplied instead of divided to convert seconds into counter frequency units
-	read_pmctr(DCLOAD_PMCTR, current_counter_array);
-	// By scaling up we can at least ensure that, internally, seconds comparisons will be accurate. Displaying it to the user is not quite as straightforward.
-
-	// This counts up from 0, displays in the disp_status area
-	// Uh, but it's a 64-bit divide now...
-	//uint_to_string_dec(*current_counter / 200000000ULL, dhcp_lease_time_string);
-//	uint_to_string_dec(current_counter_array[0], dhcp_lease_time_string);
-//	uint_to_string(current_counter_array[1], (unsigned char*)dhcp_lease_time_string);
-//	uint_to_string(current_counter_array[0], (unsigned char*)dhcp_lease_time_string);
-//	disp_status(dhcp_lease_time_string);
+	// Multiplying is always better than dividing if possible.
+	// By scaling up we can at least ensure that, internally, seconds comparisons will be accurate.
+	// Displaying it to the user is not quite as straightforward.
+	unsigned long long int long_dhcp_lease_time = (unsigned long long int)dhcp_lease_time * (unsigned long long int)(PERFCOUNTER_SCALE);
+	PMCR_Read(DCLOAD_PMCR, current_counter_array);
 
 	// Check if lease is still active, renewal threshold is at 50% lease time. '>> 1' is '/2'.
 	// NOTE: GCC apparently can't handle the concept of dividing 64-bit numbers on SH4, even by a power of two.
@@ -417,7 +404,6 @@ void set_ip_dhcp(void)
 	if(dhcp_lease_time && (!dont_renew) && ((long_dhcp_lease_time >> 1) < (*current_counter)))
 	{
 		dhcp_lease_time = 0; // This disables DHCP renewal unless it gets updated with a valid value. Its dual-purpose is a renewal code enabler.
-//		old_dhcp_lease_updater = 0;
 		old_dhcp_lease_updater_array[0] = 0;
 		old_dhcp_lease_updater_array[1] = 0;
 		// Renewal needed
@@ -448,7 +434,7 @@ void set_ip_dhcp(void)
 
 			// At this point DHCP is disabled.
 			// Don't need the counter anymore.
-			disable_pmctr(DCLOAD_PMCTR);
+			PMCR_Disable(DCLOAD_PMCR);
 
 			// Early return because there's no point in continuing.
 			// dhcp_renew() runs dhcp_go() if it gets a NAK, and we probably got here
@@ -468,60 +454,226 @@ void set_ip_dhcp(void)
 	// Only update if we need to. bb->loop could very easily be faster than 1 Hz.
 	// Also: When int size is 32-bit, 'ULL' indicates a constant is actually
 	// supposed to be stored in an unsigned long long int (64-bit, in SH4's case).
-//	else if( (long_dhcp_lease_time >= current_counter) && (current_counter > (old_dhcp_lease_updater + ONSCREEN_REFRESH_SCALED - 1ULL)) )
 	else if( (long_dhcp_lease_time >= (*current_counter)) && ((*current_counter) > ((*old_dhcp_lease_updater) + ONSCREEN_REFRESH_SCALED - 1ULL)) )
 	{
-//		old_dhcp_lease_updater = current_counter;
 		old_dhcp_lease_updater_array[0] = current_counter_array[0];
 		old_dhcp_lease_updater_array[1] = current_counter_array[1];
 
-		// SH4 can only do 32 bit / 32 bit --> 32 bit
+		// SH4 can only do 32 bit / 32 bit --> 32 bit for integers
 		// Need to somehow divide the (long_dhcp_lease_time - current_counter) difference, which is 64-bit, without 64-bit divide...
 		unsigned long long int difference = long_dhcp_lease_time - (*current_counter);
-#ifndef FAST_COUNTER
-		unsigned int remaining_lease = (unsigned int)((difference * 43980ULL) >> 43); // <-- Assumes perfcounter values are supposed to be divided by 200,000,000
+
+#ifndef BUS_RATIO_COUNTER
+			// Well, there is a 64-bit divide. SH4 can do doubles.
+			// In little endian mode the high half and low half of the double are
+			// flipped, though.
+			// Setting this up is also a little convoluted...
+			unsigned int remaining_lease = 0;
+			unsigned int old_fpscr = 0;
+
+			// Save fpscr value so we can use it
+			asm volatile ("sts fpscr,r1\n\t" // Store old fpscr into R1
+										"mov r1,%[out_old_fpscr]\n\t" // Store old fpscr for safekeeping
+				: [out_old_fpscr] "=r" (old_fpscr)
+				: // no inputs
+				: // no clobbers
+			);
+
+			// Right-way-of-doing-it method
+			//
+			// Unfortunately it appears that SZ = 1, PR = 1 is undefined on SH4, so we
+			// gotta do some light gymnastics here.
+			//
+
+			// Switch to single-precision & pair-move mode
+			unsigned int single_tmp_fpscr = 0;
+			single_tmp_fpscr = old_fpscr | (1 << 20); // Set FPSCR.SZ to pair move mode
+			single_tmp_fpscr &= ~(1 << 19); // Clear FPSCR.PR to single-precision mode
+
+			asm volatile ("mov %[in_sngl_tmp],r1\n\t" // Load new fpscr into R1
+										"lds r1,fpscr\n\t" // Load R1 into fpscr
+				: // no outputs
+				: [in_sngl_tmp] "r" (single_tmp_fpscr)
+				: // no clobbers
+			);
+
+			// Using paired moves to reduce this to 2 instructions and minimize memory accesses
+			// Unpaired moves would take 2 instructions (memory accesses) per double
+			asm volatile ("fmov.d %[in_dblfreq],DR2\n\t" // Load SH4 double-encoded frequency directly into DR2
+										"fmov.d %[in_dbl32],DR6\n\t" // Load SH4 double-encoded 2^32 directly into DR6
+				: // no outputs
+				: [in_dblfreq] "m" (const_perf_freq), [in_dbl32] "m" (const_32)
+				: // no clobbers
+			);
+
+			// Switch to double-precision & single-move mode
+			unsigned int double_tmp_fpscr = 0;
+			double_tmp_fpscr = old_fpscr | (1 << 19); // Set FPSCR.PR to double-precision mode
+			double_tmp_fpscr &= ~(1 << 20); // Clear FPSCR.SZ to single move mode
+
+			asm volatile ("mov %[in_dbl_tmp],r1\n\t" // Load new fpscr into R1
+										"lds r1,fpscr\n\t" // Load R1 into fpscr
+				: // no outputs
+				: [in_dbl_tmp] "r" (double_tmp_fpscr)
+				: // no clobbers
+			);
+
+			// End right-way-of-doing-it setup method
+/*
+			// Undefined behavior method
+			//
+			// This is left here for those daredevils who are willing to risk their
+			// Dreamcasts to test it. Worst case it mucks up the FPU because there's
+			// physically some hardware missing, best case it speeds up double-precision
+			// loads by removing a fair margin of setup overhead. No idea what reality
+			// is--I didn't make the chip!
+			//
+			// I might guess the only thing undefined about it is that the 32-bit halves
+			// of a double are flipped. Technically that qualifies for "undefined
+			// behavior." It wasn't until the SH4A that SZ=1, PR=1 actually allowed
+			// for proper double loads/stores and operations. But I make no guarantees
+			// about this as I haven't tested it.
+			//
+
+			unsigned int undefined_tmp_fpscr = 0;
+			undefined_tmp_fpscr = old_fpscr | (3 << 19); // Set FPSCR.PR to double-precision mode & FPSCR.SZ to pair-move mode
+
+			asm volatile ("mov %[in_undef_tmp],r1\n\t" // Load new fpscr into R1
+										"lds r1,fpscr\n\t" // Load R1 into fpscr
+				: // no outputs
+				: [in_undef_tmp] "r" (undefined_tmp_fpscr)
+				: // no clobbers
+			);
+
+			// Using paired moves to reduce this to 2 instructions
+			// Unpaired moves would take 2 instructions per double
+			asm volatile ("fmov.d %[in_dblfreq],DR2\n\t" // Load SH4 double-encoded frequency directly into DR2
+										"fmov.d %[in_dbl32],DR6\n\t" // Load SH4 double-encoded 2^32 directly into DR6
+				: // no outputs
+				: [in_dblfreq] "m" (const_perf_freq), [in_dbl32] "m" (const_32)
+				: // no clobbers
+			);
+
+			// End undefined behavior setup method
+*/
+			// Manually convert 48-bit int to double
+			asm volatile ("lds %[in_dbl0],FPUL\n\t" // Load low half
+										"cmp/pl %[in_dbl0]\n\t" // Low half (signed) > 0 ? (T = 1) : (T = 0)
+										"bt.s .skip_sign\n\t" // Skip sign conversion if > 0 (i.e. T == 1) (delayed)
+										"float FPUL,DR0\n\t" // Convert low half to double (delay slot)
+										"fadd DR6,DR0\n\t"// Handle sign conversion of low half by adding 2^32 to negatives
+									".skip_sign:\n\t" // What's nice about doubles is that no information is lost in 32-bit sign conversion
+										"lds %[in_dbl1],FPUL\n\t" // Load high half
+										"float FPUL,DR4\n\t" // Convert high half to double
+										"fmul DR6,DR4\n\t" // DR4 *= 2^32 to correct for the split
+										"fadd DR4,DR0\n\t" // DR0 += DR4 to put Humpty Dumpty back together again
+										// And now we have a 48-bit int converted to a double on an SH4.
+										"fdiv DR2,DR0\n\t" // DR0 /= DR2; the whole point of all this
+										"ftrc DR0,FPUL\n\t" // Convert result to 32-bit int in FPUL
+										"sts FPUL,%[out_int]\n\t" // Get the answer out
+				: [out_int] "=r" (remaining_lease)
+				:	[in_dbl0] "r" (((unsigned int*)&difference)[0]), [in_dbl1] "r" (((unsigned int*)&difference)[1])
+				: "t" // "t-bit" gets clobbered by cmp/pl
+			);
+			// Constraints for SH can be found here:
+			// https://github.com/gcc-mirror/gcc/blob/master/gcc/config/sh/constraints.md
+			//
+			// GCC doesn't always document arch-specific constraints in an easy-to-find
+			// way. In such situations, best to check /gcc/config/<arch>/constraints.md
+			// directly. Common constraints are in /gcc/common.md, but those are usually
+			// well-documented on gcc's help pages.
+
+			// Cleanup -- don't want to mess with programs that expect certain bits set by default.
+			// Bad form on the program's part if so, but I don't want to be responsible for breaking things.
+			asm volatile ("mov %[in_old_fpscr],r1\n\t" // Load old fpscr into R1
+										"lds r1,fpscr\n\t" // Load R1 into fpscr
+				: // no outputs
+				: [in_old_fpscr] "r" (old_fpscr)
+				: // no clobbers
+			);
+
+			// This is what just happened:
+	//		double div = ((double)difference) / ((double)PERFCOUNTER_SCALE);
+	//		unsigned int remaining_lease = (unsigned int)div;
+
+//		unsigned int remaining_lease = (unsigned int)((difference * 43ULL) >> 33); // <-- Assumes perfcounter values are supposed to be divided by 200,000,000 (well, 99750000 x 2, really)
 #else
-		unsigned int remaining_lease = (unsigned int)((difference * 58788ULL) >> 47); // <-- Assumes perfcounter values are supposed to be divided by experimentally-derived 2,393,976,245
+		// This is for CPU/bus ratio mode.
+		// Assumes perfcounter values are to be divided by experimentally-derived
+		// 2,393,976,245 (close enough to 99.75MHz * 24)
+		unsigned int remaining_lease = (unsigned int)((difference * 14697ULL) >> 45);
+		// This crazy number, if the perf counter is in bus ratio mode, is only off
+		// by one second every 117575 seconds, which is the entire countable range
+		// in that mode.
 #endif
-		// For some reason this crazy number, if the perf counter is "running fast" is only off by one second every 117576 seconds, which is the entire range at that speed.
+		// And, finally update the lease timer
 		update_lease_time_display(remaining_lease);
 
 		// MATH!
-		// This is accurate to within 15 seconds. Meaning, the on-screen display
-		// will be faster than actual time by less than one second per day. If the
-		// lease time were 1407374 seconds, the display counter would go up to 1407359.
-		// (Ignoring the fact that lease renewal threshold is at 50% lease time.)
-		// The trick to this is finding a fraction suitably close to 1/200000000
-		// but the denominator is a power of two. 43980 is the largest numerator
-		// that can multiply the max 48-bit number and still be within 64-bits
-		// while having a power-of-two denominator that keeps the fraction ~5x10^-9.
-		// The maximum number that can multiply the maximum 48-bit number and stay
-		// in 64-bits is 2^16 (64 - 48 = 16), or 65535.
+		//
+		// The trick to the crazy 14697 number is finding a fraction very close to
+		// 1/(bus clk * 24), but the denominator is a power of two and the
+		// numerator is as close to an integer as possible. The maximum number that
+		// can multiply the maximum 48-bit number and stay within 64-bits is 2^16
+		// (64 - 48 = 16), or 65535. Note that I'm using 1/(99750000 * 24) as a
+		// baseline, as I assume 99.75MHz is the target bus frequency.
+		//
+		// The upper bound for the denominator is 2^47 given those constraints, as
+		// (2^47) * 1/(99750000 * 24) is the biggest number under 65535 we can get
+		// without exceeding 65535. So the next step is to multiply 1/(bus clk * 24)
+		// by every power of two that keeps the result >= 1, and use the numerator
+		// that is closest to an integer to minimize error. For mine, this is 2^45,
+		// which has a numerator of 14697.04... It's the closest numerator to an
+		// integer of all the options, so it'll be the most accurate. For bus clocks
+		// very close to 99.75MHz, 14697 is still the best number for this.
 		//
 		// Now what GCC does here is really neat: it multiplies the upper 32 bits of
-		// 'difference' by 43980, and then 32-bit x 32-bit --> 64-bit multiplies
-		// 43980 by the lower 32 bits. Then, it adds the result of the upper 32-bit
-		// multiply with the upper 32-bits of the 64-bit result from the lower 32-bits
-		// multiply. Then it shifts that sum right by 11 instead of 43, and uses that
-		// register. This is one of my favorite tricks, and I'm glad to see GCC doing
-		// it here. :)
+		// 'difference' by the numerator, and then 32-bit x 32-bit --> 64-bit
+		// multiplies the numerator by the lower 32 bits. Then, it adds the result
+		// of the upper 32-bit multiply with the upper 32-bits of the 64-bit result
+		// from the lower 32-bits multiply. Then it shifts that sum right by 13
+		// instead of 45, and uses that register. This is one of my favorite tricks,
+		// and I'm glad to see GCC doing it here. :)
 		//
 		// Note:
-		// Loss of accuracy due to shifting the counter frequency happens, for example
-		// doing >> 16 instead of the weird math trick would be off by 49664 cycles
-		// per 200000000, or 0.0248% of 1 second per second. This would mean that
-		// if the DHCP lease time is the max allowed (16.3 days), renewal will happen
-		// about 350 seconds, or about 5 minutes, 50 seconds, early. You'd see it as
-		// the on-screen timer will be too fast by 1 second every 1 hour, 6 minutes,
-		// and 40 seconds. Crazy math trick is much more accurate since 200000000 is
-		// not a very nice number to work with in base-2.
+		// Finding error: first find the actual number of seconds the machine will
+		// count to. In my case it's 117576. (2^48 - 1)/COUNTER_VALUE_PER_SEC = max
+		// seconds, where for me COUNTER_VALUE_PER_SEC = 2393976245. Then,
+		// ((14697/2^45)*2393976245)*117576 = max displayed seconds. For me, max
+		// displayed seconds is 117575. That's one second lost per the entire
+		// countable range in CPU/bus ratio mode, which is about 1 day, 8 hours, and
+		// 40 minutes! In my actual calculation I kept as many decimal places as
+		// possible, but they've been omitted here for clarity.
+		//
+		// The internal timer will not have any slowdown, as there is no approximate
+		// division being done anywhere except for displaying the countdown on-
+		// screen. Floats would solve this, but this is MUCH faster. I mean, just
+		// compare it to the doubles shenanigans necessary to divide by 200MHz!
+		// (Unfortunately there's no good approximation for 200MHz. The best I
+		// found, 43/2^33, loses 0.8 seconds every 10 minutes.)
+		//
+
+#ifdef PERFCTR_DEBUG
+		clear_lines(174, 24, BG_COLOR);
+		uint_to_string(current_counter_array[1], (unsigned char*)dhcp_lease_time_string);
+		draw_string(30, 174, dhcp_lease_time_string, STR_COLOR);
+		uint_to_string(current_counter_array[0], (unsigned char*)dhcp_lease_time_string);
+		draw_string(126, 174, dhcp_lease_time_string, STR_COLOR);
+	#if (DCLOAD_PMCR == 1)
+		uint_to_string(*((volatile unsigned short*)PMCR1_CTRL_REG), (unsigned char*)dhcp_lease_time_string);
+	#elif (DCLOAD_PMCR == 2)
+		uint_to_string(*((volatile unsigned short*)PMCR2_CTRL_REG), (unsigned char*)dhcp_lease_time_string);
+	#else
+		uint_to_string(0xffffffff, (unsigned char*)dhcp_lease_time_string);
+	#endif
+		draw_string(230, 174, dhcp_lease_time_string, STR_COLOR);
+#endif
 	}
 
 	// We're supposed to wait until 87.5% of the lease time has elapsed to do a new discover,
 	// if we even need to do a new discover (due to getting a NAK during renewal).
 	// GCC will almost certainly optimize this into the conditional. This is just way more readable.
 	// Also: best variable name ever, lol.
-//	unsigned int eighty_seven_point_five = (long_dhcp_lease_time >> 1) + (long_dhcp_lease_time >> 2) + (long_dhcp_lease_time >> 3); // 0.5 + 0.25 + 0.125 = 0.875, or 87.5%
 	unsigned long long int eighty_seven_point_five = (long_dhcp_lease_time >> 1) + (long_dhcp_lease_time >> 2) + (long_dhcp_lease_time >> 3); // 0.5 + 0.25 + 0.125 = 0.875, or 87.5%
 	// This checks if set_ip_from_file() gave us a DHCP-mode IP (0.x.x.x) or a static
 	// IP of some sort. It also checks if the DHCP lease expired per above. DOUBLE WHAMMY!!
@@ -550,7 +702,7 @@ void set_ip_dhcp(void)
 
 			// At this point DHCP is disabled.
 			// Don't need the counter anymore.
-			disable_pmctr(DCLOAD_PMCTR);
+			PMCR_Disable(DCLOAD_PMCR);
 		}
 		else
 		{
@@ -600,7 +752,11 @@ int main(void)
 
 	// Enable pmcr1 if it's not enabled
 	// (Don't worry, this won't run again if it's already enabled; that would accidentally reset the lease timer!)
-	init_pmctr(DCLOAD_PMCTR, PMCR_ELAPSED_TIME_MODE);
+#ifndef BUS_RATIO_COUNTER
+	PMCR_Init(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_COUNT_CPU_CYCLES);
+#else
+	PMCR_Init(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_COUNT_RATIO_CYCLES);
+#endif
 
 	while (1) {
 		*VIDBORDER = 0;
