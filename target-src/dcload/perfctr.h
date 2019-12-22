@@ -116,16 +116,19 @@
 // configuration registers. I haven't been able to find one, though. Places to
 // check would be Google Patents and the Japanese Patent Office--maybe someone
 // else can find something?
-#define PMCR_UNKNOWN_BIT_0200 0x0200 // <-- subroutine tracing?
+#define PMCR_UNKNOWN_BIT_0040 0x0040
+#define PMCR_UNKNOWN_BIT_0080 0x0080
+#define PMCR_UNKNOWN_BIT_0200 0x0200
 #define PMCR_UNKNOWN_BIT_0400 0x0400
 #define PMCR_UNKNOWN_BIT_0800 0x0800
 #define PMCR_UNKNOWN_BIT_1000 0x1000
-// One of them might be "Count while CPU sleep"? Not sure
+// Writing 1 to all of these bits reads back as 0, so it looks like they aren't
+// writable. It's possible they are write-only like the clear register, though.
+// Or they're read-only bits; one of them may be an overflow bit that only gets
+// written to 0
 
 // PMCR_MODE_CLEAR_INVERTED just clears the event mode if it's inverted with
-// '~', and event modes are listed below. Mode bits may just be 0x00ff, but it's
-// possible that bits 0x40 and 0x80 are also unknown bits, so I'm not taking
-// any chances.
+// '~', and event modes are listed below.
 #define PMCR_MODE_CLEAR_INVERTED 0x003f
 
 // PMCR_CLOCK_TYPE sets the counters to count clock cycles instead of CPU/bus

@@ -267,8 +267,8 @@ void cmd_maple(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 // Except restart--read is 'R', so restart is 'B' (think reBoot)
 //
 // Sending command data of 'D' 0x1 (2 bytes) disables ('D') perf counter 1 (0x1)
-// Sending command data 'I' 0x3 0x23 0x1 (4 bytes) inits ('I') both perf counters (0x3) to elapsed time mode (0x23) and count is 1 cpu cycle = 1 count (0x1)
-// Sending command data 'B' 0x2 0x23 0x0 (4 bytes) restarts ('B') perf counter 2 (0x2) to elapsed time mode (0x23) and count is CPU/bus ratio method (0x0)
+// Sending command data 'I' 0x3 0x23 0x0 (4 bytes) inits ('I') both perf counters (0x3) to elapsed time mode (0x23) and count is 1 cpu cycle = 1 count (0x0)
+// Sending command data 'B' 0x2 0x23 0x1 (4 bytes) restarts ('B') perf counter 2 (0x2) to elapsed time mode (0x23) and count is CPU/bus ratio method (0x1)
 // ...
 // etc.
 //
@@ -289,7 +289,6 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 	unsigned int i;
 	int invalid_pmcr = 0, invalid_mode = 0, invalid_count = 0;
 
-//	unsigned long long int read = 0;
 	unsigned char read = 0;
 
 	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
@@ -360,7 +359,6 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 		}
 		else
 		{
-			//read = PMCR_Read(command->data[1]);
 			PMCR_Read(command->data[1], read_array);
 			read = 1;
 		}
@@ -399,7 +397,6 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 	if(read) // This will send little endian perf counter value as the response.
 	{
 		i = 8; // 64-bit value is 8 bytes
-		//out_message = (char*)&read; // C lets you do this :)
 		out_message = (char*)read_array; // C lets you do this :)
 	}
 	// Make and send response
