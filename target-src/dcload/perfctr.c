@@ -52,7 +52,6 @@ void PMCR_Init(int which, unsigned short mode, unsigned char count_type) // Will
 // Enable "undocumented" performance counters (well, they were undocumented at one point. They're documented now!)
 void PMCR_Enable(int which, unsigned short mode, unsigned char count_type) // Will do nothing if perfcounter is already running!
 {
-	// Only need one of them, and there are 2
 	// Don't do anything if being asked to enable an already-enabled counter
 	if(count_type > 1)
 	{

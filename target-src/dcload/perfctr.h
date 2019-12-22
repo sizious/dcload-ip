@@ -44,7 +44,8 @@
 // you own for Dreamcast and looking at the raw byte code (or a raw disassembly)
 // of its main program binary. It would appear as though they were timing a loop
 // with the low half of perf counter 1 in elapsed time mode. Definitely seems
-// like a good thing to do when targeting 60fps!
+// like a good thing to do when targeting 60fps! Shenmue Disc 4 also uses the
+// same configuration, but what's being timed is not as clear.
 //
 // Another place you can actually find both control addresses 0xFF00008x and all
 // data addresses 0xFF10000x is in binaries of ancient, freely available versions
@@ -52,12 +53,11 @@
 // hex editor and do a search to find the control register addresses, and the
 // data addresses are equally plain to see in any relevant performance profiling
 // firmware. There's no effort or decryption required to find them whatsoever;
-// all you need is an old trial version and a hex editor. This is similarly true
-// for ST40 Micro Toolset, which uses these addresses, as well.
+// all you need is an old trial version and a hex editor.
 //
 // However, something even better than all of that is if you search for "SH4
 // 0xFF000084" (without quotes) online you'll find an old forum where some logs
-// were posted of the terminal/command prompt output from the ST40 toolset,
+// were posted of the terminal/command prompt output from some STMicro JTAG tool,
 // which not only has the address registers but also clearly characterizes their
 // size as 16-bit: https://www.multimediaforum.de/threads/36260834-alice-hsn-3800tw-usb-jtag-ft4232h/page2
 //
@@ -149,7 +149,7 @@
 #define PMCR_CLEAR_COUNTER 0x2000
 #define PMCR_CLEAR_COUNTER_SHIFT 13
 
-// PMST likely means PM START. It's consistently used to enable the counter,
+// PMST appears to mean PM START. It's consistently used to enable the counter,
 // though, so I guess it's PM START. I'm just calling it PMST here for lack of
 // a better name, since this is what the Linux kernel and lxdream call it.
 #define PMCR_PMST_BIT 0x4000
@@ -160,6 +160,13 @@
 #define PMCR_ENABLE_SHIFT 15
 // You know what? These bits might be backwards. Need to do some more testing to
 // figure out what happens with different combinations
+// It appears that it takes both PMST and ENABLE to start the counter running.
+// Disabling either stops the counter.
+// Perhaps it's a 2-bit mode: 1-1 is run, 1-0 and 0-1 are ??? and 0-0 is off
+
+// So maybe we need this?
+#define PMCR_RUN_BITS 0xC000
+#define PMCR_RUN_SHIFT 14
 
 //
 // --- Performance Counter Event Code Definitions ---
