@@ -23,7 +23,7 @@
 //
 // The below definitions are for configuring specific system functionality.
 // Don't change them unless you know you need them. Overclocked machines would
-// need to change the numbers described by comments marked OC.
+// need to change the numbers described by comments marked 'OC' (no quotes).
 //
 
 // OC: Overclocked machines would need to change this.
@@ -66,6 +66,13 @@
 // It's perf high stuck to perf low, and then the contents of the pmcr reg in use
 // (i.e. the reg specified by DCLOAD_PMCR)
 #define PERFCTR_DEBUG
+
+// Use FPSCR PR=1, SZ=1 to improve double-precision loading performance (use 2x
+// 64-bit "paired moves" via fmov.d versus 4x 32-bit "single moves" via fmov.s).
+// Disabled by default because it's technically undefined behavior, and using it
+// breaks compatibility with SH4A CPUs (lol). It also may not behave the same on
+// all SH7091 CPUs (works on mine).
+//#define UNDEFINED_DOUBLES
 
 // ---- End of user-changeable definitions ----
 

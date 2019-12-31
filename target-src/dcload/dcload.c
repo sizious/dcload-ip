@@ -478,34 +478,12 @@ void set_ip_dhcp(void)
 				: // no inputs
 				: "r1"
 			);
-
+#ifndef UNDEFINED_DOUBLES
 			// Right-way-of-doing-it method
 			//
 			// Unfortunately it appears that SZ = 1, PR = 1 is undefined on SH4, so we
 			// gotta do some light gymnastics here.
 			//
-
-			// Switch to single-precision & pair-move mode
-			unsigned int single_tmp_fpscr = 0;
-			single_tmp_fpscr = old_fpscr | (1 << 20); // Set FPSCR.SZ to pair move mode
-			single_tmp_fpscr &= ~(1 << 19); // Clear FPSCR.PR to single-precision mode
-
-			asm volatile ("mov %[in_sngl_tmp],r1\n\t" // Load new fpscr into R1
-				: // no outputs
-				: [in_sngl_tmp] "r" (single_tmp_fpscr)
-				: "r1"
-			);
-			// GCC has no clobber for fpscr, so this needs to be its own line
-			asm volatile ("lds r1,fpscr\n\t"); // Load R1 into fpscr
-
-			// Using paired moves to reduce this to 2 instructions and minimize memory accesses
-			// Unpaired moves would take 2 instructions (memory accesses) per double
-			asm volatile ("fmov.d %[in_dblfreq],DR2\n\t" // Load SH4 double-encoded frequency directly into DR2
-										"fmov.d %[in_dbl32],DR6\n\t" // Load SH4 double-encoded 2^32 directly into DR6
-				: // no outputs
-				: [in_dblfreq] "m" (*const_perf_freq), [in_dbl32] "m" (*const_32)
-				: "dr2", "dr6"
-			);
 
 			// Switch to double-precision & single-move mode
 			unsigned int double_tmp_fpscr = 0;
@@ -520,21 +498,34 @@ void set_ip_dhcp(void)
 			// GCC has no clobber for fpscr, so this needs to be its own line
 			asm volatile ("lds r1,fpscr\n\t"); // Load R1 into fpscr
 
+			// Using paired would reduce this to 2 instructions and minimize memory accesses
+			// Unpaired moves take 2 instructions (memory accesses) per double
+			// Don't be fooled: I already flipped the two 32-bit halves of the doubles in memory
+			// because I wanted to try using paired moves (via fmov.d). ;)
+			asm volatile ("fmov.s @%[in_dblfreq]+,FR2\n\t" // Load SH4 double-encoded frequency directly into DR2
+										"fmov.s @%[in_dblfreq],FR3\n\t"
+										"fmov.s @%[in_dbl32]+,FR6\n\t" // Load SH4 double-encoded 2^32 directly into DR6
+										"fmov.s @%[in_dbl32],FR7\n\t"
+				: // no outputs
+				: [in_dblfreq] "r" (const_perf_freq), [in_dbl32] "r" (const_32)
+				: "fr2", "fr3", "fr6", "fr7"
+			);
+
 			// End right-way-of-doing-it setup method
-/*
+#else
+			//
 			// Undefined behavior method
 			//
-			// This is left here for those daredevils who are willing to risk their
-			// Dreamcasts to test it. Worst case it mucks up the FPU because there's
-			// physically some hardware missing, best case it speeds up double-precision
-			// loads by removing a fair margin of setup overhead. No idea what reality
-			// is--I didn't make the chip!
-			//
-			// I might guess the only thing undefined about it is that the 32-bit halves
-			// of a double are flipped. Technically that qualifies for "undefined
-			// behavior." It wasn't until the SH4A that SZ=1, PR=1 actually allowed
-			// for proper double loads/stores and operations. But I make no guarantees
-			// about this as I haven't tested it.
+			// I would guess the only thing undefined about it is that the 32-bit
+			// halves of a double are flipped--technically that qualifies for
+			// "undefined behavior." It wasn't until the SH4A that SZ=1, PR=1 actually
+			// allowed for proper double-precision loads/stores and operations in
+			// either endianness, and chances are that's why it's a reserved
+			// combination on SH4 (i.e. Hitachi engineers were likely planning for it
+			// and were not able to make it work until SH4A). Using SZ=1, PR=1 would
+			// make code not interchangeable between SH4 and SH4A, and this kind of
+			// incompatibility would definitely make the "undefined behavior"
+			// designation make sense.
 			//
 
 			unsigned int undefined_tmp_fpscr = 0;
@@ -550,15 +541,15 @@ void set_ip_dhcp(void)
 
 			// Using paired moves to reduce this to 2 instructions
 			// Unpaired moves would take 2 instructions per double
-			asm volatile ("fmov.d %[in_dblfreq],DR2\n\t" // Load SH4 double-encoded frequency directly into DR2
-										"fmov.d %[in_dbl32],DR6\n\t" // Load SH4 double-encoded 2^32 directly into DR6
+			asm volatile ("fmov.d @%[in_dblfreq],DR2\n\t" // Load SH4 double-encoded frequency directly into DR2
+										"fmov.d @%[in_dbl32],DR6\n\t" // Load SH4 double-encoded 2^32 directly into DR6
 				: // no outputs
-				: [in_dblfreq] "m" (const_perf_freq), [in_dbl32] "m" (const_32)
+				: [in_dblfreq] "r" (const_perf_freq), [in_dbl32] "r" (const_32)
 				: "dr2", "dr6"
 			);
 
 			// End undefined behavior setup method
-*/
+#endif
 			// Manually convert 48-bit int to double
 			asm volatile ("lds %[in_dbl0],FPUL\n\t" // Load low half
 										"cmp/pl %[in_dbl0]\n\t" // Low half (signed) > 0 ? (T = 1) : (T = 0)
