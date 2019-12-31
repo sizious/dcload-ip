@@ -1,11 +1,11 @@
-// As much as I'd love to put my name up here for 2019 copyright, uh, Internet
-// pseudonyms and all that. ;)
+// ---- perfctr.c - SH7091 Performance Counter Module Code ----
 //
-// So consider the perfctr.h & perfctr.c set of files in the public domain. It
-// would always be great to give credit back to the original source!!
+// This file is part of the DreamHAL project, a hardware abstraction library
+// primarily intended for use on the SH7091 found in hardware such as the SEGA
+// Dreamcast game console.
 //
-// Note that DCLOAD-IP is actually GPLv2 licensed, though public domain code is
-// absolutely compatible with that.
+// The performance counter module is hereby released into the public domain in
+// the hope that it may prove useful. Now go profile some code and hit 60 fps! :)
 //
 // --Moopthehedgehog
 
@@ -21,89 +21,62 @@ static unsigned char pmcr_enabled = 0;
 // Also: Disabling and re-enabling the counters doesn't reset them; the clearing
 // needs to happen while a counter is disabled to reset it.
 //
-// I don't know if you can disable and re-enable with a different mode without
-// explicitly clearing and have it keep going, continuing from where it left off.
-// It might actually behave that way.
+// You can disable and re-enable with a different mode without explicitly
+// clearing and have it keep going, continuing from where it left off.
 //
 
 void PMCR_Init(int which, unsigned short mode, unsigned char count_type) // Will do nothing if perfcounter is already running!
 {
-	// Only need one of them, and there are 2
 	// Don't do anything if being asked to enable an already-enabled counter
 	if( (which == 1) && ((!pmcr_enabled) || (pmcr_enabled == 2)) )
 	{
 		// counter 1
-		PMCR_Clear(1);
-		PMCR_Enable(1, mode, count_type);
+		PMCR_Enable(1, mode, count_type, PMCR_RESET_COUNTER);
 	}
 	else if( (which == 2) && ((!pmcr_enabled) || (pmcr_enabled == 1)) )
 	{
 		// counter 2
-		PMCR_Clear(2);
-		PMCR_Enable(2, mode, count_type);
+		PMCR_Enable(2, mode, count_type, PMCR_RESET_COUNTER);
 	}
 	else if( (which == 3) && (!pmcr_enabled) )
-	{	// Both
-		PMCR_Clear(3);
-		PMCR_Enable(3, mode, count_type);
+	{
+		// Both
+		PMCR_Enable(3, mode, count_type, PMCR_RESET_COUNTER);
 	}
 }
 
 // Enable "undocumented" performance counters (well, they were undocumented at one point. They're documented now!)
-void PMCR_Enable(int which, unsigned short mode, unsigned char count_type) // Will do nothing if perfcounter is already running!
+void PMCR_Enable(int which, unsigned short mode, unsigned char count_type, unsigned char reset_count) // Will do nothing if perfcounter is already running!
 {
-	// Don't do anything if being asked to enable an already-enabled counter
-	if(count_type > 1)
+	// Don't do anything if count_type or reset_count are invalid
+	if((count_type | reset_count) > 1)
 	{
 		return;
 	}
 
+	// Build config from parameters
+	unsigned short pmcr_ctrl = PMCR_RUN_COUNTER | (reset_count << PMCR_RESET_COUNTER_SHIFT) | (count_type << PMCR_CLOCK_TYPE_SHIFT) | mode;
+
+	// Don't do anything if being asked to enable an already-enabled counter
 	if( (which == 1) && ((!pmcr_enabled) || (pmcr_enabled == 2)) )
 	{
 		// counter 1
-		unsigned short pmcr1_ctrl = *((volatile unsigned short*)PMCR1_CTRL_REG);
-
-		// Clear the mode bits, default to 1 count = 1 cycle
-		pmcr1_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_CLOCK_TYPE);
-
-		// Set mode, switch to CPU/Bus ratio for counting if set (saves an if() this way)
-		pmcr1_ctrl |= mode | (count_type << PMCR_CLOCK_TYPE_SHIFT);
-
-		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr1_ctrl | PMCR_ENABLE_BIT | PMCR_PMST_BIT;
+		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr_ctrl;
 
 		pmcr_enabled += 1;
 	}
 	else if( (which == 2) && ((!pmcr_enabled) || (pmcr_enabled == 1)) )
 	{
 		// counter 2
-		unsigned short pmcr2_ctrl = *((volatile unsigned short*)PMCR2_CTRL_REG);
-
-		// Clear the mode bits, default to 1 count = 1 cycle
-		pmcr2_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_CLOCK_TYPE);
-
-		// Set mode, switch to CPU/Bus ratio for counting if set (saves an if() this way)
-		pmcr2_ctrl |= mode | (count_type << PMCR_CLOCK_TYPE_SHIFT);
-
-		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr2_ctrl | PMCR_ENABLE_BIT | PMCR_PMST_BIT;
+		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr_ctrl;
 
 		pmcr_enabled += 2;
 	}
 	else if( (which == 3) && (!pmcr_enabled) )
 	{
 		// Both
-		unsigned short pmcr1_ctrl = *((volatile unsigned short*)PMCR1_CTRL_REG);
-		unsigned short pmcr2_ctrl = *((volatile unsigned short*)PMCR2_CTRL_REG);
-
-		// Clear the mode bits, default to 1 count = 1 cycle
-		pmcr1_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_CLOCK_TYPE);
-		pmcr2_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_CLOCK_TYPE);
-
-		// Set mode, switch to CPU/Bus ratio for counting if set (saves an if() this way)
-		pmcr1_ctrl |= mode | (count_type << PMCR_CLOCK_TYPE_SHIFT);
-		pmcr2_ctrl |= mode | (count_type << PMCR_CLOCK_TYPE_SHIFT);
-
-		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr1_ctrl | PMCR_ENABLE_BIT | PMCR_PMST_BIT;
-		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr2_ctrl | PMCR_ENABLE_BIT | PMCR_PMST_BIT;
+		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr_ctrl;
+		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr_ctrl;
 
 		pmcr_enabled = 3;
 	}
@@ -153,7 +126,7 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 								 "mov.l r2,%[outl]\n\t" // get data to memory
 		: [outh] "=m" (out_array[1]), [outl] "=m" (out_array[0])
 		: [reg1h] "m" (pmcr1_regh), [reg1l] "m" (pmcr1_regl) // SH4 can't mov an immediate longword into a register...
-		: // no clobbers
+		: "r1", "r2"
 		);
 	}
 	else if( (which == 2) && (pmcr_enabled & 0x2) )
@@ -170,7 +143,7 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 								 "mov.l r2,%[outl]\n\t" // get data to memory
 		: [outh] "=m" (out_array[1]), [outl] "=m" (out_array[0])
 		: [reg2h] "m" (pmcr2_regh), [reg2l] "m" (pmcr2_regl) // SH4 can't mov an immediate longword into a register...
-		: // no clobbers
+		: "r1", "r2"
 		);
 	}
 	else if(!pmcr_enabled)
@@ -183,11 +156,6 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 		out_array[1] = 0xffff;
 		out_array[0] = 0xffffffff;
 	}
-
-// This is how the counter registers are meant to be read, and is done above:
-//	result = ((unsigned long long int)(result_h & 0xffff) << 32) | (result_l);
-// return result;
-// return *((unsigned long long int*) out_array); // Return 64-bit int on a system with only 32-bit general registers...
 }
 
 // Reset counter to 0 and start it again
@@ -197,84 +165,79 @@ void PMCR_Restart(int which, unsigned short mode, unsigned char count_type)
 	if( (which == 1) && (pmcr_enabled & 0x1) )
  	{
  		// counter 1
-		PMCR_Disable(1);
-		PMCR_Clear(1);
-		PMCR_Enable(1, mode, count_type);
+		PMCR_Stop(1);
+		PMCR_Enable(1, mode, count_type, PMCR_RESET_COUNTER);
  	}
 	else if( (which == 2) && (pmcr_enabled & 0x2) )
  	{
  		// counter 2
-		PMCR_Disable(2);
-		PMCR_Clear(2);
-		PMCR_Enable(2, mode, count_type);
+		PMCR_Stop(2);
+		PMCR_Enable(2, mode, count_type, PMCR_RESET_COUNTER);
  	}
 	else if( (which == 3) && (pmcr_enabled == 3) )
  	{
 		// Both
-		PMCR_Disable(3);
-		PMCR_Clear(3);
-		PMCR_Enable(3, mode, count_type);
+		PMCR_Stop(3);
+		PMCR_Enable(3, mode, count_type, PMCR_RESET_COUNTER);
  	}
 }
 
-// Clearing only works when the counter is disabled.
-void PMCR_Clear(int which)
-{
-	if( (which == 1) && ((!pmcr_enabled) || (pmcr_enabled == 2)) )
-	{
-		// counter 1
-		unsigned short pmcr1_ctrl = *((volatile unsigned short*)PMCR1_CTRL_REG);
-		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr1_ctrl | PMCR_CLEAR_COUNTER;
-	}
-	else if( (which == 2) && ((!pmcr_enabled) || (pmcr_enabled == 1)) )
-	{
-		// counter 2
-		unsigned short pmcr2_ctrl = *((volatile unsigned short*)PMCR2_CTRL_REG);
-		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr2_ctrl | PMCR_CLEAR_COUNTER;
-	}
-	else if( (which == 3) && (!pmcr_enabled) )
-	{
-		// Both
-		unsigned short pmcr1_ctrl = *((volatile unsigned short*)PMCR1_CTRL_REG);
-		unsigned short pmcr2_ctrl = *((volatile unsigned short*)PMCR2_CTRL_REG);
-
-		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr1_ctrl | PMCR_CLEAR_COUNTER;
-		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr2_ctrl | PMCR_CLEAR_COUNTER;
-	}
-}
-
-// Note that disabling does NOT clear the counter.
-void PMCR_Disable(int which)
+// Clearing only works when the counter is disabled. Otherwise, stopping the
+// counter via setting the 0x2000 bit holds the data in the data registers,
+// whereas disabling without setting that bit reads back as all 0 (but doesn't
+// clear the counters for next start). This function just stops a running
+// counter and does nothing if the counter is already stopped or disabled, as
+// clearing is handled by PMCR_Enable().
+void PMCR_Stop(int which)
 {
 	if( (which == 1) && (pmcr_enabled & 0x1) )
 	{
 		// counter 1
-		unsigned short pmcr1_ctrl = *((volatile unsigned short*)PMCR1_CTRL_REG);
-		pmcr1_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_ENABLE_BIT);
-		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr1_ctrl;
+		*((volatile unsigned short*)PMCR1_CTRL_REG) = PMCR_STOP_COUNTER;
 
-		pmcr_enabled -= 1;
+		pmcr_enabled &= 0x2;
 	}
 	else if( (which == 2) && (pmcr_enabled & 0x2) )
 	{
 		// counter 2
-		unsigned short pmcr2_ctrl = *((volatile unsigned short*)PMCR2_CTRL_REG);
-		pmcr2_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_ENABLE_BIT);
-		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr2_ctrl;
+		*((volatile unsigned short*)PMCR2_CTRL_REG) = PMCR_STOP_COUNTER;
 
-		pmcr_enabled -= 2;
+		pmcr_enabled &= 0x1;
 	}
 	else if( (which == 3) && (pmcr_enabled == 3) )
 	{
 		// Both
-		unsigned short pmcr1_ctrl = *((volatile unsigned short*)PMCR1_CTRL_REG);
-		unsigned short pmcr2_ctrl = *((volatile unsigned short*)PMCR2_CTRL_REG);
+		*((volatile unsigned short*)PMCR1_CTRL_REG) = PMCR_STOP_COUNTER;
+		*((volatile unsigned short*)PMCR2_CTRL_REG) = PMCR_STOP_COUNTER;
 
-		pmcr1_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_ENABLE_BIT);
-		pmcr2_ctrl &= ~(PMCR_MODE_CLEAR_INVERTED | PMCR_ENABLE_BIT);
+		pmcr_enabled = 0;
+	}
+}
 
-		*((volatile unsigned short*)PMCR1_CTRL_REG) = pmcr1_ctrl;
-		*((volatile unsigned short*)PMCR2_CTRL_REG) = pmcr2_ctrl;
+// Note that disabling does NOT clear the counter.
+// It may appear that way because reading a disabled counter returns 0, but re-
+// enabling without first clearing will simply continue where it left off.
+void PMCR_Disable(int which)
+{
+	if(which == 1)
+	{
+		// counter 1
+		*((volatile unsigned short*)PMCR1_CTRL_REG) = PMCR_DISABLE_COUNTER;
+
+		pmcr_enabled &= 0x2;
+	}
+	else if(which == 2)
+	{
+		// counter 2
+		*((volatile unsigned short*)PMCR2_CTRL_REG) = PMCR_DISABLE_COUNTER;
+
+		pmcr_enabled &= 0x1;
+	}
+	else if(which == 3)
+	{
+		// Both
+		*((volatile unsigned short*)PMCR1_CTRL_REG) = PMCR_DISABLE_COUNTER;
+		*((volatile unsigned short*)PMCR2_CTRL_REG) = PMCR_DISABLE_COUNTER;
 
 		pmcr_enabled = 0;
 	}

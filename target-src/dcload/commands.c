@@ -242,64 +242,63 @@ void cmd_maple(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN + i);
 }
 
-// The 6 perfctr functions are:
+// The 6 performance counter control functions are:
 /*
 	// Clear counter and enable
 	void PMCR_Init(int which, unsigned short mode, unsigned char count_type);
 
-	// Enable one or both of these "undocumented" performance counters. Does not clear counter(s).
-	void PMCR_Enable(int which, unsigned short mode, unsigned char count_type);
+	// Enable one or both of these "undocumented" performance counters.
+	void PMCR_Enable(int which, unsigned short mode, unsigned char count_type, unsigned char reset_counter);
 
 	// Disable, clear, and re-enable with new mode (or same mode)
 	void PMCR_Restart(int which, unsigned short mode, unsigned char count_type);
 
 	// Read a counter
-	// out_array is specifically uint32 out_array[2] -- 48-bit value needs a 64-bit storage unit
 	void PMCR_Read(int which, volatile unsigned int *out_array);
 
-	// Clear counter(s) -- only works when disabled!
-	void PMCR_Clear(int which);
+	// Stop counter(s) (without clearing)
+	void PMCR_Stop(int which);
 
-	// Disable counter(s) without clearing
+	// Disable counter(s) (without clearing)
 	void PMCR_Disable(int which);
 */
 // The command is the first letter of the function (capitalized) plus the counter number, plus a byte with the mode (if applicable)
 // Except restart--read is 'R', so restart is 'B' (think reBoot)
 //
 // Sending command data of 'D' 0x1 (2 bytes) disables ('D') perf counter 1 (0x1)
-// Sending command data 'I' 0x3 0x23 0x0 (4 bytes) inits ('I') both perf counters (0x3) to elapsed time mode (0x23) and count is 1 cpu cycle = 1 count (0x0)
+// Sending command data 'E' 0x3 0x23 0x0 0x1 (5 bytes) enables ('E') both perf counters (0x3) to elapsed time mode (0x23) where count is 1 cpu cycle = 1 count (0x0) and continue the counter from its current value (0x1)
 // Sending command data 'B' 0x2 0x23 0x1 (4 bytes) restarts ('B') perf counter 2 (0x2) to elapsed time mode (0x23) and count is CPU/bus ratio method (0x1)
 // ...
 // etc.
 //
 // Notes:
-// - Remember to disable before leaving DCLOAD to execute a program, if needed.
+// - Remember to disable before leaving DCLOAD to execute a program if needed.
 // - See perfctr.h for how to calculate time using the CPU/bus ratio method.
 // - PMCR_Init() and PMCR_Enable() will do nothing if the perf counter is already running!
 
 static char * ok_message = "OK";
 static char * invalid_read_message = "PMCR read: 1 or 2 only.";
-static char * invalid_function_message = "PMCR: I, E, B, R, C, or D only.";
+static char * invalid_function_message = "PMCR: I, E, B, R, S, or D only.";
 static char * invalid_option_message = "PMCR: 1, 2, or 3 only.";
 static char * invalid_mode_message = "PMCR modes: 0x1-0x29.";
 static char * invalid_count_type_message = "PMCR count: 0 or 1 only.";
+static char * invalid_reset_type_message = "PMCR reset: 0 or 1 only.";
 static volatile unsigned int read_array[2] = {0};
 
 void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
-	unsigned int i;
-	int invalid_pmcr = 0, invalid_mode = 0, invalid_count = 0;
+	char * out_message = ok_message;
+	unsigned int i = 3;
+	unsigned char invalid_pmcr = 0, invalid_mode = 0, invalid_count = 0, invalid_reset = 0;
 
 	unsigned char read = 0;
 
 	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
 	command_t * response = (command_t *)buffer;
 
-	// Size is 2 or 4 bytes depending on the command. Easy!
+	// Size is 2, 4, or 5 bytes depending on the command. Easy!
 	// No need for address, it's not used here so it can be whatever.
+	// Size isn't actually checked, either...
 	memcpy(response, command, COMMAND_LEN);
-
-	char * out_message = ok_message;
-	i = 3;
 
 	if((!command->data[1]) || (command->data[1] > 3))
 	{
@@ -330,9 +329,13 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 		{
 			invalid_count = 1;
 		}
+		else if(command->data[4] > 1)
+		{
+			invalid_reset = 1;
+		}
 		else
 		{
-			PMCR_Enable(command->data[1], command->data[2], command->data[3]);
+			PMCR_Enable(command->data[1], command->data[2], command->data[3], command->data[4]);
 		}
 	}
 	else if(command->data[0] == 'B') // Restart
@@ -363,9 +366,9 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 			read = 1;
 		}
 	}
-	else if(command->data[0] == 'C') // Clear
+	else if(command->data[0] == 'S') // Stop
 	{
-		PMCR_Clear(command->data[1]);
+		PMCR_Stop(command->data[1]);
 	}
 	else if(command->data[0] == 'D') // Disable
 	{
@@ -393,6 +396,11 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 		out_message = invalid_count_type_message;
 		i = 25;
 	}
+	else if(invalid_reset)
+	{
+		out_message = invalid_reset_type_message;
+		i = 25;
+	}
 
 	if(read) // This will send little endian perf counter value as the response.
 	{
@@ -410,47 +418,6 @@ void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN + i);
 }
 
-/*
-//
-// Counter disable (only) version
-//
-
-static char * ok_message = ": OK";
-static char * invalid_option_message = " : PMCR D1, D2, or D3 only.";
-
-void cmd_pmcr(ip_header_t * ip, udp_header_t * udp, command_t * command) {
-	unsigned int i;
-	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
-	command_t * response = (command_t *)buffer;
-
-	// Size is 2 bytes. Easy!
-	// No need for address, it's not used here so it can be whatever.
-	memcpy(response, command, COMMAND_LEN);
-
-	char * out_message = ok_message;
-	i = 5;
-
-	if((command->data[0] != 'D') || (!command->data[1]) || (command->data[1] > 3))
-	{
-		out_message = invalid_option_message;
-		i = 28;
-	}
-	else
-	{
-		PMCR_Disable(command->data[1]);
-	}
-
-	// Make and send response
-	// Append response string to received command
-	memcpy(&(response->data[2]), out_message, i);
-	response->size = htonl(i + 2);
-
-	// make_ether was run in net.c already
-	make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN + i, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
-	make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) response, COMMAND_LEN + i, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 1); // 1
-	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN + i);
-}
-*/
 /*
 // command_t struct here For reference
 

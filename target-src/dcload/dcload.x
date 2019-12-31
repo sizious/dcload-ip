@@ -236,4 +236,6 @@ _stack = 0x8c00f400;
    error displays at a time :) */
 ASSERT(( (_stack - _end) > 800 ), "Error: Not enough stack space: need at least 800 bytes")
 ASSERT(( _end <= (ORIGIN(ram) + LENGTH(ram)) ), "Error: Region 'ram' overflowed: try '-Os' or shrink code size")
+/* For some reason LD's normal overflow checks don't run when sections are
+   explicitly aligned, so these asserts are here to make up for it. */
 }

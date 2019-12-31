@@ -385,7 +385,7 @@ void set_ip_dhcp(void)
 
 	// Check renewal condition. Only matters if dhcp_lease_time has been set before.
 	// The counter is 48-bit, so the max lease time allowed in 1 count = 1 cycle
-	// mode is around 1410902 seconds. That's about 16.3 days.
+	// mode is around 1410902 seconds. That's about 16.33 days.
 
 	// SH4 dmulu.l is 32 bit * 32 bit --> 64 bit
 	// GCC knows to use dmulu.l based on this code.
@@ -395,12 +395,12 @@ void set_ip_dhcp(void)
 	unsigned long long int long_dhcp_lease_time = (unsigned long long int)dhcp_lease_time * (unsigned long long int)(PERFCOUNTER_SCALE);
 	PMCR_Read(DCLOAD_PMCR, current_counter_array);
 
-	// Check if lease is still active, renewal threshold is at 50% lease time. '>> 1' is '/2'.
-	// NOTE: GCC apparently can't handle the concept of dividing 64-bit numbers on SH4, even by a power of two.
-	// It adds over 1kB of extra code at the mere sight of it, weirdly, so we do the shift manually here.
 	unsigned long long int *current_counter = (unsigned long long int*)current_counter_array;
 	unsigned long long int *old_dhcp_lease_updater = (unsigned long long int*)old_dhcp_lease_updater_array;
 
+	// Check if lease is still active, renewal threshold is at 50% lease time. '>> 1' is '/2'.
+	// NOTE: GCC apparently can't handle the concept of dividing 64-bit numbers on SH4, even by a power of two.
+	// It adds over 1kB of extra code at the mere sight of it, weirdly, so we do the shift manually here.
 	if(dhcp_lease_time && (!dont_renew) && ((long_dhcp_lease_time >> 1) < (*current_counter)))
 	{
 		dhcp_lease_time = 0; // This disables DHCP renewal unless it gets updated with a valid value. Its dual-purpose is a renewal code enabler.
@@ -476,7 +476,7 @@ void set_ip_dhcp(void)
 										"mov r1,%[out_old_fpscr]\n\t" // Store old fpscr for safekeeping
 				: [out_old_fpscr] "=r" (old_fpscr)
 				: // no inputs
-				: // no clobbers
+				: "r1"
 			);
 
 			// Right-way-of-doing-it method
@@ -491,19 +491,20 @@ void set_ip_dhcp(void)
 			single_tmp_fpscr &= ~(1 << 19); // Clear FPSCR.PR to single-precision mode
 
 			asm volatile ("mov %[in_sngl_tmp],r1\n\t" // Load new fpscr into R1
-										"lds r1,fpscr\n\t" // Load R1 into fpscr
 				: // no outputs
 				: [in_sngl_tmp] "r" (single_tmp_fpscr)
-				: // no clobbers
+				: "r1"
 			);
+			// GCC has no clobber for fpscr, so this needs to be its own line
+			asm volatile ("lds r1,fpscr\n\t"); // Load R1 into fpscr
 
 			// Using paired moves to reduce this to 2 instructions and minimize memory accesses
 			// Unpaired moves would take 2 instructions (memory accesses) per double
 			asm volatile ("fmov.d %[in_dblfreq],DR2\n\t" // Load SH4 double-encoded frequency directly into DR2
 										"fmov.d %[in_dbl32],DR6\n\t" // Load SH4 double-encoded 2^32 directly into DR6
 				: // no outputs
-				: [in_dblfreq] "m" (const_perf_freq), [in_dbl32] "m" (const_32)
-				: // no clobbers
+				: [in_dblfreq] "m" (*const_perf_freq), [in_dbl32] "m" (*const_32)
+				: "dr2", "dr6"
 			);
 
 			// Switch to double-precision & single-move mode
@@ -512,11 +513,12 @@ void set_ip_dhcp(void)
 			double_tmp_fpscr &= ~(1 << 20); // Clear FPSCR.SZ to single move mode
 
 			asm volatile ("mov %[in_dbl_tmp],r1\n\t" // Load new fpscr into R1
-										"lds r1,fpscr\n\t" // Load R1 into fpscr
 				: // no outputs
 				: [in_dbl_tmp] "r" (double_tmp_fpscr)
-				: // no clobbers
+				: "r1"
 			);
+			// GCC has no clobber for fpscr, so this needs to be its own line
+			asm volatile ("lds r1,fpscr\n\t"); // Load R1 into fpscr
 
 			// End right-way-of-doing-it setup method
 /*
@@ -539,11 +541,12 @@ void set_ip_dhcp(void)
 			undefined_tmp_fpscr = old_fpscr | (3 << 19); // Set FPSCR.PR to double-precision mode & FPSCR.SZ to pair-move mode
 
 			asm volatile ("mov %[in_undef_tmp],r1\n\t" // Load new fpscr into R1
-										"lds r1,fpscr\n\t" // Load R1 into fpscr
 				: // no outputs
 				: [in_undef_tmp] "r" (undefined_tmp_fpscr)
-				: // no clobbers
+				: "r1"
 			);
+			// GCC has no clobber for fpscr, so this needs to be its own line
+			asm volatile ("lds r1,fpscr\n\t"); // Load R1 into fpscr
 
 			// Using paired moves to reduce this to 2 instructions
 			// Unpaired moves would take 2 instructions per double
@@ -551,7 +554,7 @@ void set_ip_dhcp(void)
 										"fmov.d %[in_dbl32],DR6\n\t" // Load SH4 double-encoded 2^32 directly into DR6
 				: // no outputs
 				: [in_dblfreq] "m" (const_perf_freq), [in_dbl32] "m" (const_32)
-				: // no clobbers
+				: "dr2", "dr6"
 			);
 
 			// End undefined behavior setup method
@@ -573,7 +576,7 @@ void set_ip_dhcp(void)
 										"sts FPUL,%[out_int]\n\t" // Get the answer out
 				: [out_int] "=r" (remaining_lease)
 				:	[in_dbl0] "r" (((unsigned int*)&difference)[0]), [in_dbl1] "r" (((unsigned int*)&difference)[1])
-				: "t" // "t-bit" gets clobbered by cmp/pl
+				: "t", "fpul", "dr0", "dr2", "dr4", "dr6" // "t-bit" gets clobbered by cmp/pl
 			);
 			// Constraints for SH can be found here:
 			// https://github.com/gcc-mirror/gcc/blob/master/gcc/config/sh/constraints.md
@@ -586,11 +589,12 @@ void set_ip_dhcp(void)
 			// Cleanup -- don't want to mess with programs that expect certain bits set by default.
 			// Bad form on the program's part if so, but I don't want to be responsible for breaking things.
 			asm volatile ("mov %[in_old_fpscr],r1\n\t" // Load old fpscr into R1
-										"lds r1,fpscr\n\t" // Load R1 into fpscr
 				: // no outputs
 				: [in_old_fpscr] "r" (old_fpscr)
-				: // no clobbers
+				: "r1"
 			);
+			// GCC has no clobber for fpscr, so this needs to be its own line
+			asm volatile ("lds r1,fpscr\n\t"); // Load R1 into fpscr
 
 			// This is what just happened:
 	//		double div = ((double)difference) / ((double)PERFCOUNTER_SCALE);
@@ -750,7 +754,7 @@ int main(void)
 		scif_puts("\n");
 	*/
 
-	// Enable pmcr1 if it's not enabled
+	// Enable PMCR if it's not enabled
 	// (Don't worry, this won't run again if it's already enabled; that would accidentally reset the lease timer!)
 #ifndef BUS_RATIO_COUNTER
 	PMCR_Init(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_COUNT_CPU_CYCLES);

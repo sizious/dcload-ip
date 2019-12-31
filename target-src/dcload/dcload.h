@@ -81,6 +81,7 @@ void disp_info(void);
 void disp_status(const char * status);
 void clear_lines(unsigned int y, unsigned int n, unsigned int c);
 
-void set_ip_dhcp(void); // Exported for bb->loop
+// Exported for bb->loop
+void set_ip_dhcp(void);
 
 #endif

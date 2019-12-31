@@ -1,16 +1,20 @@
-// As much as I'd love to put my name up here for 2019 copyright, uh, Internet
-// pseudonyms and all that. ;)
+// ---- perfctr.h - SH7091 Performance Counter Module Header ----
 //
-// So consider the perfctr.h & perfctr.c set of files in the public domain. It
-// would always be great to give credit back to the original source!!
+// This file is part of the DreamHAL project, a hardware abstraction library
+// primarily intended for use on the SH7091 found in hardware such as the SEGA
+// Dreamcast game console.
 //
-// Note that DCLOAD-IP is actually GPLv2 licensed, though public domain code is
-// absolutely compatible with that.
+// The performance counter module is hereby released into the public domain in
+// the hope that it may prove useful. Now go profile some code and hit 60 fps! :)
 //
 // --Moopthehedgehog
+//
+
+#ifndef __PERFCTR_H__
+#define __PERFCTR_H__
 
 //
-// -- General SH4 performance Counter Notes --
+// -- General SH4 Performance Counter Notes --
 //
 // There are 2 performance counters that can measure elapsed time. They are each
 // 48-bit counters. They are part of the so-called "ASE" subsystem, which you can
@@ -18,11 +22,20 @@
 // system architecture, volume 1: system":
 // https://www.st.com/content/ccc/resource/technical/document/user_manual/36/75/05/ac/e8/7e/42/2d/CD00147163.pdf/files/CD00147163.pdf/jcr:content/translations/en.CD00147163.pdf
 //
-// They can count cycles, so that's 200MHz a.k.a. 5 ns increments. At 5 ns
-// increments, a 48-bit cycle counter can run continuously for almost 16.3 days.
-// It's actually closer to 16 days, 7 hours, 55 minutes, and 2 seconds, depending
-// on how close the bus clock is to 99.75MHz.
-// Side note: apparently they don't have an overflow interrupt.
+// They can count cycles, so that's 199.5MHz (not 200MHz!!) a.k.a. roughly 5 ns
+// increments. At 5 ns increments, a 48-bit cycle counter can run continuously
+// for 16.33 days. It's actually 16 days, 7 hours, 55 minutes, and 2 seconds,
+// depending on how close the bus clock is to 99.75MHz. There is also a second
+// mode that counts cycles according to a ratio between the CPU frequency and
+// the system bus clock, and it increments the counter by 12 every bus cycle.
+// This second mode is detailed in the description for PMCR_CLOCK_TYPE in this
+// file, and it is recommended for use when the CPU frequency is not a runtime
+// constant.
+//
+// Side note: The counters don't have an overflow interrupt or overflow bit.
+// (I did actually run one to 48-bit overflow in elapsed time mode using the
+// ratio method to check this. They don't appear to sign-extend the upper 16
+// bits in elapsed time mode, either.)
 //
 // The two counters are functionally identical. I would recommend using the
 // PMCR_Init() function to start one (or both) up the first time.
@@ -59,11 +72,12 @@
 // 0xFF000084" (without quotes) online you'll find an old forum where some logs
 // were posted of the terminal/command prompt output from some STMicro JTAG tool,
 // which not only has the address registers but also clearly characterizes their
-// size as 16-bit: https://www.multimediaforum.de/threads/36260834-alice-hsn-3800tw-usb-jtag-ft4232h/page2
+// size as 16-bit:
+// https://www.multimediaforum.de/threads/36260834-alice-hsn-3800tw-usb-jtag-ft4232h/page2
 //
 // -- Event Mode Info --
 //
-// Specific information on each of these modes can be found in the document titled
+// Specific information on each counter mode can be found in the document titled
 // "SuperH™ Family E10A-USB Emulator: Additional Document for User’s Manual:
 // Supplementary Information on Using the SH7750R Renesas Microcomputer Development Environment System"
 // which is available on Renesas's website, in the "Documents" section of the
@@ -86,11 +100,8 @@
 // which contains units for each mode (e.g. which measure time and which just
 // count): https://www.lauterbach.com/frames.html?home.html (It's in Downloads
 // -> Trace32 Help System -> it's the file called "SH2, SH3 and SH4 Debugger"
-// with the filename debugger_sh4.pdf)
+// with the filename debugger_sh4.pdf).
 //
-
-#ifndef __PERFCTR_H__
-#define __PERFCTR_H__
 
 //
 // --- Performance Counter Registers ---
@@ -111,65 +122,93 @@
 // --- Performance Counter Configuration Flags ---
 //
 
-// These bits' functions are currently unknown. They may simply be reserved.
+// These bits' functions are currently unknown, but they may simply be reserved.
 // It's possible that there's a [maybe expired?] patent that details the
-// configuration registers. I haven't been able to find one, though. Places to
+// configuration registers, though I haven't been able to find one. Places to
 // check would be Google Patents and the Japanese Patent Office--maybe someone
 // else can find something?
+//
+// Some notes:
+// Writing 1 to all of these bits reads back as 0, so it looks like they aren't
+// config bits. It's possible they are write-only like the stop bit, though,
+// or that they're just reserved-write-0-only. It appears that they are always
+// written with zeros in software that uses them, so that's confirmed safe to do.
+//
+// Also, after running counter 1 to overflow, it appears there's no overflow bit
+// (maybe the designers thought 48-bits would be so much to count to that they
+// didn't bother implementing one?). The upper 16-bits of the counter high
+// register are also not sign-extension bits. They may be a hidden config area,
+// but probably not because big endian mode would swap the byte order.
 #define PMCR_UNKNOWN_BIT_0040 0x0040
 #define PMCR_UNKNOWN_BIT_0080 0x0080
 #define PMCR_UNKNOWN_BIT_0200 0x0200
 #define PMCR_UNKNOWN_BIT_0400 0x0400
 #define PMCR_UNKNOWN_BIT_0800 0x0800
 #define PMCR_UNKNOWN_BIT_1000 0x1000
-// Writing 1 to all of these bits reads back as 0, so it looks like they aren't
-// writable. It's possible they are write-only like the clear register, though.
-// Or they're read-only bits; one of them may be an overflow bit that only gets
-// written to 0
 
 // PMCR_MODE_CLEAR_INVERTED just clears the event mode if it's inverted with
 // '~', and event modes are listed below.
 #define PMCR_MODE_CLEAR_INVERTED 0x003f
 
-// PMCR_CLOCK_TYPE sets the counters to count clock cycles instead of CPU/bus
-// ratio cycles (where T = C x B / 24 and T is time, C is count, and B is time
+// PMCR_CLOCK_TYPE sets the counters to count clock cycles or CPU/bus ratio mode
+// cycles (where T = C x B / 24 and T is time, C is count, and B is time
 // of one bus cycle). Note: B = 1/99753008 or so, but it may vary, as mine is
 // actually 1/99749010-ish; the target frequency is probably meant to be 99.75MHz.
 //
 // See the ST40 or Renesas SH7750R documents described in the above "Event Mode
 // Info" section for more details about that formula.
 //
-// Set PMCR_CLOCK_TYPE to 0 for CPU cycle counting where 1 count = 1 cycle, or
+// Set PMCR_CLOCK_TYPE to 0 for CPU cycle counting, where 1 count = 1 cycle, or
 // set it to 1 to use the above formula. Renesas documentation recommends using
-// the ratio version (set the bit to 1) when user programs mess with clock
-// frequencies. This file has some definitions later on to help with this.
+// the ratio version (set the bit to 1) when user programs alter CPU clock
+// frequencies. This header has some definitions later on to help with this.
 #define PMCR_CLOCK_TYPE 0x0100
 #define PMCR_CLOCK_TYPE_SHIFT 8
 
-// PMCR_CLEAR_COUNTER is write-only; it always reads back as 0. It also only
-// works when the timer is disabled/stopped. It does what the name suggests:
-// when this bit is written to, the counter's high and low registers are wiped.
-#define PMCR_CLEAR_COUNTER 0x2000
-#define PMCR_CLEAR_COUNTER_SHIFT 13
+// PMCR_STOP_COUNTER is write-only, as it always reads back as 0. It does what
+// the name suggests: when this bit is written to, the counter stops. However,
+// if written to while the counter is disabled or stopped, the counter's high
+// and low registers are reset to 0.
+//
+// Using PMCR_STOP_COUNTER to stop the counter has the effect of holding the
+// data in the data registers while stopped, unlike PMCR_DISABLE_COUNTER, and
+// this bit needs to be written to again (e.g. on next start) in order to
+// actually clear the counter data for another run. If not explicitly cleared,
+// the counter will continue from where it left off before being stopped.
+#define PMCR_STOP_COUNTER 0x2000
+#define PMCR_RESET_COUNTER_SHIFT 13
 
-// PMST appears to mean PM START. It's consistently used to enable the counter,
-// though, so I guess it's PM START. I'm just calling it PMST here for lack of
-// a better name, since this is what the Linux kernel and lxdream call it.
+// Bits 0xC000 both need to be set to 1 for the counters to actually begin
+// counting. I have seen that the Linux kernel actually separates them out into
+// two separate labelled bits (PMEN and PMST) for some reason, however they do
+// not appear to do anything separately. Perhaps this is a two-bit mode where
+// 1-1 is run, 1-0 and 0-1 are ???, and 0-0 is off.
+#define PMCR_RUN_COUNTER 0xC000
+#define PMCR_RUN_SHIFT 14
+// Interestingly, the output here writes 0x6000 to the counter config registers,
+// which would be the "PMST" bit and the "RESET" bit:
+// https://www.multimediaforum.de/threads/36260834-alice-hsn-3800tw-usb-jtag-ft4232h/page2
+
+// To disable a counter, just write 0 to its config register. This will not
+// reset the counter to 0, as that requires an explicit clear via setting the
+// PMCR_STOP_COUNTER bit. What's odd is that a disabled counter's data
+// registers read back as all 0, but re-enabling it without a clear will
+// continue from the last value before disabling.
+#define PMCR_DISABLE_COUNTER 0x0000
+
+// These definitions merely separate out the two PMCR_RUN_COUNTER bits, and
+// they are included here for documentation purposes.
+
+// PMST may mean PMCR START. It's consistently used to enable the counter.
+// I'm just calling it PMST here for lack of a better name, since this is what
+// the Linux kernel and lxdream call it. It could also have something to do with
+// a mode specific to STMicroelectronics.
 #define PMCR_PMST_BIT 0x4000
 #define PMCR_PMST_SHIFT 14
 
-// Enable the perf counter
-#define PMCR_ENABLE_BIT 0x8000
-#define PMCR_ENABLE_SHIFT 15
-// You know what? These bits might be backwards. Need to do some more testing to
-// figure out what happens with different combinations
-// It appears that it takes both PMST and ENABLE to start the counter running.
-// Disabling either stops the counter.
-// Perhaps it's a 2-bit mode: 1-1 is run, 1-0 and 0-1 are ??? and 0-0 is off
-
-// So maybe we need this?
-#define PMCR_RUN_BITS 0xC000
-#define PMCR_RUN_SHIFT 14
+// Likewise PMEN may mean PMCR ENABLE
+#define PMCR_PMEN_BIT 0x8000
+#define PMCR_PMEN_SHIFT 15
 
 //
 // --- Performance Counter Event Code Definitions ---
@@ -229,6 +268,11 @@
 // Likewise this uses the CPU/bus ratio method
 #define PMCR_COUNT_RATIO_CYCLES 1
 
+// These definitions are for the enable function and specify whether to reset
+// a counter to 0 or to continue from where it left off
+#define PMCR_CONTINUE_COUNTER 0
+#define PMCR_RESET_COUNTER 1
+
 //
 // --- Performance Counter Miscellaneous Definitions ---
 //
@@ -253,8 +297,8 @@
 // Clear counter and enable
 void PMCR_Init(int which, unsigned short mode, unsigned char count_type);
 
-// Enable one or both of these "undocumented" performance counters. Does not clear counter(s).
-void PMCR_Enable(int which, unsigned short mode, unsigned char count_type);
+// Enable one or both of these "undocumented" performance counters.
+void PMCR_Enable(int which, unsigned short mode, unsigned char count_type, unsigned char reset_counter);
 
 // Disable, clear, and re-enable with new mode (or same mode)
 void PMCR_Restart(int which, unsigned short mode, unsigned char count_type);
@@ -263,10 +307,10 @@ void PMCR_Restart(int which, unsigned short mode, unsigned char count_type);
 // out_array is specifically uint32 out_array[2] -- 48-bit value needs a 64-bit storage unit
 void PMCR_Read(int which, volatile unsigned int *out_array);
 
-// Clear counter(s) -- only works when disabled!
-void PMCR_Clear(int which);
+// Stop counter(s) (without clearing)
+void PMCR_Stop(int which);
 
-// Disable counter(s) without clearing
+// Disable counter(s) (without clearing)
 void PMCR_Disable(int which);
 
 #endif /* __PERFCTR_H__ */
