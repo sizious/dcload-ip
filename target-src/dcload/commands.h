@@ -20,7 +20,7 @@ typedef struct __attribute__ ((packed)) {
 #define CMD_RETVAL   "RETV" /* return value */
 #define CMD_REBOOT   "RBOT" /* reboot */
 #define CMD_MAPLE    "MAPL" /* Maple packet */
-#define CMD_PMCR 		 "PMCR" /* Disable perfcounter packet */
+#define CMD_PMCR 		 "PMCR" /* Performance counter packet */
 
 #define COMMAND_LEN  12
 
