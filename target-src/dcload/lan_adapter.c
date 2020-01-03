@@ -7,15 +7,23 @@
 #include <string.h>
 #include "packet.h"
 #include "net.h"
-#include "adapter.h"
+//#include "adapter.h" // already in lan_adapter.h
 #include "lan_adapter.h"
-#include "dcload.h"
+#include "dcload.h" // clear_lines is in here
+#include "video.h" // for draw_string
+
+#include "dhcp.h"
+
+// Here's a datasheet for the FUJITSU MB86967 chip: https://pdf1.alldatasheet.com/datasheet-pdf/view/61702/FUJITSU/MB86967.html
+
+static unsigned char lan_link_up = 0;
 
 typedef volatile unsigned int vuint32;
 typedef volatile unsigned short vuint16;
 typedef volatile unsigned char vuint8;
 
-typedef unsigned char uint8;
+// This is in dhcp.h now
+//typedef unsigned char uint8;
 
 /* Some basic macros to assist with register access */
 #undef REGL
@@ -39,12 +47,14 @@ static vuint32 *xpl = REGL(0xa0600000);
 #define FE_B16_SELECT	0x20		/* EEPROM chip select */
 #define FE_B16_CLOCK	0x40		/* EEPROM shift clock */
 #define FE_B17_DATA	0x80		/* EEPROM data bit */
+
 static void net_strobe_eeprom() {
 	REGW(16) = FE_B16_SELECT;
 	REGW(16) = FE_B16_SELECT | FE_B16_CLOCK;
 	REGW(16) = FE_B16_SELECT | FE_B16_CLOCK;
 	REGW(16) = FE_B16_SELECT;
 }
+
 static void net_read_eeprom(uint8 *data) {
 	uint8 save16, save17, val;
 	int n, bit;
@@ -102,7 +112,7 @@ static int bb_started = 0;
 
 /* Libdream-style sleep function */
 static void net_sleep_ms(int ms) {
-	int i, j, cnt;
+	int i, cnt;
 	vuint32 *a05f688c = (vuint32*)0xa05f688c;
 
 	cnt = 0x1800 * 0x58e * ms / 1000;
@@ -115,7 +125,7 @@ static void net_sleep_ms(int ms) {
 
 /* Reset the lan adapter and verify that it's there and alive */
 static int bb_detect() {
-	int i, type;
+	int type;
 
 	DEBUG("bb_detect entered\r\n");
 
@@ -292,7 +302,7 @@ static int total_pkts_rx = 0, total_pkts_tx = 0;
    at a time for transmission, but this is the simple way. */
 static int bb_tx(unsigned char *pkt, int len) {
 	int i;
-	char buffer[16];
+/*	char buffer[16]; */
 
 	DEBUG("bb_tx entered\r\n");
 
@@ -370,7 +380,7 @@ static int bb_rx() {
 		}
 
 		/* Read the packet */
-		if (len > 1514) {
+		if (len > RX_PKT_BUF_SIZE) {
 			DEBUG("bb_rx exited: big packet\r\n");
 			return -2;
 		}
@@ -379,7 +389,7 @@ static int bb_rx() {
 		}
 
 		/* Submit it for processing */
-		process_pkt(current_pkt, len);
+		process_pkt(current_pkt);
 
 		total_pkts_rx++;
 		/* if (!running)
@@ -390,17 +400,40 @@ static int bb_rx() {
 }
 
 /* Loop doing something interesting */
-static void bb_loop() {
+static void bb_loop(int is_main_loop) {
 	int result;
 
 	DEBUG("bb_loop entered\r\n");
 
+	// Put this here for now, until there's a way to deal with hotplug on this
+	// device (see the rtl_link_up variable in rtl8139.c for an example of how
+	// this variable is intended to be used)
+	if(is_main_loop)
+	{ // Just so we only set this once
+		lan_link_up = 1;
+	}
+
 	while (!escape_loop) {
 		/* Check for received packets */
 		result = bb_rx();
-		if (result < 0 && !running) {
+		if ((result < 0) && (!running)) {
 			clear_lines(320, 24, 0x0100);
 			draw_string(30, 320, "receive error!", 0xffff);
+			// lan_link_up = 0;
+		}
+/*
+// I don't have a LAN adapter so I can't test if this will do what I think it should.
+// It's supposed to be an ethernet cable hotplug indicator.
+		else if(!lan_link_up)
+		{
+			lan_link_up = 1;
+		}
+*/
+		if(is_main_loop && lan_link_up) // Only want this to run in main loop
+		{
+			// Do we need to renew our IP address?
+			// This will override set_ip_from_file() if the ip is in the 0.0.0.0/8 range
+			set_ip_dhcp();
 		}
 	}
 

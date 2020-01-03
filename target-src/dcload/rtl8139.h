@@ -85,7 +85,8 @@
 #define vuc volatile unsigned char
 
 /* Configuration definitions */
-#define RX_BUFFER_LEN        8192
+// RTL8139 RX buffer size. DCLOAD uses 16kB.
+#define RX_BUFFER_LEN        16384
 
 /* RTL8139C Config/Status info */
 typedef struct {

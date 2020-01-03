@@ -22,7 +22,9 @@ typedef struct _command_t command_t;
 
 #define CMD_REBOOT   "RBOT"  /* reboot */
 
+#define CMD_MAPLE		 "MAPL" /* Maple packet */
+#define CMD_PMCR		 "PMCR" /* Performance counter packet */
+
 #define COMMAND_LEN  12
 
 #endif
-

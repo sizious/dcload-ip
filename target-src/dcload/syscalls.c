@@ -34,12 +34,10 @@
 #include "scif.h"
 #include "adapter.h"
 
-unsigned int syscall_retval;
+unsigned int syscall_retval = 0;
 unsigned char* syscall_data;
 
-ether_header_t * ether = (ether_header_t *)pkt_buf;
-ip_header_t * ip = (ip_header_t *)(pkt_buf + ETHER_H_LEN);
-udp_header_t * udp = (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN);
+static struct dirent our_dir; // Here's a global array
 
 /* send command, enable bb, bb_loop(), then return */
 
@@ -54,6 +52,12 @@ size_t strlen(const char *s)
 
 void build_send_packet(int command_len)
 {
+	// Make these local; avoid global variables that depend on addresses if you don't have relocations.
+	// Especially if the binary is going to or could be loaded somewhere other than expected.
+	ether_header_t * ether = (ether_header_t *)pkt_buf;
+	ip_header_t * ip = (ip_header_t *)(pkt_buf + ETHER_H_LEN);
+	udp_header_t * udp = (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN);
+
 	unsigned char * command = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
 /*
 	scif_puts("build_send_packet\n");
@@ -64,8 +68,8 @@ void build_send_packet(int command_len)
 	scif_puts("\n");
 */
 	make_ether(tool_mac, bb->mac, ether);
-	make_ip(tool_ip, our_ip, UDP_H_LEN + command_len, 17, ip);
-	make_udp(tool_port, 31313, command, command_len, ip, udp);
+	make_ip(tool_ip, our_ip, UDP_H_LEN + command_len, IP_UDP_PROTOCOL, ip);
+	make_udp(tool_port, 31313, command, command_len, ip, udp, 1);
 	bb->start();
 	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + command_len);
 
@@ -88,10 +92,10 @@ int read(int fd, void *buf, size_t count)
 
 	memcpy(command->id, CMD_READ, 4);
 	command->value0 = htonl(fd);
-	command->value1 = htonl(buf);
+	command->value1 = htonl((unsigned int)buf);
 	command->value2 = htonl(count);
 	build_send_packet(sizeof(command_3int_t));
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -102,10 +106,10 @@ int write(int fd, const void *buf, size_t count)
 
 	memcpy(command->id, CMD_WRITE, 4);
 	command->value0 = htonl(fd);
-	command->value1 = htonl(buf);
+	command->value1 = htonl((unsigned int)buf);
 	command->value2 = htonl(count);
 	build_send_packet(sizeof(command_3int_t));
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -127,7 +131,7 @@ int open(const char *pathname, int flags, ...)
 	memcpy(command->string, pathname, namelen+1);
 
 	build_send_packet(sizeof(command_2int_string_t)+namelen);
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -140,7 +144,7 @@ int close(int fd)
 	command->value0 = htonl(fd);
 
 	build_send_packet(sizeof(command_int_t));
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -158,7 +162,7 @@ int creat(const char *pathname, mode_t mode)
 	memcpy(command->string, pathname, namelen+1);
 
 	build_send_packet(sizeof(command_int_string_t)+namelen);
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -175,7 +179,7 @@ int link(const char *oldpath, const char *newpath)
 	memcpy(command->string + namelen1 + 1, newpath, namelen2 + 1);
 
 	build_send_packet(sizeof(command_string_t)+namelen1+namelen2+1);
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 
@@ -191,7 +195,7 @@ int unlink(const char *pathname)
 	memcpy(command->string, pathname, namelen + 1);
 
 	build_send_packet(sizeof(command_string_t)+namelen);
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -206,7 +210,7 @@ int chdir(const char *path)
 	memcpy(command->string, path, namelen + 1);
 
 	build_send_packet(sizeof(command_string_t)+namelen);
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -224,7 +228,7 @@ int chmod(const char *path, mode_t mode)
 	memcpy(command->string, path, namelen+1);
 
 	build_send_packet(sizeof(command_int_string_t)+namelen);
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -239,7 +243,7 @@ off_t lseek(int fildes, off_t offset, int whence)
 	command->value2 = htonl(whence);
 
 	build_send_packet(sizeof(command_3int_t));
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -250,11 +254,11 @@ int fstat(int filedes, struct stat *buf)
 
 	memcpy(command->id, CMD_FSTAT, 4);
 	command->value0 = htonl(filedes);
-	command->value1 = htonl(buf);
+	command->value1 = htonl((unsigned int)buf);
 	command->value2 = htonl(sizeof(struct stat));
 
 	build_send_packet(sizeof(command_3int_t));
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -263,10 +267,9 @@ time_t time(time_t * t)
 {
 	command_int_t * command = (command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-
 	memcpy(command->id, CMD_TIME, 4);
 	build_send_packet(sizeof(command_int_t));
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -279,11 +282,11 @@ int stat(const char *file_name, struct stat *buf)
 	memcpy(command->id, CMD_STAT, 4);
 	memcpy(command->string, file_name, namelen+1);
 
-	command->value0 = htonl(buf);
+	command->value0 = htonl((unsigned int)buf);
 	command->value1 = htonl(sizeof(struct stat));
 
 	build_send_packet(sizeof(command_2int_string_t)+namelen);
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -296,7 +299,7 @@ int utime(const char *filename, struct utimbuf *buf)
 	memcpy(command->id, CMD_UTIME, 4);
 	memcpy(command->string, filename, namelen+1);
 
-	command->value0 = htonl(buf);
+	command->value0 = htonl((unsigned int)buf);
 
 	if (!buf) {
 		command->value1 = htonl(buf->actime);
@@ -304,7 +307,7 @@ int utime(const char *filename, struct utimbuf *buf)
 	}
 
 	build_send_packet(sizeof(command_3int_string_t)+namelen);
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -318,7 +321,7 @@ DIR * opendir(const char *name)
 	memcpy(command->string, name, namelen+1);
 
 	build_send_packet(sizeof(command_string_t)+namelen);
-	bb->loop();
+	bb->loop(0);
 
 	return (DIR *)syscall_retval;
 }
@@ -328,27 +331,25 @@ int closedir(DIR *dir)
 	command_int_t * command = (command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
 	memcpy(command->id, CMD_CLOSEDIR, 4);
-	command->value0 = htonl(dir);
+	command->value0 = htonl((unsigned int)dir);
 
 	build_send_packet(sizeof(command_int_t));
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
-
-struct dirent our_dir;
 
 struct dirent *readdir(DIR *dir)
 {
 	command_3int_t * command = (command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
 	memcpy(command->id, CMD_READDIR, 4);
-	command->value0 = htonl(dir);
-	command->value1 = htonl(&our_dir);
+	command->value0 = htonl((unsigned int)dir);
+	command->value1 = htonl((unsigned int)&our_dir);
 	command->value2 = htonl(sizeof(struct dirent));
 
 	build_send_packet(sizeof(command_3int_t));
-	bb->loop();
+	bb->loop(0);
 
 	if (syscall_retval)
 		return &our_dir;
@@ -361,10 +362,10 @@ int rewinddir(DIR *dir)
 	command_int_t * command = (command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
 	memcpy(command->id, CMD_REWINDDIR, 4);
-	command->value0 = htonl(dir);
+	command->value0 = htonl((unsigned int)dir);
 
 	build_send_packet(sizeof(command_int_t));
-	bb->loop();
+	bb->loop(0);
 
 	return syscall_retval;
 }
@@ -387,7 +388,7 @@ size_t gdbpacket(const char *in_buf, unsigned int size_pack, char* out_buf)
 	command->value1 = htonl(out_size);
 	memcpy(command->string, in_buf, in_size);
 	build_send_packet(sizeof(command_2int_string_t)-1 + in_size);
-	bb->loop();
+	bb->loop(0);
 
 	if (syscall_retval <= out_size)
 		memcpy(out_buf, syscall_data, syscall_retval);

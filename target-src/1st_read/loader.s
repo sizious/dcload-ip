@@ -17,6 +17,22 @@
 !   This code is responsible for loading the main dcload binary into RAM at a
 !   convenient location (0x8c004000) as well as the default exception handler
 !   binary to its home (0x8c00f400).
+
+!
+!   11/25/2019
+!   Note about the above original text and the various addresses in play here:
+!
+!   Just to be clear, the Dreamcast BIOS calls/syscalls are actually in the
+!   region 0x8C000000-0x8C003fff, NOT up to 0x8C007fff as is posted in various
+!   places on the Internet. There is empty space between 0x8C004000-0x8c007fff
+!   and IP.BIN is at 0x8C008000-0x8C00ffff. 0x8C010000 is where 1ST_READ.BIN is
+!   loaded by the console. That's what all these numbers are referring to.
+!   DCLOAD lives in the 0x8C004000-0x8C00ffff range along with its exception
+!   handler, which is loaded separately to a spot adjacent the DCLOAD stack base.
+!   DCLOAD hardcodes some magic numbers based on the starting address of
+!   0x8C004000, so that can't be changed.
+!   --Moopthehedgehog
+!
     .text
     .balign     2
     .globl      start
@@ -69,6 +85,7 @@ exception_size:
 exception_ptr:
     .long       exception
 exception_base:
+! FYI: exception.bin is exactly 2048 bytes
     .long       0x8c00f400
 dcload_size:
     .long       (dcload_end - dcload) >> 2

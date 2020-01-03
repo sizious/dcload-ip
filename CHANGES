@@ -1,6 +1,6 @@
 WHATS NEW IN 1.0.4
 
-* Maintenance versions of dcload moved into the CA CVS repository on 
+* Maintenance versions of dcload moved into the CA CVS repository on
   SourceForge with the blessings of adk. Please send future bug reports and
   patches to bard@allusion.net. If there is sufficient demand, we'll setup
   a separate mailing list for it, but you can also join the KOS mailing
@@ -20,7 +20,7 @@ WHATS NEW IN 1.0.4
 WHATS NEW IN 1.0.3
 
 * actually seems to be working right, unlike 1.0.1 and 1.0.2, which were both
-  buggy as hell under many (most?) conditions. If 1.0.1 and 1.0.2 locked up, 
+  buggy as hell under many (most?) conditions. If 1.0.1 and 1.0.2 locked up,
   went berzerk, or did other strange and horrible things when you used them,
   try 1.0.3.
 * dc-tool should now be able to recover from dropped packets in nearly all
@@ -47,4 +47,3 @@ WHATS NEW IN 1.0.1
 WHATS NEW IN 1.0.0
 
 * initial release of dcload-ip
-

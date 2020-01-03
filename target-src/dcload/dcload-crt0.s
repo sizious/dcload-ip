@@ -1,9 +1,44 @@
 ! crt0.s for dcload
 
+	.extern _setup_video
+	.extern _clrscr
+	.extern _draw_string
+	.extern _uint_to_string
+	.extern _exception_code_to_string
+	.extern ___set_fpscr
+
+	.extern _edata
+	.extern _end
+	.extern _stack
+	.extern _main
+
+	.extern _read
+	.extern _write
+	.extern _open
+	.extern _close
+	.extern _creat
+	.extern _link
+	.extern _unlink
+	.extern _chdir
+	.extern _chmod
+	.extern _lseek
+	.extern _fstat
+	.extern _time
+	.extern _stat
+	.extern _utime
+	.extern _dcexit
+	.extern _opendir
+	.extern _closedir
+	.extern _readdir
+	.extern _gethostinfo
+	.extern _gdbpacket
+	.extern _rewinddir
+
 	.section .text
 	.global	start
 	.global _atexit
 	.global _dcloadsyscall
+
 start:
 	bra	realstart
 	nop

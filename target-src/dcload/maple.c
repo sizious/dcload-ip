@@ -10,8 +10,9 @@
  */
 
 #include "maple.h"
+#include <string.h>
 
-#define MAPLE(x) (*(volatile unsigned long *)(0xa05f6c00+(x)))
+#define MAPLE(x) (*((volatile unsigned long *)(0xa05f6c00+(x))))
 
 
 /*
@@ -48,7 +49,10 @@ void maple_wait_dma()
    to be aligned to a 32 byte boundary, so we add some padding
    to account for extra aligning.                              */
 
-static unsigned char dmabuffer[ 1024 + 1024 + 4 + 4 + 32 ];
+// Make GCC align it in the .data section. Keep the extra alignment padding bytes for safety when using "-Os"
+//...Although it's very possible we just don't need those extra padding bytes anymore, since GCC aligns the binary relative to 0x8c010000.
+#define MAPLE_DMA_SIZE (1024 + 1024 + 4 + 4 + 32)
+__attribute__((aligned(32))) static volatile unsigned char dmabuffer[MAPLE_DMA_SIZE]; // Here's a global array
 
 
 /*

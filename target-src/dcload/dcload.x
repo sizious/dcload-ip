@@ -104,25 +104,27 @@ SECTIONS
   } =0
   _etext = .;
   PROVIDE (etext = .);
-  .fini      :
+  .fini   ALIGN(4):
   {
     KEEP (*(.fini))
   } =0
-  .rodata   : { *(.rodata) *(.rodata.*) *(.gnu.linkonce.r*) }
-  .rodata1   : { *(.rodata1) }
+  .rodata    ALIGN(4): { *(.rodata) *(.rodata.*) *(.gnu.linkonce.r*) }
+  .rodata1   ALIGN(4): { *(.rodata1) }
   /* Adjust the address for the data segment.  We want to adjust up to
      the same address within the page on the next page up.  */
-  . = ALIGN(128) + (. & (128 - 1));
-  .data    :
+	/* Actually, we don't. There's no elf loader, so there can be only one PT_LOAD
+	   area (more if the PT_LOAD areas are directly adjacent, which we need here) */
+  /* . = ALIGN(128) + (. & (128 - 1)); */
+  .data   ALIGN(4):
   {
     *(.data)
     *(.data.*)
     *(.gnu.linkonce.d*)
     SORT(CONSTRUCTORS)
   }
-  .data1   : { *(.data1) }
-  .eh_frame : { *(.eh_frame) }
-  .gcc_except_table : { *(.gcc_except_table) }
+  .data1   ALIGN(4): { *(.data1) }
+  .eh_frame   ALIGN(4): { *(.eh_frame) }
+  .gcc_except_table   ALIGN(4): { *(.gcc_except_table) }
   .ctors   ALIGN(4):
   {
     ___ctors = .;
@@ -145,7 +147,7 @@ SECTIONS
     KEEP (*(.ctors))
     ___ctors_end = .;
   }
-   .dtors         :
+   .dtors   ALIGN(4):
   {
     ___dtors = .;
     KEEP (*crtbegin.o(.dtors))
@@ -154,28 +156,31 @@ SECTIONS
     KEEP (*(.dtors))
     ___dtors_end = .;
   }
-  .got           : { *(.got.plt) *(.got) }
-  .dynamic       : { *(.dynamic) }
+  .got       ALIGN(4): { *(.got.plt) *(.got) }
+  .dynamic   ALIGN(4): { *(.dynamic) }
   /* We want the small data sections together, so single-instruction offsets
      can access them all, and initialized data all before uninitialized, so
      we can shorten the on-disk segment size.  */
-  .sdata     :
+  .sdata   ALIGN(4):
   {
     *(.sdata)
     *(.sdata.*)
     *(.gnu.linkonce.s.*)
   }
+	/* Longword-align (4-byte align) _edata since it gets zeroed by a
+	longword-aligned instruction. */
+	. = ALIGN(32 / 8);
   _edata = .;
   PROVIDE (edata = .);
   __bss_start = .;
-  .sbss      :
+  .sbss   ALIGN(4):
   {
     *(.dynsbss)
     *(.sbss)
     *(.sbss.*)
     *(.scommon)
   }
-  .bss       :
+  .bss   ALIGN(4):
   {
    *(.dynbss)
    *(.bss)
@@ -225,4 +230,12 @@ SECTIONS
 /*  .stack 0x8c00f400 : { _stack = .; *(.stack) }*/
   /* These must appear regardless of  .  */
 _stack = 0x8c00f400;
+
+/* ASSERT triggers when condition is FALSE */
+/* Stack calculation will wrap around if ram region overflows, so only one
+   error displays at a time :) */
+ASSERT(( (_stack - _end) > 800 ), "Error: Not enough stack space: need at least 800 bytes")
+ASSERT(( _end <= (ORIGIN(ram) + LENGTH(ram)) ), "Error: Region 'ram' overflowed: try '-Os' or shrink code size")
+/* For some reason LD's normal overflow checks don't run when sections are
+   explicitly aligned, so these asserts are here to make up for it. */
 }

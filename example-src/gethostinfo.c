@@ -2,7 +2,7 @@
 
 void uint_to_string(unsigned int foo, unsigned char *bar)
 {
-    char hexdigit[16] = "0123456789abcdef";
+    char hexdigit[17] = "0123456789abcdef";
     int i;
 
     for(i=7; i>=0; i--) {
@@ -43,4 +43,3 @@ int main(void)
 
     exit(0);
 }
- 

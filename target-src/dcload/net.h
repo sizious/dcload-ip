@@ -1,14 +1,23 @@
 #ifndef __NET_H__
 #define __NET_H__
 
-void process_broadcast(unsigned char *pkt, int len);
-void process_icmp(ether_header_t *ether, ip_header_t *ip, icmp_header_t *icmp);
-void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *udp);
-void process_mine(unsigned char *pkt, int len);
-void process_pkt(unsigned char *pkt, int len);
+// Transmit buffer size
+#define TX_PKT_BUF_SIZE 1514
 
-extern unsigned char pkt_buf[1514];
+// UDP Protocol Identifier
+#define IP_UDP_PROTOCOL 17
 
-extern unsigned int our_ip;
+// ICMP Protocol Identifier
+#define IP_ICMP_PROTOCOL 1
+
+// This is the only function that needs to be exported
+void process_pkt(unsigned char *pkt);
+
+extern const unsigned char broadcast[6]; // Used in DHCP code
+
+extern unsigned char pkt_buf[TX_PKT_BUF_SIZE];
+
+// Defined in commands.c, not net.c
+extern volatile unsigned int our_ip;
 
 #endif

@@ -3,13 +3,13 @@
 #include "lan_adapter.h"
 
 // Loop escape flag, used by all drivers.
-unsigned int escape_loop = 0;
+volatile unsigned char escape_loop = 0;
 
 // The currently configured driver.
 adapter_t * bb;
 
 // Packet receive buffer
-unsigned char current_pkt[1514];
+unsigned char current_pkt[RX_PKT_BUF_SIZE]; // Here's a global array. Global packet receive buffer.
 
 int adapter_detect() {
 	// Try the BBA first.
