@@ -927,7 +927,7 @@ int main(int argc, char *argv[])
     char *filename = 0;
     char *isofile = 0;
     char *path = 0;
-    char *hostname = DREAMCAST_IP;
+    char *hostname = 0;
     char *cleanlist[4] = { 0, 0, 0, 0 };
 
     if (argc < 2) {
@@ -935,6 +935,9 @@ int main(int argc, char *argv[])
 	return 0;
     }
 
+    hostname = malloc(strlen(DREAMCAST_IP) + 1);
+    cleanlist[3] = hostname;
+    strcpy(hostname, DREAMCAST_IP);
 
 #ifdef __MINGW32__
 	if(start_ws())
@@ -994,6 +997,7 @@ int main(int argc, char *argv[])
 	    size = strtoul(optarg, NULL, 0);
 	    break;
 	case 't':
+	    free(hostname);
 	    hostname = malloc(strlen(optarg) + 1);
 	    cleanlist[3] = hostname;
 	    strcpy(hostname, optarg);
