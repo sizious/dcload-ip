@@ -5,7 +5,7 @@
 	.extern _draw_string
 	.extern _uint_to_string
 	.extern _exception_code_to_string
-	.extern ___set_fpscr
+	.extern ___call_builtin_sh_set_fpscr
 
 	.extern _edata
 	.extern _end
@@ -109,7 +109,7 @@ start_l:
 	mov.l set_fpscr_k, r1
 	jsr @r1
 	mov #0,r4
-	lds r3,fpscr
+!	lds r3,fpscr ! This isn't necessary.
 
 	! call main
 	mov.l	main_k,r0
@@ -128,7 +128,8 @@ _atexit:
 sr_mask:
 	.long	0xefff7fff
 set_fpscr_k:
-	.long	___set_fpscr
+! __set_fpscr() is deprecated, use this wrapper for builtin instead
+	.long	___call_builtin_sh_set_fpscr
 stack_k:
 	.long	_stack
 edata_k:
