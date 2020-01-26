@@ -2,6 +2,8 @@
 #define __DCLOAD_SYSCALL_H__
 
 int dcloadsyscall(unsigned int syscall, ...);
+void __exit(int status);
+void __call_builtin_sh_set_fpscr(unsigned int value);
 
 #define pcreadnr 0
 #define pcwritenr 1
@@ -11,7 +13,7 @@ int dcloadsyscall(unsigned int syscall, ...);
 #define pclinknr 5
 #define pcunlinknr 6
 #define pcchdirnr 7
-#define pcchmodnr 8        
+#define pcchmodnr 8
 #define pclseeknr 9
 #define pcfstatnr 10
 #define pctimenr 11

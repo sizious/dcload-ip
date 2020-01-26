@@ -3,8 +3,8 @@
 ! a general exception handler that displays a register dump onscreen
 ! for general exceptions (VBR + 0x100) and TLB miss exceptions (VBR + 0x400)
 !
-
 	.section .text
+
 disp_labels:
 
 	! r4 -> @(0,r15) = addr of labels
@@ -162,10 +162,27 @@ general_1:
 	mov.l @r0,r0
 	jsr @r0
 	nop
+! Let's add a 15 second delay here to be able to read the screen
+! ...or at least take a photo of it
+	mov #0,r0
+	mov #1,r1
+! change the number of shifts to change the time
+	shll16 r1
+	shll8 r1
+	shll2 r1
+	shll2 r1
+	shll2 r1
+! (1 << 16 << 8 << 2 << 2 << 2 << 1) = 2^31, a little over 10 seconds
+wait_for_a_bit:
+	cmp/eq r1,r0
+	bf/s wait_for_a_bit
+	add #1,r0
 ! return to bootloader
+return_to_loader:
 	mov.l entry_addr,r0
 	jmp @r0
 	nop
+
 .align 4
 stack_addr:
 	.long 0x8d000000
@@ -457,6 +474,7 @@ regdump:
 	lds.l @r15+,pr
 	rts
 	nop
+
 .align 4
 fpscr_val_fr:
 	.long 0x00040001

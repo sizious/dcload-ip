@@ -21,14 +21,14 @@ EXCOBJECTS	= exception.o
 all: dcload.bin exception.bin
 
 dcload: $(DCLOBJECTS)
-	$(CC) $(CFLAGS) -Wl,--warn-common -Wl,--no-undefined -Wl,-Map,output.map -Wl,-Tdcload.x -nostartfiles -nostdlib -static -Wl,-z,now $^ -o $@ -lgcc
+	$(CC) $(CFLAGS) -Wl,--warn-common -Wl,--no-undefined -Wl,-Map,dcload.map -Wl,-Tdcload.x -nostartfiles -nostdlib -static -Wl,-z,now $^ -o $@ -lgcc
 
 exception: $(EXCOBJECTS)
-	$(CC) $(CFLAGS) -Wl,-Ttext=0x8c00f400 -nostartfiles -nostdlib -static -Wl,-z,now $^ -o $@
+	$(CC) $(CFLAGS) -Wl,-Ttext=0x8c00f400 -Wl,-Map,exception.map -nostartfiles -nostdlib -static -Wl,-z,now $^ -o $@
 
 .PHONY : clean
 clean:
-	rm -f $(DCLOBJECTS) $(EXCOBJECTS) dcload exception *.asm output.map
+	rm -f $(DCLOBJECTS) $(EXCOBJECTS) dcload exception *.asm *.map
 
 .PHONY : distclean
 distclean: clean

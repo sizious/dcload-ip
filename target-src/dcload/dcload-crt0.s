@@ -98,13 +98,16 @@ start_2:
 	! zero out bss
 	mov.l	edata_k,r0
 	mov.l	end_k,r1
+	cmp/eq r0,r1 ! unless there is no bss
+	bt no_bss
 	mov	#0,r2
 
 start_l:
 	mov.l	r2,@r0
 	add	#4,r0
-	cmp/ge	r0,r1
+	cmp/hi r0,r1 ! This was cmp/ge before, which would always write 4 bytes beyond the end...
 	bt	start_l
+no_bss:
 
 	mov.l set_fpscr_k, r1
 	jsr @r1

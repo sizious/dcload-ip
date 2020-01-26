@@ -1,4 +1,5 @@
-crt0.S			a version of crt0.S 
+crt0.S			a version of crt0.S
+startup_support.c a helper file for crt0.S
 dc.x			a linker script for the Dreamcast
 dcload-syscall.S	assembly to call a dcload syscall
 dcload-syscall.h	lowlevel dcload syscall header
@@ -6,6 +7,7 @@ dcload-syscalls.c	dcload syscall c source
 dcload-syscalls.h	dcload syscall header
 
 To use this stuff in your own code, #include "dcload-syscalls.h" and link with dcload-syscalls.o and dcload-syscall.o.
+(Well, it's not quite that simple. There are a bunch of headers in target-inc that are needed, as well. The way this was put together initially was very sloppily and did not stand the test of time.)
 
 You're welcome to use any of the code in this directory in any way you please.
 I'm not responsible if it causes you to fart fire, grow a third eye, etc, etc.

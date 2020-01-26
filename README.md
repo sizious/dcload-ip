@@ -84,9 +84,9 @@ To run a GNU debugger session over the dcload connection:
 
 ### Maple Passthrough
 
-You can send packets to various maple devices attached to the Dreamcast by
-sending using the MAPL command. Simply send a command packet to the Dreamcast
-that is formatted as follows:
+You can send packets to various maple devices attached to the Dreamcast by using
+the MAPL command. Simply send a command packet to the Dreamcast that is formatted
+as follows:
 
 ```
 typedef struct __attribute__ ((packed)) {
@@ -95,7 +95,6 @@ typedef struct __attribute__ ((packed)) {
 	unsigned int size; // The length of Maple packet data (the data[] member)
 	unsigned char data[];
 } command_t;
-
 ```
 
 Maple command data format:
@@ -123,7 +122,7 @@ is as follows:
 typedef struct __attribute__ ((packed)) {
 	unsigned char id[4]; // PMCR
 	unsigned int address; // Ignored, set to 0
-	unsigned int size; // This field isn't actually checked...
+	unsigned int size; // Length of data[]. This field isn't actually checked, though...
 	unsigned char data[];
 } command_t;
 ```
