@@ -14,6 +14,7 @@ A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.th
   in a single binary
 - DHCP support (use an IP address of 000.000.000.000 in `Makefile.cfg` to enable it)
 - NTSC 480i, PAL 576i, and VGA display output modes supported
+- Dumping exceptions over the network (WIP)
 
 ### Building
 

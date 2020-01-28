@@ -5,6 +5,7 @@
 	.extern _draw_string
 	.extern _uint_to_string
 	.extern _exception_code_to_string
+	.extern _dump_to_host
 	.extern ___call_builtin_sh_set_fpscr
 
 	.extern _edata
@@ -65,6 +66,8 @@ uint_to_string_k:
 	.long _uint_to_string
 exc_to_string_k:
 	.long _exception_code_to_string
+dump_to_host_k:
+	.long _write
 
 realstart:
 	stc	sr,r0
@@ -72,6 +75,7 @@ realstart:
 	and	r1,r0
 	or	#0xf0,r0
 	ldc	r0,sr
+	! register banks may flip here if returning from an exception (but that's ok)
 	mov.l	setup_cache_k,r0
 	mov.l	p2_mask,r1
 	or	r1,r0
@@ -129,7 +133,7 @@ _atexit:
 
 	.align 4
 sr_mask:
-	.long	0xefff7fff
+	.long	0xcfff7fff ! want to be in bank 0, especially after exception handler runs
 set_fpscr_k:
 ! __set_fpscr() is deprecated, use this wrapper for builtin instead
 	.long	___call_builtin_sh_set_fpscr

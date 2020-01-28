@@ -6,9 +6,9 @@ WHATS NEW IN 1.1.1
   cause random crashes when bss would go out of alignment, particularly if there
   were no bss section. The startup code would also overwrite 4 bytes beyond the
   end of the binary because it was using the wrong comparison instruction. Yay.
-* Fixed the example-src folder, as it was in pretty bad shape. Exception-test
-  still doesn't work, but it never did (at least not since 1.0.5--I never had
-  any older versions to try it with).
+* Fixed the example-src folder, as it was in pretty bad shape.
+* Fixed the exception handler so that it actually works now, and it dumps
+  exceptions over the network in addition to printing them on-screen
 
 WHATS NEW IN 1.1.0
 

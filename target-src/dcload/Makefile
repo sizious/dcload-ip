@@ -1,7 +1,7 @@
 include ../../Makefile.cfg
 
 CC	= $(TARGETCC)
-CFLAGS	= $(TARGETCFLAGS) -DDCLOAD_VERSION=\"$(VERSION)\" -DDREAMCAST_IP=\"$(DREAMCAST_IP)\" -Wall -Wextra -Wno-unused -ffreestanding -fno-zero-initialized-in-bss -fomit-frame-pointer -fno-strict-aliasing -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-exceptions -fno-delete-null-pointer-checks -fno-stack-protector -fno-stack-check -fmerge-constants -fmerge-all-constants -std=gnu11
+CFLAGS	= $(TARGETCFLAGS) -DDCLOAD_VERSION=\"$(VERSION)\" -DDREAMCAST_IP=\"$(DREAMCAST_IP)\" -DEXCEPTION_SECONDS=$(EXCEPTION_SECONDS) -Wall -Wextra -Wno-unused -ffreestanding -fno-zero-initialized-in-bss -fomit-frame-pointer -fno-strict-aliasing -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-exceptions -fno-delete-null-pointer-checks -fno-stack-protector -fno-stack-check -fmerge-constants -fmerge-all-constants -std=gnu11
 INCLUDE	= -I../../target-inc
 
 OBJCOPY	= $(TARGETOBJCOPY)

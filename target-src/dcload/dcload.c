@@ -31,6 +31,7 @@
 #include "net.h"
 #include "cdfs.h"
 #include "maple.h"
+#include "syscalls.h"
 
 #include "dhcp.h"
 #include "perfctr.h"
@@ -81,7 +82,6 @@ static const char *dhcp_mode_string = " (DHCP Mode)"; // Indicator that DHCP is 
 static const char *dhcp_timeout_string = " (DHCP Timed Out!)"; // DHCP timeout indicator
 static const char *dhcp_lease_string = "DHCP Lease Time (sec): "; // DHCP lease time
 static char dhcp_lease_time_string[11] = {0}; // For converting lease time to seconds. 10 characters + null term. Max lease is theoretically 4294967295, but really is 1410902 due to perf counters.
-
 
 /* converts expevt value to description, used by exception handler */
 char * exception_code_to_string(unsigned int expevt)
@@ -232,7 +232,7 @@ void draw_progress(unsigned int current, unsigned int total)
 	draw_string(294, 174, ")", STR_COLOR);
 }
 
-// called by exception.s
+// called by exception.S
 void setup_video(unsigned int mode, unsigned int color)
 {
 	STARTUP_Init_Video(mode);
