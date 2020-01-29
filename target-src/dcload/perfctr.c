@@ -99,7 +99,7 @@ static const unsigned int pmcr2_regl = PMCTR2L_REG;
 // out_array should be an array consisting of 2x unsigned ints.
 void PMCR_Read(int which, volatile unsigned int *out_array)
 {
- // if pmcr is not enabled, this function will just return 0
+ // if a pmcr is disabled, it will just return 0
 
 	// little endian (big endian would need to flip [0] and [1])
 
