@@ -146,11 +146,6 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 		: "r1", "r2"
 		);
 	}
-	else if(!pmcr_enabled)
-	{
-		out_array[1] = 0;
-		out_array[0] = 0;
-	}
 	else // Invalid
 	{
 		out_array[1] = 0xffff;
