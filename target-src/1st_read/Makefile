@@ -10,7 +10,7 @@ asm_only:
 
 .PHONY : clean
 clean:
-	-rm -f $(TARGET) loader.bin loader.elf loader.o *.asm
+	-rm -f $(TARGET) loader.bin loader.elf loader.o *.asm *.map
 
 .PHONY : distclean
 distclean: clean
@@ -21,7 +21,7 @@ rm-elf:
 
 loader.elf: loader.s disable.s ../dcload/dcload.bin ../dcload/exception.bin
 	$(TARGETCC) $(TARGETCFLAGS) -o $@ loader.s disable.s -nostartfiles \
-	    -nostdlib -Ttext=0x8c010000 -Wa,-I../dcload
+	    -nostdlib -Ttext=0x8c010000 -Wl,-Map=loader.map -Wa,-I../dcload
 
 loader.bin: loader.elf
 	$(TARGETOBJCOPY) -O binary $^ $@

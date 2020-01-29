@@ -1,3 +1,47 @@
+WHATS NEW IN 1.1.1
+
+* Overhauled the video subsystem, so non-VGA PAL video works now. VGA output is
+  also not egregiously shifted upwards anymore like it used to be.
+* Fixed startup code bugs that have probably been there for decades and would
+  cause random crashes when bss would go out of alignment, particularly if there
+  were no bss section. The startup code would also overwrite 4 bytes beyond the
+  end of the binary because it was using the wrong comparison instruction. Yay.
+* Fixed the example-src folder, as it was in pretty bad shape.
+* Fixed the exception handler so that it actually works now, and it dumps
+  exceptions over the network (both to the dc-tool console and to a file named
+  "dcload_exception_dump.bin" in whatever directory the terminal is currently
+  in) in addition to printing them on-screen
+
+WHATS NEW IN 1.1.0
+
+* IPv4 DHCP support! Hurray! It's got a nifty DHCP lease countdown timer, too,
+  which persists across loaded programs to keep track of time for DHCP renewal
+  purposes without impacting running programs.
+* Performance counter monitoring support from across the network. The Dreamcast
+  has two 48-bit performance counters that can be configured independently in a
+  variety of ways, and this functionality allows for controlling them in much the
+  same way the a Maple passthrough support from 1.0.5.
+  -- One of the counters is used to keep track of time for DHCP, but it can be
+  disabled by a packet if it's needed for user programs (the DHCP timer will be
+  totally off if this is done, but there isn't anything we can do about that,
+  sorry. That really should never be an issue, though, and bear in mind that they
+  cannot be written to with an initial value to count from, so no saving/restoring
+  state that way).
+* Added an option in Makefile.cfg to slow down dc-tool a tiny bit to help with
+  CPU usage on laptops that run the network polling loop far faster in 2020 than
+  laptops did in 2004. It's called "SAVE_MY_FANS"
+* Added support for GCC 9.2 (if using GCC 4.x from KallistiOS, make sure
+  USING_KOS_GCC is uncommented in Makefile.cfg)
+* Presumably many tens of issues were fixed. Feels like a hundred, honestly, but
+  it's probably more like 20-30. The whole Dreamcast side of the program got a
+  pretty major backend overhaul.
+
+WHATS NEW IN 1.0.5
+
+* Maple passthrough support.
+* Some fixes.
+* No one ever really documented the changes from 1.0.4 to 1.0.5.
+
 WHATS NEW IN 1.0.4
 
 * Maintenance versions of dcload moved into the CA CVS repository on

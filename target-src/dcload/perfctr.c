@@ -99,7 +99,7 @@ static const unsigned int pmcr2_regl = PMCTR2L_REG;
 // out_array should be an array consisting of 2x unsigned ints.
 void PMCR_Read(int which, volatile unsigned int *out_array)
 {
- // if pmcr is not enabled, this function will just return 0
+ // if a pmcr is disabled, it will just return 0
 
 	// little endian (big endian would need to flip [0] and [1])
 
@@ -112,7 +112,7 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 	//
 	// One thing that would be nice is if SH4 had the movi20s instruction to make
 	// absolute addresses in 3 cycles, but only the SH2A has that... :(
-	if( (which == 1) && (pmcr_enabled & 0x1) )
+	if(which == 1)
 	{
 		// counter 1
 //		out_array[1] = *((volatile unsigned int*)PMCTR1H_REG) & 0xffff;
@@ -129,7 +129,7 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 		: "r1", "r2"
 		);
 	}
-	else if( (which == 2) && (pmcr_enabled & 0x2) )
+	else if(which == 2)
 	{
 		// counter 2
 //		out_array[1] = *((volatile unsigned int*)PMCTR2H_REG) & 0xffff;
@@ -145,11 +145,6 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 		: [reg2h] "m" (pmcr2_regh), [reg2l] "m" (pmcr2_regl) // SH4 can't mov an immediate longword into a register...
 		: "r1", "r2"
 		);
-	}
-	else if(!pmcr_enabled)
-	{
-		out_array[1] = 0;
-		out_array[0] = 0;
 	}
 	else // Invalid
 	{

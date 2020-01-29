@@ -65,7 +65,7 @@
 // Enable for perf counter debugging printouts, placed under the disp_status area
 // It's perf high stuck to perf low, and then the contents of the pmcr reg in use
 // (i.e. the reg specified by DCLOAD_PMCR)
-#define PERFCTR_DEBUG
+//#define PERFCTR_DEBUG
 
 // Use FPSCR PR=1, SZ=1 to improve double-precision loading performance (use 2x
 // 64-bit "paired moves" via fmov.d versus 4x 32-bit "single moves" via fmov.s).
@@ -83,6 +83,7 @@ extern volatile unsigned char running;
 // Called by asm functions
 char * exception_code_to_string(unsigned int expevt);
 void uint_to_string(unsigned int foo, unsigned char *bar);
+void setup_video(unsigned int mode, unsigned int color);
 
 void disp_info(void);
 void disp_status(const char * status);
@@ -90,5 +91,18 @@ void clear_lines(unsigned int y, unsigned int n, unsigned int c);
 
 // Exported for bb->loop
 void set_ip_dhcp(void);
+
+// For dcload-crt0.s to interface with startup_support.c
+void __call_builtin_sh_set_fpscr(unsigned int value);
+
+// These definitions correspond to 'fbuffer_color_mode' in STARTUP_Init_Video()
+// dcload only supports 16-bit color modes
+#define FB_RGB0555 0
+#define FB_RGB565 1
+
+// To set video modes via startup_support.c
+// dcload only supports 640x480 modes
+void STARTUP_Init_Video(unsigned char fbuffer_color_mode);
+void STARTUP_Set_Video(unsigned char fbuffer_color_mode);
 
 #endif

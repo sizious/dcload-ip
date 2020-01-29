@@ -163,6 +163,7 @@ SECTIONS
   {
     *(.sdata .sdata.* .gnu.linkonce.s.*)
   }
+	. = ALIGN(32 / 8);
   _edata = .; PROVIDE (edata = .);
   __bss_start = .;
   .sbss           :
@@ -179,9 +180,16 @@ SECTIONS
    /* Align here to ensure that the .bss section occupies space up to
       _end.  Align after .bss to ensure correct alignment even if the
       .bss section disappears because there are no input sections.
-      FIXME: Why do we need it? When there is no .bss section, we don't
+      Question: Why do we need it? When there is no .bss section, we don't
       pad the .data section.  */
-   . = ALIGN(. != 0 ? 32 / 8 : 1);
+			/* Answer: bss must exist and be at least 4 bytes in size because
+			crt0.S will try to zero out bss even if there isn't one. So we
+			always need a bss section, and moreover it (_edata in particular)
+			must be aligned to 4 bytes as 'mov.l Rm,@Rn' will crash otherwise.
+			This now still needs to be aligned to 4 bytes (to line up with _end if
+			there is no bss), but with a change to crt0.S	it at least will check if
+			there is a bss section first... */
+   . = ALIGN(. != 0 ? 32 /8 : 1);
   }
   . = ALIGN(32 / 8);
   . = ALIGN(32 / 8);

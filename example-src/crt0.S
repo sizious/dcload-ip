@@ -1,4 +1,5 @@
 	.section .text
+	.extern ___call_builtin_sh_set_fpscr
 	.global	start
 	.global ___exit
 	.global _atexit
@@ -12,7 +13,7 @@ setup_cache:
 	mov.l	ccr_addr,r0
 	mov.w	ccr_data,r1
 	mov.l	r1,@r0
-	mov.l	start_2_k,r0	
+	mov.l	start_2_k,r0
 	nop
 	nop
 	nop
@@ -20,9 +21,9 @@ setup_cache:
 	nop
 	nop
 	nop
-	jmp	@r0	
+	jmp	@r0
 	nop
-start_2:		
+start_2:
 	mov.l	old_stack_k,r14
 	mov.l	r15,@r14
 	mov.l	old_pr_k,r14
@@ -33,21 +34,29 @@ start_2:
 	! zero out bss
 	mov.l	edata_k,r0
 	mov.l	end_k,r1
+	cmp/eq r0,r1 ! unless there is no bss
+	bt no_bss
 	mov	#0,r2
 start_l:
 	mov.l	r2,@r0
 	add	#4,r0
-	cmp/ge	r0,r1
+	cmp/hi r0,r1 ! This was cmp/ge before, which would always write 4 bytes beyond the end...
 	bt	start_l
-
+no_bss:
 #if defined (__SH3E__) || defined(__SH4_SINGLE__) || defined(__SH4__) || defined(__SH4_SINGLE_ONLY)
 	mov.l set_fpscr_k, r1
 	jsr @r1
 	mov #0,r4
-	lds r3,fpscr
+!	lds r3,fpscr ! This isn't necessary.
 #endif /*  defined (__SH3E__) || defined(__SH4_SINGLE__) || defined(__SH4__) || defined(__SH4_SINGLE_ONLY__) */
+	! enable exceptions and the FPU
+	stc	sr,r0
+	mov.l	sr_mask,r1
+	and	r1,r0
+	or	#0xf0,r0
+	ldc	r0,sr
 
-	! call the mainline	
+	! call the mainline
 	mov.l	main_k,r0
 	jsr	@r0
 	or	r0,r0
@@ -60,24 +69,27 @@ start_l:
 
 ___exit:
 	mov.l	old_pr_k,r14
-	mov.l	@r14,r15	
+	mov.l	@r14,r15
 	lds	r15,pr
 	mov.l	old_stack_k,r14
-	mov.l	@r14,r15	
+	mov.l	@r14,r15
 	rts
 	nop
 
 _atexit:
 	rts
 	nop
-		
+
 	.align 4
+sr_mask:
+	.long	0xefff7fff
 #if defined (__SH3E__) || defined(__SH4_SINGLE__) || defined(__SH4__) || defined(__SH4_SINGLE_ONLY__)
 set_fpscr_k:
-	.long	___set_fpscr
+! __set_fpscr() is deprecated, use this wrapper for builtin instead
+	.long	___call_builtin_sh_set_fpscr
 #endif /*  defined (__SH3E__) || defined(__SH4_SINGLE__) || defined(__SH4__) || defined(SH4_SINGLE_ONLY) */
 stack_k:
-	.long	_stack	
+	.long	_stack
 edata_k:
 	.long	_edata
 end_k:
@@ -99,8 +111,8 @@ _old_pr:
 
 setup_cache_k:
 	.long	setup_cache
-start_2_k:	
-	.long	start_2	
+start_2_k:
+	.long	start_2
 p2_mask:
 	.long	0xa0000000
 ccr_addr:
@@ -109,11 +121,10 @@ ccr_data:
 	.word	0x090b
 
 	.align 4
-		
+
 #ifdef __ELF__
 	.section .stack,"aw"
 #else
 	.section .stack
 #endif
 ! _stack:	.long	0xdeaddead
-
