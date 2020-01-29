@@ -112,7 +112,7 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 	//
 	// One thing that would be nice is if SH4 had the movi20s instruction to make
 	// absolute addresses in 3 cycles, but only the SH2A has that... :(
-	if( (which == 1) && (pmcr_enabled & 0x1) )
+	if(which == 1)
 	{
 		// counter 1
 //		out_array[1] = *((volatile unsigned int*)PMCTR1H_REG) & 0xffff;
@@ -129,7 +129,7 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 		: "r1", "r2"
 		);
 	}
-	else if( (which == 2) && (pmcr_enabled & 0x2) )
+	else if(which == 2)
 	{
 		// counter 2
 //		out_array[1] = *((volatile unsigned int*)PMCTR2H_REG) & 0xffff;
