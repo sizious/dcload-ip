@@ -47,7 +47,7 @@ options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
   `dcload-ip 1.1.1 - with DHCP`  <- name/version  
   `Broadband Adapter (HIT-0400)`  <- adapter driver in use  
   `00:d0:f1:02:ab:dd`  <- dc hardware address  
-  `192.168.001.004`  <- dc ip address
+  `192.168.001.004`  <- dc ip address  
   `idle...`  <- status  
 
   The background of the screen will be blue.
