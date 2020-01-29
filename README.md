@@ -14,7 +14,7 @@ A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.th
   in a single binary
 - DHCP support (use an IP address of 000.000.000.000 in `Makefile.cfg` to enable it)
 - NTSC 480i, PAL 576i, and VGA display output modes supported
-- Dumping exceptions over the network (WIP)
+- Dumping exceptions over the network if the dcload console is enabled
 
 ### Building
 
@@ -172,6 +172,91 @@ counter is needed by that program.
 - See perfctr.h for how to calculate time using the CPU/bus ratio method, in
 addition to the available counter modes (and for loads of other information)
 - PMCR_Init() and PMCR_Enable() will do nothing if the perf counter is already running!
+
+### Exception Dumping
+
+Another new feature is the ability to send a full register dump to a host PC
+running dc-tool-ip with the console enabled (i.e. not invoked with the `-n`
+command line option).
+
+In the event of an exception, dcload will print a full register dump on the
+screen and to the dc-tool console. It will also make a file called
+`dcload_exception_dump.bin` in the directory that the terminal is currently in.
+
+The format of the dump binary is as follows:
+```
+// Exception struct
+struct _exception_struct_t {
+	unsigned char id[4]; // EXPT
+	unsigned int expt_code; // Exception code
+	unsigned int pc;
+	unsigned int pr;
+	unsigned int sr;
+	unsigned int gbr;
+	unsigned int vbr;
+	unsigned int dbr;
+	unsigned int mach;
+	unsigned int macl;
+	unsigned int r0b0;
+	unsigned int r1b0;
+	unsigned int r2b0;
+	unsigned int r3b0;
+	unsigned int r4b0;
+	unsigned int r5b0;
+	unsigned int r6b0;
+	unsigned int r7b0;
+	unsigned int r0b1;
+	unsigned int r1b1;
+	unsigned int r2b1;
+	unsigned int r3b1;
+	unsigned int r4b1;
+	unsigned int r5b1;
+	unsigned int r6b1;
+	unsigned int r7b1;
+	unsigned int r8;
+	unsigned int r9;
+	unsigned int r10;
+	unsigned int r11;
+	unsigned int r12;
+	unsigned int r13;
+	unsigned int r14;
+	unsigned int r15;
+	unsigned int fpscr;
+	unsigned int fr0;
+	unsigned int fr1;
+	unsigned int fr2;
+	unsigned int fr3;
+	unsigned int fr4;
+	unsigned int fr5;
+	unsigned int fr6;
+	unsigned int fr7;
+	unsigned int fr8;
+	unsigned int fr9;
+	unsigned int fr10;
+	unsigned int fr11;
+	unsigned int fr12;
+	unsigned int fr13;
+	unsigned int fr14;
+	unsigned int fr15;
+	unsigned int fpul;
+	unsigned int xf0;
+	unsigned int xf1;
+	unsigned int xf2;
+	unsigned int xf3;
+	unsigned int xf4;
+	unsigned int xf5;
+	unsigned int xf6;
+	unsigned int xf7;
+	unsigned int xf8;
+	unsigned int xf9;
+	unsigned int xf10;
+	unsigned int xf11;
+	unsigned int xf12;
+	unsigned int xf13;
+	unsigned int xf14;
+	unsigned int xf15;
+} __attribute__ ((__packed__));
+```
 
 ### Notes
 

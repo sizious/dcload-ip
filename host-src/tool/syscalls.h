@@ -69,6 +69,9 @@ int dc_gdbpacket(unsigned char * buffer);
 #define CMD_GDBPACKET "DC20"
 #define CMD_REWINDDIR "DC21"
 
+// Special definition for exception handler data
+#define CMD_EXCEPTION "EXPT"
+
 struct _command_3int_t {
 	unsigned char id[4];
 	unsigned int value0;

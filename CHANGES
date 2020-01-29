@@ -8,7 +8,9 @@ WHATS NEW IN 1.1.1
   end of the binary because it was using the wrong comparison instruction. Yay.
 * Fixed the example-src folder, as it was in pretty bad shape.
 * Fixed the exception handler so that it actually works now, and it dumps
-  exceptions over the network in addition to printing them on-screen
+  exceptions over the network (both to the dc-tool console and to a file named
+  "dcload_exception_dump.bin" in whatever directory the terminal is currently
+  in) in addition to printing them on-screen
 
 WHATS NEW IN 1.1.0
 

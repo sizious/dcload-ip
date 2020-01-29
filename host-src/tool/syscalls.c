@@ -117,7 +117,34 @@ int dc_write(unsigned char * buffer)
 
     recv_data(data, ntohl(command->value1), ntohl(command->value2), 1);
 
-    retval = write(ntohl(command->value0), data, ntohl(command->value2));
+    // Check for exception messages. This compare is pretty quick, so it
+    // shouldn't slow anything down unless someone is really pelting the console
+    // hard.. Although, in that case printf() will probably become a big
+    // bottleneck before this memcmp() ever does...
+    if(!(memcmp(data, CMD_EXCEPTION, 4)))
+    {
+      // Exception data starts with "EXPT"
+      exception_struct_t *exception_frame = (exception_struct_t*)data;
+      unsigned int *exception_frame_uints = (unsigned int*)data;
+
+      printf("\n\n");
+      printf(exception_code_to_string(exception_frame->expt_code));
+      for(unsigned int regdump = 0; regdump < 66; regdump++)
+      {
+        printf(exception_label_array[regdump]);
+        printf(": 0x%x\n", exception_frame_uints[regdump + 2]);
+      }
+
+      // Write out to a file as well
+      // It will end up in the working directory of the terminal
+      int out_file = open("dcload_exception_dump.bin", O_CREAT | O_WRONLY | O_TRUNC);
+      retval = write(out_file, data, ntohl(command->value2));
+      close(out_file);
+    }
+    else
+    {
+      retval = write(ntohl(command->value0), data, ntohl(command->value2));
+    }
 
     if(send_command(CMD_RETVAL, retval, retval, NULL, 0) == -1) {
         free(data);
@@ -479,8 +506,8 @@ int dc_gdbpacket(unsigned char * buffer)
     size_t in_size, out_size;
     static char gdb_buf[GDBBUFSIZE];
     int retval = 0;
-	
-#ifdef __MINGW32__	
+
+#ifdef __MINGW32__
 	if (gdb_server_socket == INVALID_SOCKET) {
 #else
 	if (gdb_server_socket < 0) {

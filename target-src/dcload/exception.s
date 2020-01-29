@@ -104,30 +104,33 @@ general_1:
 ! assume the stack may be fux0red
 	mov.l stack_addr,r15
 ! save and display registers
-	add #-128,r15 ! 264 for regs + extra 4 for event code
+	add #-128,r15 ! 264 bytes for regs
 	add #-128,r15 ! only get a signed 8-bit immediate
-	add #-12,r15 ! that makes 268
+	add #-8,r15 ! that makes 264
 	sts.l pr,@-r15
 	mov.l r0,@-r15
-	mov.l r1,@-r15 ! These extra 12 make 280, but the first 268 bytes is the dump area + event code
-! put expevt code on stack top
-	mov.l expevt,r0
-	mov.l @r0,r0
-	mov.l stack_addr,r1
-	add #-4,r1
-	mov.l r0,@r1
 ! do regdump display
 	mova regdump,r0
 	jsr @r0
-	 nop
-! dump exception regs to host
-	mov #1,r4 ! stdout
-	mov.l stack_addr,r5 ! address to dump
-	mov.l dump_size,r6 ! dump size
-	mov.l dump_to_host_k,r0
-	mov.l @r0,r0
+	 mov.l r1,@-r15 ! These extra 12 make 276, but the first 264 bytes is the dump area
+! get expevt code to put at bottom of regdump stack area
+	mov.l expevt,r0
+! don't need temporary pr, r0, and r1 at this position on stack anymore after regdump runs
+	add #12,r15
+	mov.l @r0,r1
+	mov.l exception_id,r0 ! "EXPT" ID (no null-term)
+	mov.l r1,@-r15 ! overwrite temporary stack-stored pr with expevt code
+	mov.l r0,@-r15 ! overwrite temporary stack-stored r0 with "EXPT" (first data out in transmitted dump)
+! send regdump to host with expevt and ID
+! using a syscall will automatically check if dctool console is enabled or not
+	mov #1,r4 ! write is dcload syscall 1
+	mov #1,r5 ! stdout is file descriptor 1
+	mov.l stack_addr,r6 ! address to dump
+	mov.l dump_size,r7 ! dump size
+	mov.l	dcloadsyscall_k,r0
+	mov.l @r0,r0 ! get dump function call hardcoded in dcload-crt0.s
 	jsr @r0
-	 sub r6,r5 ! stack_addr -= dump_size
+	 sub r7,r6 ! stack_addr -= dump_size
 ! reset stack
 	mov.l stack_addr,r15
 ! display exception identifier string
@@ -170,6 +173,11 @@ general_1:
 	mov.l @r0,r0
 	jsr @r0
 	 mov #48,r5
+! call dcload's exit via syscall interface to terminate console if it's running
+	mov.l	dcloadsyscall_k,r0
+	mov.l	@r0,r0
+	jsr	@r0
+	 mov	#15,r4 ! dcload's exit syscall is syscall 15
 ! Let's add a few seconds delay here to be able to read the screen
 ! ...or at least take a photo of it
 	mov #0,r0
@@ -199,17 +207,21 @@ exc_to_string_k:
 	.long 0x8c00401c
 timeout_1second:
 	.long 66666666
-dump_to_host_k:
-	.long 0x8c004020
 dump_size:
 ! numbytes to dump
-	.long 268
+	.long 272
+exception_id:
+! "EXPT" (no null termination)
+	.long 0x54505845
+dcloadsyscall_k:
+	.long	0x8c004008
 
-.align 4
+! regdump will be aligned to 4 bytes just by virtue of how all the above variables
+! are aligned to 4 bytes and are all longs.
 
 regdump:
 ! save registers for display
-! caller has allocated 264 bytes on stack for regs + 4 for expevt code
+! caller has allocated 264 bytes on stack for regs
 ! caller has left r0,r1, and old pr on stack
 	sts.l pr,@-r15
 	mov r15,r0

@@ -5,7 +5,6 @@
 	.extern _draw_string
 	.extern _uint_to_string
 	.extern _exception_code_to_string
-	.extern _dump_to_host
 	.extern ___call_builtin_sh_set_fpscr
 
 	.extern _edata
@@ -66,8 +65,8 @@ uint_to_string_k:
 	.long _uint_to_string
 exc_to_string_k:
 	.long _exception_code_to_string
-dump_to_host_k:
-	.long _write
+
+! end of dcload hardcoded stuff
 
 realstart:
 	stc	sr,r0
