@@ -9,8 +9,6 @@ dcload-ip implements (to some extent) the following protocols:
 
 * ICMP - dcload-ip responds to ICMP echo requests (ping)
 
-* UDP  - dcload-ip uses UDP for transfering data and commands 
+* UDP  - dcload-ip uses UDP for transfering data and commands
 
-
-
-
+* DHCP - dcload-ip can use IPv4 DHCP to get an IP address now

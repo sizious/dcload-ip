@@ -12,7 +12,7 @@ void uint_to_string(unsigned int foo, unsigned char *bar)
     bar[8] = 0;
 }
 
-int main(void)
+void main(void)
 {
     unsigned int tool_ip;
     unsigned int tool_port;

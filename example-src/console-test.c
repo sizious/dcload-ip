@@ -1,6 +1,6 @@
 #include "dcload-syscalls.h"
 
-int main(void)
+void main(void)
 {
     int fd;
     unsigned char buffer[2048];
@@ -26,11 +26,10 @@ int main(void)
 	write(1, "read failed!\n", 14);
 	exit(1);
     }
-    
+
     write(1, buffer, count);
 
     close(fd);
 
     exit(0);
 }
- 

@@ -31,15 +31,13 @@
 #include "net.h"
 #include "cdfs.h"
 #include "maple.h"
+#include "syscalls.h"
 
 #include "dhcp.h"
 #include "perfctr.h"
 
 // Modify the branding slightly to prevent confusing it with stock DCLoad-IP
 #define NAME "dcload-ip " DCLOAD_VERSION " - with DHCP"
-
-#define VIDMODEREG (volatile unsigned int *)0xa05f8044
-#define VIDBORDER (volatile unsigned int *)0xa05f8040
 
 // Scale up the onscreen refresh interval
 #define ONSCREEN_REFRESH_SCALED ((unsigned long long int)ONSCREEN_DHCP_LEASE_TIME_REFRESH_INTERVAL * (unsigned long long int)PERFCOUNTER_SCALE)
@@ -84,7 +82,6 @@ static const char *dhcp_mode_string = " (DHCP Mode)"; // Indicator that DHCP is 
 static const char *dhcp_timeout_string = " (DHCP Timed Out!)"; // DHCP timeout indicator
 static const char *dhcp_lease_string = "DHCP Lease Time (sec): "; // DHCP lease time
 static char dhcp_lease_time_string[11] = {0}; // For converting lease time to seconds. 10 characters + null term. Max lease is theoretically 4294967295, but really is 1410902 due to perf counters.
-
 
 /* converts expevt value to description, used by exception handler */
 char * exception_code_to_string(unsigned int expevt)
@@ -235,19 +232,22 @@ void draw_progress(unsigned int current, unsigned int total)
 	draw_string(294, 174, ")", STR_COLOR);
 }
 
-// called by exception.s
+// called by exception.S
 void setup_video(unsigned int mode, unsigned int color)
 {
-	init_video(check_cable(), mode);
+	STARTUP_Init_Video(mode);
 	clrscr(color);
 }
 
 static void error_bb(char *msg)
 {
-	setup_video(0, 0x2000); // Red screen
+	setup_video(FB_RGB0555, 0x2000); // Red screen
 	draw_string(30, 54, NAME, STR_COLOR);
 	draw_string(30, 78, msg, STR_COLOR);
-	while(1);
+	while(1)
+	{
+		asm volatile ("sleep"); // This way it doesn't actually halt and catch fire ;)
+	}
 }
 
 void disp_info(void)
@@ -255,7 +255,7 @@ void disp_info(void)
 	int c;
 	unsigned char *ip = (unsigned char *)&our_ip;
 
-	setup_video(0, BG_COLOR);
+	setup_video(FB_RGB0555, BG_COLOR);
 	draw_string(30, 54, NAME, STR_COLOR);
 	draw_string(30, 78, bb->name, STR_COLOR);
 	draw_string(30, 102, mac_string, STR_COLOR);
@@ -498,7 +498,7 @@ void set_ip_dhcp(void)
 			// GCC has no clobber for fpscr, so this needs to be its own line
 			asm volatile ("lds r1,fpscr\n\t"); // Load R1 into fpscr
 
-			// Using paired would reduce this to 2 instructions and minimize memory accesses
+			// Using paired moves would reduce this to 2 instructions and minimize memory accesses
 			// Unpaired moves take 2 instructions (memory accesses) per double
 			// Don't be fooled: I already flipped the two 32-bit halves of the doubles in memory
 			// because I wanted to try using paired moves (via fmov.d). ;)
@@ -754,7 +754,6 @@ int main(void)
 #endif
 
 	while (1) {
-		*VIDBORDER = 0;
 
 		if (booted) {
 			disp_status("idle...");
