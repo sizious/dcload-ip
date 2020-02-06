@@ -5,7 +5,7 @@
 	.extern _draw_string
 	.extern _uint_to_string
 	.extern _exception_code_to_string
-	.extern ___set_fpscr
+	.extern ___call_builtin_sh_set_fpscr
 
 	.extern _edata
 	.extern _end
@@ -66,12 +66,15 @@ uint_to_string_k:
 exc_to_string_k:
 	.long _exception_code_to_string
 
+! end of dcload hardcoded stuff
+
 realstart:
 	stc	sr,r0
 	mov.l	sr_mask,r1
 	and	r1,r0
 	or	#0xf0,r0
 	ldc	r0,sr
+	! register banks may flip here if returning from an exception (but that's ok)
 	mov.l	setup_cache_k,r0
 	mov.l	p2_mask,r1
 	or	r1,r0
@@ -98,18 +101,21 @@ start_2:
 	! zero out bss
 	mov.l	edata_k,r0
 	mov.l	end_k,r1
+	cmp/eq r0,r1 ! unless there is no bss
+	bt no_bss
 	mov	#0,r2
 
 start_l:
 	mov.l	r2,@r0
 	add	#4,r0
-	cmp/ge	r0,r1
+	cmp/hi r0,r1 ! This was cmp/ge before, which would always write 4 bytes beyond the end...
 	bt	start_l
+no_bss:
 
 	mov.l set_fpscr_k, r1
 	jsr @r1
 	mov #0,r4
-	lds r3,fpscr
+!	lds r3,fpscr ! This isn't necessary.
 
 	! call main
 	mov.l	main_k,r0
@@ -126,9 +132,10 @@ _atexit:
 
 	.align 4
 sr_mask:
-	.long	0xefff7fff
+	.long	0xcfff7fff ! want to be in bank 0, especially after exception handler runs
 set_fpscr_k:
-	.long	___set_fpscr
+! __set_fpscr() is deprecated, use this wrapper for builtin instead
+	.long	___call_builtin_sh_set_fpscr
 stack_k:
 	.long	_stack
 edata_k:

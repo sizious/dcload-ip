@@ -1,3 +1,4 @@
+#include "dcload-syscalls.h"
 #include "dcload-syscall.h"
 
 int link (const char *oldpath, const char *newpath)
@@ -8,26 +9,26 @@ int link (const char *oldpath, const char *newpath)
 	return -1;
 }
 
-int read (int file, char *ptr, int len)
+int read(int file, void *buf, size_t len)
 {
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
-	return dcloadsyscall(pcreadnr, file, ptr, len);
+	return dcloadsyscall(pcreadnr, file, buf, len);
     else
 	return -1;
 }
 
-int lseek (int file, int ptr, int dir)
+off_t lseek(int filedes, off_t offset, int dir)
 {
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
-	return dcloadsyscall(pclseeknr, file, ptr, dir);
+	return dcloadsyscall(pclseeknr, filedes, offset, dir);
     else
 	return -1;
 }
 
-int write ( int file, char *ptr, int len)
+int write(int file, const void *buf, size_t len)
 {
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
-	return dcloadsyscall(pcwritenr, file, ptr, len);
+	return dcloadsyscall(pcwritenr, file, buf, len);
     else
 	return -1;
 }
@@ -40,23 +41,30 @@ int close (int file)
 	return -1;
 }
 
-int fstat (int file, struct stat *st)
+int fstat (int file, struct stat *buf)
 {
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
-	return dcloadsyscall(pcfstatnr, file, st);
+	return dcloadsyscall(pcfstatnr, file, buf);
     else
 	return -1;
 }
 
-int open (const char *path, int flags)
+int open (const char *path, int flags, ...)
 {
+  va_list ap;
+
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
-	return dcloadsyscall(pcopennr, path, flags);
+    {
+      va_start(ap, flags);
+      int return_value = dcloadsyscall(pcopennr, path, flags, va_arg(ap, int));
+      va_end(ap);
+      return return_value;
+    }
     else
 	return -1;
 }
 
-int creat (const char *path, int mode)
+int creat (const char *path, mode_t mode)
 {
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
 	return dcloadsyscall(pccreatnr, path, mode);
@@ -79,15 +87,15 @@ void exit (int status)
     __exit(status);
 }
 
-int stat (const char *path, struct stat *st)
+int stat (const char *path, struct stat *buf)
 {
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
-	return dcloadsyscall(pcstatnr, path, st);
+	return dcloadsyscall(pcstatnr, path, buf);
     else
 	return -1;
 }
 
-int chmod (const char *path, short mode)
+int chmod (const char *path, mode_t mode)
 {
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
 	return dcloadsyscall(pcchmodnr, path, mode);
@@ -95,10 +103,10 @@ int chmod (const char *path, short mode)
 	return -1;
 }
 
-int utime (const char *path, char *times)
+int utime (const char *path, struct utimbuf *buf)
 {
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
-	return dcloadsyscall(pcutimenr, path, times);
+	return dcloadsyscall(pcutimenr, path, buf);
     else
 	return -1;
 }
@@ -111,7 +119,7 @@ int chdir (const char *path)
 	return -1;
 }
 
-long time(long *t)
+time_t time(time_t *t)
 {
     if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
 	return dcloadsyscall(pctimenr, t);
