@@ -137,7 +137,7 @@ int dc_write(unsigned char * buffer)
 
       // Write out to a file as well
       // It will end up in the working directory of the terminal
-      int out_file = open("dcload_exception_dump.bin", O_CREAT | O_WRONLY | O_TRUNC);
+      int out_file = open("dcload_exception_dump.bin", O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
       retval = write(out_file, data, ntohl(command->value2));
       close(out_file);
     }
