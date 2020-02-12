@@ -1,7 +1,9 @@
 #ifndef __DCLOAD_H__
 #define __DCLOAD_H__
 
+//==============================================================================
 // ---- Start of user-changeable definitions ----
+//==============================================================================
 
 // Desired on-screen refresh interval for DHCP lease time
 // In seconds, minimum is 1 second.
@@ -13,7 +15,7 @@
 // Valid values are 1 or 2 ONLY.
 #define DCLOAD_PMCR 1
 
-// Background color
+// Background color (in RGB0555 format; default blue is 0x0010)
 #define BG_COLOR 0x0010
 
 // String color (0xffff = white)
@@ -74,7 +76,9 @@
 // all SH7091 CPUs (works on mine).
 //#define UNDEFINED_DOUBLES
 
+//==============================================================================
 // ---- End of user-changeable definitions ----
+//==============================================================================
 
 // Globally-important variables
 extern volatile unsigned char booted;
