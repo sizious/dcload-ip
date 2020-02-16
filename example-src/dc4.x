@@ -189,7 +189,7 @@ SECTIONS
 			This now still needs to be aligned to 4 bytes (to line up with _end if
 			there is no bss), but with a change to crt0.S	it at least will check if
 			there is a bss section first... */
-   . = ALIGN(. != 0 ? 32 /8 : 1);
+   . = ALIGN(. != 0 ? 32 / 8 : 1);
   }
   . = ALIGN(32 / 8);
   . = ALIGN(32 / 8);
