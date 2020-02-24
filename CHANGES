@@ -1,22 +1,28 @@
-WHATS NEW IN 1.1.1
+WHAT'S NEW IN 1.1.2
+
+* LAN Adapter is now bug fixed and fully supported. Functions just like the BBA.
+  [Moopthehedgehog]
+
+WHAT'S NEW IN 1.1.1
 
 * Overhauled the video subsystem, so non-VGA PAL video works now. VGA output is
-  also not egregiously shifted upwards anymore like it used to be.
+  also not egregiously shifted upwards anymore like it used to be. [Moopthehedgehog]
 * Fixed startup code bugs that have probably been there for decades and would
   cause random crashes when bss would go out of alignment, particularly if there
   were no bss section. The startup code would also overwrite 4 bytes beyond the
   end of the binary because it was using the wrong comparison instruction. Yay.
-* Fixed the example-src folder, as it was in pretty bad shape.
+  [Moopthehedgehog]
+* Fixed the example-src folder, as it was in pretty bad shape. [Moopthehedgehog]
 * Fixed the exception handler so that it actually works now, and it dumps
   exceptions over the network (both to the dc-tool console and to a file named
   "dcload_exception_dump.bin" in whatever directory the terminal is currently
-  in) in addition to printing them on-screen
+  in) in addition to printing them on-screen. [Moopthehedgehog]
 
-WHATS NEW IN 1.1.0
+WHAT'S NEW IN 1.1.0
 
 * IPv4 DHCP support! Hurray! It's got a nifty DHCP lease countdown timer, too,
   which persists across loaded programs to keep track of time for DHCP renewal
-  purposes without impacting running programs.
+  purposes without impacting running programs. [Moopthehedgehog]
 * Performance counter monitoring support from across the network. The Dreamcast
   has two 48-bit performance counters that can be configured independently in a
   variety of ways, and this functionality allows for controlling them in much the
@@ -26,23 +32,23 @@ WHATS NEW IN 1.1.0
   totally off if this is done, but there isn't anything we can do about that,
   sorry. That really should never be an issue, though, and bear in mind that they
   cannot be written to with an initial value to count from, so no saving/restoring
-  state that way).
+  state that way). [Moopthehedgehog]
 * Added an option in Makefile.cfg to slow down dc-tool a tiny bit to help with
   CPU usage on laptops that run the network polling loop far faster in 2020 than
-  laptops did in 2004. It's called "SAVE_MY_FANS"
+  laptops did in 2004. It's called "SAVE_MY_FANS" [Moopthehedgehog]
 * Added support for GCC 9.2 (if using GCC 4.x from KallistiOS, make sure
-  USING_KOS_GCC is uncommented in Makefile.cfg)
+  USING_KOS_GCC is uncommented in Makefile.cfg) [Moopthehedgehog]
 * Presumably many tens of issues were fixed. Feels like a hundred, honestly, but
   it's probably more like 20-30. The whole Dreamcast side of the program got a
-  pretty major backend overhaul.
+  pretty major backend overhaul. [Moopthehedgehog]
 
-WHATS NEW IN 1.0.5
+WHAT'S NEW IN 1.0.5
 
 * Maple passthrough support.
 * Some fixes.
 * No one ever really documented the changes from 1.0.4 to 1.0.5.
 
-WHATS NEW IN 1.0.4
+WHAT'S NEW IN 1.0.4
 
 * Maintenance versions of dcload moved into the CA CVS repository on
   SourceForge with the blessings of adk. Please send future bug reports and
@@ -61,7 +67,7 @@ WHATS NEW IN 1.0.4
 * Multi-pass retry in host tool to avoid incorrect data [dp]
 * Renamed some conflicting struct members for glibc2.3.x [WvN]
 
-WHATS NEW IN 1.0.3
+WHAT'S NEW IN 1.0.3
 
 * actually seems to be working right, unlike 1.0.1 and 1.0.2, which were both
   buggy as hell under many (most?) conditions. If 1.0.1 and 1.0.2 locked up,
@@ -76,13 +82,13 @@ WHATS NEW IN 1.0.3
   starts, when you execute dc-tool -r, or if you disconnect and reconnect the
   ethernet cable. If the message stays there, check your ethernet cable.
 
-WHATS NEW IN 1.0.2
+WHAT'S NEW IN 1.0.2
 
 * fixed bug where rx configuration was not restored properly
   (only affected dcload syscalls - could cause dc-tool to segfault apparently,
    and who knows what else...)
 
-WHATS NEW IN 1.0.1
+WHAT'S NEW IN 1.0.1
 
 * works with 100mbit now
 * added syscall to return the ip and port of the dc-tool host

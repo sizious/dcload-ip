@@ -43,4 +43,6 @@ extern volatile unsigned char escape_loop;
 // All adapter drivers should use this shared buffer to receive.
 extern unsigned char current_pkt[RX_PKT_BUF_SIZE];
 
+extern unsigned char tx_small_packet_zero_buffer[60];
+
 #endif

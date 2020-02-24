@@ -70,6 +70,9 @@ __attribute__((aligned(8))) static const unsigned int const_32[2] = {0x41f00000,
 volatile unsigned char booted = 0;
 volatile unsigned char running = 0;
 
+// Keep track of background color depending on the type of adapter installed
+volatile unsigned int global_bg_color = BBA_BG_COLOR;
+
 static volatile unsigned int current_counter_array[2] = {0};
 static volatile unsigned int old_dhcp_lease_updater_array[2] = {0}; // To update lease time display
 static volatile unsigned char dont_renew = 0;
@@ -200,31 +203,15 @@ void clear_lines(unsigned int y, unsigned int n, unsigned int c)
 		*vmem++ = c;
 }
 
-// I've seen this used before, but I can't remember what used it.
-// Bear in mind this function takes up about 144 bytes just sitting here.
-// That can increase to 160 bytes under certain alignment conditions.
 void draw_progress(unsigned int current, unsigned int total)
 {
-// A hexadecimal progress indicator...
-//	unsigned char current_string[9];
-//	unsigned char total_string[9];
-
-//	uint_to_string(total, total_string);
-//	uint_to_string(current, current_string);
-//	clear_lines(120, 24, BG_COLOR);
-//	draw_string(30, 174, "(", STR_COLOR);
-//	draw_string(42, 174, current_string, STR_COLOR);
-//	draw_string(138, 174, "/", STR_COLOR);
-//	draw_string(150, 174, total_string, STR_COLOR);
-//	draw_string(246, 174, ")", STR_COLOR);
-
-	// Well, we can do decimal now.
+	// For some reason this was in hexadecimal before... but we can do decimal now.
 	char current_string[11];
 	char total_string[11];
 
 	uint_to_string_dec(total, total_string);
 	uint_to_string_dec(current, current_string);
-	clear_lines(120, 24, BG_COLOR);
+	clear_lines(120, 24, global_bg_color);
 	draw_string(30, 174, "(", STR_COLOR);
 	draw_string(42, 174, current_string, STR_COLOR);
 	draw_string(162, 174, "/", STR_COLOR);
@@ -241,7 +228,7 @@ void setup_video(unsigned int mode, unsigned int color)
 
 static void error_bb(char *msg)
 {
-	setup_video(FB_RGB0555, 0x2000); // Red screen
+	setup_video(FB_RGB0555, ERROR_BG_COLOR);
 	draw_string(30, 54, NAME, STR_COLOR);
 	draw_string(30, 78, msg, STR_COLOR);
 	while(1)
@@ -255,7 +242,7 @@ void disp_info(void)
 	int c;
 	unsigned char *ip = (unsigned char *)&our_ip;
 
-	setup_video(FB_RGB0555, BG_COLOR);
+	setup_video(FB_RGB0555, global_bg_color);
 	draw_string(30, 54, NAME, STR_COLOR);
 	draw_string(30, 78, bb->name, STR_COLOR);
 	draw_string(30, 102, mac_string, STR_COLOR);
@@ -267,7 +254,7 @@ void disp_info(void)
 }
 
 void disp_status(const char * status) {
-	clear_lines(150, 24, BG_COLOR);
+	clear_lines(150, 24, global_bg_color);
 	draw_string(30, 150, status, STR_COLOR);
 }
 
@@ -335,7 +322,7 @@ static void update_ip_display(unsigned char *new_ip, const char *mode_string)
 {
 	int c;
 
-	clear_lines(126, 24, BG_COLOR);
+	clear_lines(126, 24, global_bg_color);
 	for(c = 0; c < 4; c++)
 	{
 		uchar_to_string_dec(new_ip[3-c], &ip_string[c*4]);
@@ -348,7 +335,7 @@ static void update_ip_display(unsigned char *new_ip, const char *mode_string)
 // cause a triple-nested if(), which will then break things.
 static void dhcp_waiting_mode_display(void)
 {
-	clear_lines(126, 24, BG_COLOR);
+	clear_lines(126, 24, global_bg_color);
 	draw_string(30, 126, waiting_string, STR_COLOR);
 	draw_string(234, 126, dhcp_mode_string, STR_COLOR);
 }
@@ -357,7 +344,7 @@ static void update_lease_time_display(unsigned int new_time)
 {
 	// Casting to char gets rid of GCC warning.
 	uint_to_string_dec(new_time, dhcp_lease_time_string);
-	clear_lines(448, 24, BG_COLOR);
+	clear_lines(448, 24, global_bg_color);
 	draw_string(30, 448, dhcp_lease_string, STR_COLOR);
 	draw_string(306, 448, dhcp_lease_time_string, STR_COLOR);
 }
@@ -379,6 +366,7 @@ void set_ip_dhcp(void)
 	if(__builtin_expect(!booted, 0))
 	{
 		disp_info();
+		disp_status("idle...");
 	}
 
 	unsigned char *ip = (unsigned char *)&our_ip;
@@ -649,7 +637,7 @@ void set_ip_dhcp(void)
 		//
 
 #ifdef PERFCTR_DEBUG
-		clear_lines(174, 24, BG_COLOR);
+		clear_lines(174, 24, global_bg_color);
 		uint_to_string(current_counter_array[1], (unsigned char*)dhcp_lease_time_string);
 		draw_string(30, 174, dhcp_lease_time_string, STR_COLOR);
 		uint_to_string(current_counter_array[0], (unsigned char*)dhcp_lease_time_string);

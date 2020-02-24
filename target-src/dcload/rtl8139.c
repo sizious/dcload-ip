@@ -7,11 +7,8 @@
 #include "dhcp.h"
 
 static rtl_status_t rtl = {0};
-static unsigned char rtl_link_up = 0;
-static unsigned char rtl_is_copying = 0;
-
-// Defined below
-extern adapter_t adapter_bba;
+static volatile unsigned char rtl_link_up = 0;
+static volatile unsigned char rtl_is_copying = 0;
 
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
 static vuc * const nic8 = REGC(0xa1001700);
@@ -27,9 +24,14 @@ static int bb_detect()
 {
 	const char *str = (char*)REGC(0xa1001400);
 	if (!memcmp(str, "GAPSPCI_BRIDGE_2", 16))
+	{
+		global_bg_color = BBA_BG_COLOR;
 		return 0;
+	}
 	else
+	{
 		return -1;
+	}
 }
 
 static void rtl_init()
@@ -71,8 +73,8 @@ static void rtl_init()
 	/* Enable receive and transmit functions */
 	nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE;
 
-	/* Set Rx FIFO threashold to 16 bytes, Rx size to 16k+16, 1024 byte DMA burst */
-	nic32[RT_RXCONFIG/4] = 0x00000e00; // (1<<7 = 0x80) for nowrap or bit 7 = 0 for wrap, 1024 byte dma burst (6<<8 = 0xe00) is undocumented in 8139C datasheet, but it's in the 8139D datasheet: https://www.cs.usfca.edu/~cruse/cs326f04/RTL8139D_DataSheet.pdf
+	/* Set Rx FIFO threshold to 16 bytes, Rx size to 16k+16, 1024 byte DMA burst */
+	nic32[RT_RXCONFIG/4] = 0x00000e00; // (1<<7 = 0x80) for nowrap or bit 7 = 0 for wrap, 1024 byte dma burst (6<<8 = 0x600) is undocumented in 8139C datasheet, but it's in the 8139D datasheet: https://www.cs.usfca.edu/~cruse/cs326f04/RTL8139D_DataSheet.pdf
 
 	/* Set Tx 1024 byte DMA burst */
 	nic32[RT_TXCONFIG/4] = 0x00000600;
@@ -179,13 +181,6 @@ static vuc * const txdesc[4] = {
 	REGC(0xa1847800)
 };
 
-// Used for padding since doing a padding memset isn't exactly safe without G2 locking like KOS.
-// Triple buffering the data works for these small packets just fine. Small data therefore does this now:
-// source --memcpy--> small packet buffer --memcpy--> area reserved for transmit (txdesc) --DMA--> inaccessible internal Realtek buffer --MII--> network!
-// It only costs about 64 bytes to implement this (60 for buffer, 4 for function calls) after GCC's optimized it.
-static unsigned char tx_small_packet_zero_buffer[60]; // Here's a non-global array
-// ...Which is to say, if you're looking for 60 bytes, this is NOT the place to get them from, sorry!!
-
 static int bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: http://realtek.info/pdf/rtl8139cp.pdf
 {
 	while (!(nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x2000)) { // While tx is not complete (checking OWN)
@@ -235,10 +230,10 @@ static void pktcpy(unsigned char *dest, unsigned char *src, int n)
 static int bb_rx()
 {
 	int processed;
-	unsigned int      rx_status;
+	unsigned int rx_status;
 	int rx_size, pkt_size, ring_offset;
 	int i;
-	unsigned char       *pkt;
+	unsigned char *pkt;
 
 	processed = 0;
 
@@ -283,25 +278,41 @@ static void bb_loop(int is_main_loop)
 
 	intr = 0;
 
+	if(is_main_loop)
+	{
+		if(!(booted || running))
+		{
+			disp_info();
+		}
+
+		// Need to wait for a link change before it's OK to do anything
+		rtl_link_up = 0;
+	}
+
 	// OMG this is polling the network adapter. Well, ok then.
-	while(!escape_loop) {
+	while(!escape_loop)
+	{
 
 		/* Check interrupt status */
-		if (nic16[RT_INTRSTATUS/2] != intr) {
+		if (nic16[RT_INTRSTATUS/2] != intr)
+		{
 			intr = nic16[RT_INTRSTATUS/2];
 			nic16[RT_INTRSTATUS/2] = intr & ~RT_INT_RX_ACK;
 		}
 
 		/* Did we receive some data? */
-		if (intr & RT_INT_RX_ACK) {
-			//i = bb_rx(); // bb_rx() can only return a value of 1
+		if (intr & RT_INT_RX_ACK)
+		{
+			//i = bb_rx();
 			bb_rx();
 		}
 
 		/* link change */
-		if (intr & RT_INT_RXFIFO_UNDERRUN) {
+		if (intr & RT_INT_RXFIFO_UNDERRUN)
+		{
 
-			if (booted && (!running)) {
+			if (booted && (!running))
+			{
 				disp_status("link change...");
 			}
 
@@ -314,7 +325,8 @@ static void bb_loop(int is_main_loop)
 			while (!(nic16[RT_INTRSTATUS/2] & RT_INT_RXFIFO_UNDERRUN));
 			nic16[RT_INTRSTATUS/2] = RT_INT_RXFIFO_UNDERRUN;
 
-			if (booted && (!running)) {
+			if (booted && (!running))
+			{
 				disp_status("idle...");
 			}
 
@@ -328,7 +340,8 @@ static void bb_loop(int is_main_loop)
 		}
 
 		/* Rx Buffer overflow */
-		if (intr & RT_INT_RXBUF_OVERFLOW) {
+		if (intr & RT_INT_RXBUF_OVERFLOW)
+		{
 			rtl.cur_rx = nic16[RT_RXBUFHEAD];
 			nic16[RT_RXBUFTAIL]=  rtl.cur_rx - 16;
 

@@ -1,5 +1,5 @@
 
-# dcload-ip 1.1.1 (with DHCP)
+# dcload-ip 1.1.2 (with DHCP)
 
 A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/).
 
@@ -44,24 +44,26 @@ options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
 
 * The correct display is something like:
 
-  `dcload-ip 1.1.1 - with DHCP`  <- name/version  
+  `dcload-ip 1.1.2 - with DHCP`  <- name/version  
   `Broadband Adapter (HIT-0400)`  <- adapter driver in use  
   `00:d0:f1:02:ab:dd`  <- dc hardware address  
   `192.168.001.004`  <- dc ip address  
   `idle...`  <- status  
 
-  The background of the screen will be blue.
+  The background of the screen will be blue (Broadband Adapter) or green (LAN Adapter).
 
-* For the **Broadband Adapter** only: if the status line reports `link
-  change...` and does not change back to `idle...` within a short period
-  of time, you may have a cable problem. dcload-ip will not work while
-  `link change...` is displayed, or before it is displayed the first time.
-  The `link change...` message normally is seen when you start dcload-ip,
-  when you execute `dc-tool -r`, and when you disconnect the ethernet cable.
+* If the status line reports `link change...` and does not change back to
+  `idle...` within a short period of time, you may have a cable problem.
+  dcload-ip will not work while `link change...` is displayed, or before it is
+  displayed the first time. The `link change...` message normally is seen when
+  you start dcload-ip, when you execute `dc-tool -r`, and when you disconnect
+  the ethernet cable.
 
 * If an exception is caught while a loaded program is running, the screen
-  will turn lighter blue and display the exception info. dcload-ip should be
-  active again after that point.
+  will turn lighter blue and display the exception info for a time set by
+  `EXCEPTION_SECONDS` in Makefile.cfg (default is 15 seconds). dcload-ip should
+  be active again after that point. See the Exception Dumping section of this
+  README for what happens if an exception occurs while the dc-tool console is used.
 
 ### Testing
 
@@ -261,7 +263,7 @@ struct _exception_struct_t {
 ### Notes
 
 * You can use `arp` instead of setting the Dreamcast's IP in `Makefile.cfg`.
-On Windows, you may use the `netsh` command which is more reliable (e.g. `netsh
+  On Windows, you may use the `netsh` command which is more reliable (e.g. `netsh
   interface ip add neighbors "Ethernet" 192.168.10.1 AA-BB-CC-DD-EE-FF)`. In that
   case, don't forget to specify an IP address in the Ethernet card of your computer.
   Please set the Dreamcast's IP in `Makefile.cfg` to be in the range 169.254.xxx.xxx
@@ -277,7 +279,7 @@ section for that
 
 * [SiZiOUS](https://www.github.com/SiZiOUS) for maintaining this program
 * rtl8139 code based on code by Dan Potter
-* LAN Adapter driver is pulled from an early version of the KOS LA driver
+* LAN Adapter driver code is derived from an early version of the KOS LA driver
 * There are some various files from `newlib-1.8.2` here
 * `video.s`, `maple.c`, and `maple.h` were written by Marcus Comstedt
 * initial win32 porting and implementation of -t by Florian 'Proff' Schulze

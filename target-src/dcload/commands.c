@@ -19,6 +19,8 @@ unsigned int tool_ip = 0;
 unsigned char tool_mac[6] = {0};
 unsigned short tool_port = 0;
 
+static unsigned int incoming_current = 0;
+
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
 #define BIN_INFO_MAP_SIZE 16384
@@ -94,6 +96,7 @@ void cmd_loadbin(ip_header_t * ip, udp_header_t * udp, command_t * command)
 		if (!booted)
 			disp_info();
 		disp_status("receiving data...");
+		incoming_current = 0; // initialize incoming_current
 	}
 }
 
@@ -105,6 +108,12 @@ void cmd_partbin(command_t * command)
 
 	index = (ntohl(command->address) - bin_info.load_address) >> 10;
 	bin_info.map[index] = 1;
+
+	if(__builtin_expect(!running, 1))
+	{
+		incoming_current += ntohl(command->size);
+		draw_progress(incoming_current, bin_info.load_size);
+	}
 }
 
 void cmd_donebin(ip_header_t * ip, udp_header_t * udp, command_t * command)
@@ -130,6 +139,7 @@ void cmd_donebin(ip_header_t * ip, udp_header_t * udp, command_t * command)
 		if (!booted)
 			disp_info();
 		disp_status("idle...");
+		incoming_current = 0; // reset incoming size
 	}
 }
 

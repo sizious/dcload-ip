@@ -15,8 +15,14 @@
 // Valid values are 1 or 2 ONLY.
 #define DCLOAD_PMCR 1
 
-// Background color (in RGB0555 format; default blue is 0x0010)
-#define BG_COLOR 0x0010
+// Background color
+// In RGB0555 format
+// BBA default blue is 0x0010
+// LAN default green is 0x0100
+// Error default red is 0x2000
+#define BBA_BG_COLOR 0x0010
+#define LAN_BG_COLOR 0x0100
+#define ERROR_BG_COLOR 0x2000
 
 // String color (0xffff = white)
 #define STR_COLOR 0xffff
@@ -83,6 +89,7 @@
 // Globally-important variables
 extern volatile unsigned char booted;
 extern volatile unsigned char running;
+extern volatile unsigned int global_bg_color;
 
 // Called by asm functions
 char * exception_code_to_string(unsigned int expevt);
@@ -92,6 +99,7 @@ void setup_video(unsigned int mode, unsigned int color);
 void disp_info(void);
 void disp_status(const char * status);
 void clear_lines(unsigned int y, unsigned int n, unsigned int c);
+void draw_progress(unsigned int current, unsigned int total);
 
 // Exported for bb->loop
 void set_ip_dhcp(void);
