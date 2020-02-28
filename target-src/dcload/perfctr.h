@@ -7,6 +7,10 @@
 // The performance counter module is hereby released into the public domain in
 // the hope that it may prove useful. Now go profile some code and hit 60 fps! :)
 //
+// This file has been adapted to meet the specific needs of dcload. Namely, the
+// PMCR_Read() function uses an array to store values. This allows data to persist
+// across program loads, since the entirety of dcload is technically "volatile."
+//
 // --Moopthehedgehog
 //
 

@@ -36,7 +36,7 @@
 #include "dhcp.h"
 #include "perfctr.h"
 
-// Modify the branding slightly to prevent confusing it with stock DCLoad-IP
+// Modify the branding slightly to prevent confusing it with stock dcload-ip
 #define NAME "dcload-ip " DCLOAD_VERSION " - with DHCP"
 
 // Scale up the onscreen refresh interval
@@ -72,6 +72,7 @@ volatile unsigned char running = 0;
 
 // Keep track of background color depending on the type of adapter installed
 volatile unsigned int global_bg_color = BBA_BG_COLOR;
+volatile unsigned int installed_adapter = BBA_MODEL;
 
 static volatile unsigned int current_counter_array[2] = {0};
 static volatile unsigned int old_dhcp_lease_updater_array[2] = {0}; // To update lease time display
@@ -203,21 +204,9 @@ void clear_lines(unsigned int y, unsigned int n, unsigned int c)
 		*vmem++ = c;
 }
 
-void draw_progress(unsigned int current, unsigned int total)
-{
-	// For some reason this was in hexadecimal before... but we can do decimal now.
-	char current_string[11];
-	char total_string[11];
-
-	uint_to_string_dec(total, total_string);
-	uint_to_string_dec(current, current_string);
-	clear_lines(120, 24, global_bg_color);
-	draw_string(30, 174, "(", STR_COLOR);
-	draw_string(42, 174, current_string, STR_COLOR);
-	draw_string(162, 174, "/", STR_COLOR);
-	draw_string(174, 174, total_string, STR_COLOR);
-	draw_string(294, 174, ")", STR_COLOR);
-}
+// There used to be a progress indicator here, but using it dropped network
+// performance by a whopping 10x. 10x. That's insane. Needless to say, it has
+// now disappeared and will not be coming back.
 
 // called by exception.S
 void setup_video(unsigned int mode, unsigned int color)
@@ -389,7 +378,7 @@ void set_ip_dhcp(void)
 	// Check if lease is still active, renewal threshold is at 50% lease time. '>> 1' is '/2'.
 	// NOTE: GCC apparently can't handle the concept of dividing 64-bit numbers on SH4, even by a power of two.
 	// It adds over 1kB of extra code at the mere sight of it, weirdly, so we do the shift manually here.
-	if(dhcp_lease_time && (!dont_renew) && ((long_dhcp_lease_time >> 1) < (*current_counter)))
+	if(__builtin_expect(dhcp_lease_time && (!dont_renew) && ((long_dhcp_lease_time >> 1) < (*current_counter)), 0))
 	{
 		dhcp_lease_time = 0; // This disables DHCP renewal unless it gets updated with a valid value. Its dual-purpose is a renewal code enabler.
 		old_dhcp_lease_updater_array[0] = 0;
@@ -662,7 +651,7 @@ void set_ip_dhcp(void)
 	// IP of some sort. It also checks if the DHCP lease expired per above. DOUBLE WHAMMY!!
 	// Only need to check the first octet of IP since it's a /8 range
 	// Also check if renew was NAK'd, and if it was, are we at the 87.5% threshold for a new discover?
-	if( (ip[3] == 0) || (dont_renew && (eighty_seven_point_five < (*current_counter))) )
+	if(__builtin_expect((ip[3] == 0) || (dont_renew && (eighty_seven_point_five < (*current_counter))), 0))
 	{
 		dont_renew = 0;
 		dhcp_waiting_mode_display();
@@ -699,7 +688,7 @@ void set_ip_dhcp(void)
 		disp_status("idle..."); // Staying consistent with DCLOAD conventions
 	}
 
-	// DCLoad-IP can now keep on going as normal.
+	// dcload-ip can now keep on going as normal.
 }
 
 int main(void)

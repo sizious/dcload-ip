@@ -2,6 +2,10 @@ WHAT'S NEW IN 1.1.2
 
 * LAN Adapter is now bug fixed and fully supported. Functions just like the BBA.
   [Moopthehedgehog]
+* Automatic detection and performance tuning depending on which adapter is installed.
+  WARNING: This is a semi-major change, and though dc-tool-ip 1.1.2 is still
+  backwards compatible with older versions of dcload-ip, it will not work
+  optimally unless used with dcload-ip 1.1.2. [Moopthehedgehog]
 
 WHAT'S NEW IN 1.1.1
 

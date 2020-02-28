@@ -41,6 +41,7 @@ static struct dirent our_dir; // Here's a global array
 
 /* send command, enable bb, bb_loop(), then return */
 
+// This does not include null-termination in the output value
 size_t strlen(const char *s)
 {
 	int c = 0;

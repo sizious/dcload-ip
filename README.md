@@ -3,7 +3,7 @@
 
 A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/).
 
-### Features
+## Features
 
 * Load  `elf`, `srec`, and `bin`
 * PC I/O (read, write, etc to PC - compatible with original dcload)
@@ -16,7 +16,7 @@ A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.th
 - NTSC 480i, PAL 576i, and VGA display output modes supported
 - Dumping exceptions over the network if the dcload console is enabled
 
-### Building
+## Building
 
 1. Edit `Makefile.cfg` for your system and network, and then run `make`.
 
@@ -25,7 +25,7 @@ NOTE: GCC 4.7.x users using the KOS 2.1.0 build environment must ensure
 options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
 ``sh4-elf-`` prefix, which won't work with the KOS 2.1.0 compiler.
 
-### Installation
+## Installation
 
 1. PC - run `make install` (installs dc-tool)
 2. DC
@@ -37,7 +37,7 @@ options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
       (please use the `IP.BIN` from the `make-cd` directory if you are going
       to distribute either cds or cd images).
 
-### On-screen display
+## On-screen display
 
 * If you see the message `NO ETHERNET ADAPTER DETECTED!`, something has
   gone wrong. The background of the screen will be red.
@@ -65,7 +65,7 @@ options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
   be active again after that point. See the Exception Dumping section of this
   README for what happens if an exception occurs while the dc-tool console is used.
 
-### Testing
+## Testing
 
 1. `cd example-src`
 2. `dc-tool -x console-test` (tests some PC I/O)
@@ -73,7 +73,7 @@ options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
 4. `dc-tool -x gethostinfo` (displays the Dreamcast's ip, and the ip and port of
    the dc-tool host)
 
-### KOS GDB-over-dcload
+## KOS GDB-over-dcload
 
 To run a GNU debugger session over the dcload connection:
 
@@ -85,7 +85,7 @@ To run a GNU debugger session over the dcload connection:
 5. Launch sh-elf-gdb and connect to the dc-tool using `target remote :2159`
 6. Squash bugs
 
-### Maple Passthrough
+## Maple Passthrough
 
 You can send packets to various maple devices attached to the Dreamcast by using
 the MAPL command. Simply send a command packet to the Dreamcast that is formatted
@@ -110,7 +110,7 @@ Maple command data format:
 
 You will get a similarly formatted response in return.
 
-### Performance Counter Control
+## Performance Counter Control
 
 Newly added is the ability to control Dreamcast/SH7091 performance counters over
 the network. These were a previously hidden aspect of the Dreamcast's CPU, and
@@ -175,7 +175,7 @@ counter is needed by that program.
 addition to the available counter modes (and for loads of other information)
 - PMCR_Init() and PMCR_Enable() will do nothing if the perf counter is already running!
 
-### Exception Dumping
+## Exception Dumping
 
 Another new feature is the ability to send a full register dump to a host PC
 running dc-tool-ip with the console enabled (i.e. not invoked with the `-n`
@@ -260,7 +260,7 @@ struct _exception_struct_t {
 } __attribute__ ((__packed__));
 ```
 
-### Notes
+## Notes
 
 * You can use `arp` instead of setting the Dreamcast's IP in `Makefile.cfg`.
   On Windows, you may use the `netsh` command which is more reliable (e.g. `netsh
@@ -275,7 +275,7 @@ struct _exception_struct_t {
 * Patches and improvements are welcome; please raise an issue here in the "Issues"
 section for that
 
-### Credits
+## Credits
 
 * [SiZiOUS](https://www.github.com/SiZiOUS) for maintaining this program
 * rtl8139 code based on code by Dan Potter

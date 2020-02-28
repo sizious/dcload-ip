@@ -86,10 +86,14 @@
 // ---- End of user-changeable definitions ----
 //==============================================================================
 
+#define LAN_MODEL 0300
+#define BBA_MODEL 0400
+
 // Globally-important variables
 extern volatile unsigned char booted;
 extern volatile unsigned char running;
 extern volatile unsigned int global_bg_color;
+extern volatile unsigned int installed_adapter;
 
 // Called by asm functions
 char * exception_code_to_string(unsigned int expevt);
@@ -99,7 +103,6 @@ void setup_video(unsigned int mode, unsigned int color);
 void disp_info(void);
 void disp_status(const char * status);
 void clear_lines(unsigned int y, unsigned int n, unsigned int c);
-void draw_progress(unsigned int current, unsigned int total);
 
 // Exported for bb->loop
 void set_ip_dhcp(void);

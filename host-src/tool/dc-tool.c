@@ -340,6 +340,23 @@ int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int 
     return 0;
 }
 
+// Adapter type detection for RX FIFO stuff (each adapter needs different values)
+#define BBA_MODEL 0400
+#define LAN_MODEL 0300
+
+unsigned int installed_adapter = 0;
+
+// Division factor for how long to wait for DC to empty its RX FIFO
+#define BBA_RX_FIFO_DELAY_DIV DREAMCAST_BBA_RX_FIFO_DELAY_DIV
+#define LAN_RX_FIFO_DELAY_DIV DREAMCAST_LAN_RX_FIFO_DELAY_DIV
+
+unsigned int rx_fifo_delay = PACKET_TIMEOUT/51; // Default for compatibility with old dcload-ip versions
+
+#define BBA_RX_FIFO_DELAY_COUNT DREAMCAST_BBA_RX_FIFO_DELAY_COUNT
+#define LAN_RX_FIFO_DELAY_COUNT DREAMCAST_LAN_RX_FIFO_DELAY_COUNT
+// Number of packets to send before waiting for DC to empty its RX FIFO
+unsigned int rx_fifo_delay_count = 15; // Default for compatibility with old dcload-ip versions
+
 /* send size bytes to dc from addr to dcaddr*/
 int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
 {
@@ -347,10 +364,58 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
     unsigned char * i = 0;
     unsigned int a = dcaddr;
     unsigned int start = 0;
-    int count = 0;
+    unsigned int count = 0;
 
     if (!size)
-	return -1;
+	   return -1;
+
+    if(!installed_adapter)
+    {
+      // First check for the type of adapter installed (only need to do this once)
+      do
+      {
+    send_cmd(CMD_VERSION, 0, 0, NULL, 0);
+      }
+      while(recv_response(buffer, PACKET_TIMEOUT) == -1);
+
+      while(memcmp(((command_t *)buffer)->id, CMD_VERSION, 4)) {
+  	printf("send_data: error in response to CMD_VERSION, retrying... %c%c%c%c\n",buffer[0],buffer[1],buffer[2],buffer[3]);
+  	do
+  	    send_cmd(CMD_VERSION, 0, 0, NULL, 0);
+  	while (recv_response(buffer, PACKET_TIMEOUT) == -1);
+      }
+
+      // As of version 1.1.2 the 'version' command now stuffs a numeric adapter
+      // type into the previously unused command->address field :)
+      installed_adapter = ntohl(((command_t*)buffer)->address);
+
+      if(installed_adapter == BBA_MODEL)
+      {
+        printf("%s\n", ((command_t*)buffer)->data);
+        rx_fifo_delay = PACKET_TIMEOUT/BBA_RX_FIFO_DELAY_DIV;
+        rx_fifo_delay_count = BBA_RX_FIFO_DELAY_COUNT;
+      }
+      else if(installed_adapter == LAN_MODEL)
+      {
+        printf("%s\n", ((command_t*)buffer)->data);
+        rx_fifo_delay = PACKET_TIMEOUT/LAN_RX_FIFO_DELAY_DIV;
+        rx_fifo_delay_count = LAN_RX_FIFO_DELAY_COUNT;
+      }
+      else
+      {
+        // "But most people have a BBA! Why not default to that?????"
+        // Because if they get this error then the network is massively screwed up and
+        // they'll probably see higher performance from using the LAN Adapter timings.
+        // It means, "buy a new router." Seriously: Gigabit-class hardware is less than $30 USD in 2020.
+
+        // Alternatively, it means someone is using an old version of dcload-ip and really needs to upgrade.
+        printf("Unknown adapter or old version of dcload-ip detected.\nDefaulting to Broadband Adapter...\n");
+        installed_adapter = BBA_MODEL;
+
+      }
+    }
+
+    // Send the data!
 
     do
     {
@@ -365,24 +430,29 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
 	while (recv_response(buffer, PACKET_TIMEOUT) == -1);
     }
 
-    for(i = addr; i < addr + size; i += 1024) {
-	if ((addr + size - i) >= 1024) {
-	    send_cmd(CMD_PARTBIN, dcaddr, 1024, i, 1024);
-	}
-	else {
-	    send_cmd(CMD_PARTBIN, dcaddr, (addr + size) - i, i, (addr + size) - i);
-	}
-	dcaddr += 1024;
-
-	/* give the DC a chance to empty its rx fifo
-	 * this increases transfer rate on 100mbit by about 3.4x
-	 */
-	count++;
-	if (count == 15) {
-	    start = time_in_usec();
-	    while ((time_in_usec() - start) < PACKET_TIMEOUT/51);
-		count = 0;
+    for(i = addr; i < addr + size; i += 1024)
+    {
+      if ((addr + size - i) >= 1024)
+      {
+	       send_cmd(CMD_PARTBIN, dcaddr, 1024, i, 1024);
 	    }
+	    else
+      {
+	       send_cmd(CMD_PARTBIN, dcaddr, (addr + size) - i, i, (addr + size) - i);
+	    }
+
+      dcaddr += 1024;
+
+    	/* give the DC a chance to empty its rx fifo
+    	 * this increases transfer rate on 100mbit by about 3.4x
+    	 */
+    	count++;
+    	if (count == rx_fifo_delay_count)
+      {
+  	    start = time_in_usec();
+  	    while ((time_in_usec() - start) < rx_fifo_delay);
+  		  count = 0;
+      }
     }
 
     start = time_in_usec();

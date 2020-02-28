@@ -7,18 +7,24 @@
 #include <string.h>
 #include "packet.h"
 #include "net.h"
-//#include "adapter.h" // already in lan_adapter.h
+#include "adapter.h"
 #include "lan_adapter.h"
 #include "dcload.h" // clear_lines is in here
 #include "video.h" // for draw_string
 
 #include "dhcp.h"
+#include "memfuncs.h"
 
-// Here's a datasheet for the FUJITSU MB86967 chip: https://pdf1.alldatasheet.com/datasheet-pdf/view/61702/FUJITSU/MB86967.html
-
-// For debugging LAN Adapter driver (may not compile on GCC < 9, and GCC 9 needs
-// to use -Os or the binary will be too big)
-#define LAN_ADAPTER_DEBUG
+// Here's a datasheet for the FUJITSU MB86967 chip:
+// https://pdf1.alldatasheet.com/datasheet-pdf/view/61702/FUJITSU/MB86967.html
+// Fun fact: Sega did not physically wire the upper 8 bits of the data transfer
+// bus, so although the MB86967 can do 16-bit data transfers, the pins are just
+// not hooked up to do it! So packets need to be transfered one byte at a time
+// to and from the LAN Adapter.
+//
+// Also, the LAN Adapter operates in ISA bus mode, not PC Card mode.
+//
+// --Moopthehedgehog
 
 static volatile unsigned char lan_link_up = 0;
 // This needs to persist across program loads and resets, so it needs to go in .data section
@@ -43,19 +49,7 @@ static vuint8 *xpc = REGC(0xa0600000);
 static vuint16 *xps = REGS(0xa0600000);
 static vuint32 *xpl = REGL(0xa0600000);
 #define REG(x) ( xpc[(x)*4 + 0x400] )
-#define REG16(x) ( xps[(x)*2 + 0x400/2] )
 #define REGW(x) ( xpc[(x)*4 + 0x400] )
-#define REGW16(x) ( xps[(x)*2 + 0x400/2] )
-// The REGx16 ones are for BMPR8 in 16-bit mode only
-
-/* This is based on the JLI EEPROM reader from FreeBSD. EEPROM in the
-   Sega adapter is a bit simpler than what is described in the Fujitsu
-   manual -- it appears to contain only the MAC address and not a base
-   address like the manual says. EEPROM is read one bit (!) at a time
-   through the EEPROM interface port. */
-#define FE_B16_SELECT	0x20		/* EEPROM chip select */
-#define FE_B16_CLOCK	0x40		/* EEPROM shift clock */
-#define FE_B17_DATA	0x80		/* EEPROM data bit */
 
 static void net_strobe_eeprom() {
 	REGW(16) = FE_B16_SELECT;
@@ -133,8 +127,8 @@ static void net_sleep_ms(int ms) {
 #ifdef LAN_ADAPTER_DEBUG
 
 static void disp_status2(const char * status) {
-	clear_lines(174, 24, LAN_BG_COLOR);
-	draw_string(30, 174, status, STR_COLOR);
+	clear_lines(222, 24, LAN_BG_COLOR);
+	draw_string(30, 222, status, STR_COLOR);
 }
 #define DEBUG(s) disp_status2(s)
 
@@ -183,17 +177,9 @@ static int bb_detect() {
 	DEBUG("bb_detect exited, success\r\n");
 	bb_started = 1;
 	global_bg_color = LAN_BG_COLOR;
+	installed_adapter = LAN_MODEL;
 	return 0;
 }
-
-// Sega uses 100ns SRAM in DP2 for LAN...
-// clear ENA DLC, 150ns SRAM, 8-bit packet transfer bus mode, 4kB buffer (2kB per bank x 2 banks), 32kB external buffer memory
-//#define DLCR6_FLAGS 0x36
-// clear ENA DLC, 100ns SRAM, 8-bit packet transfer bus mode, 4kB buffer (2kB per bank x 2 banks), 32kB external buffer memory
-#define DLCR6_FLAGS 0x76
-// clear ENA DLC, 100ns SRAM, 16-bit packet transfer bus mode, 4kB buffer (2kB per bank x 2 banks), 32kB external buffer memory
-//#define DLCR6_FLAGS 0x56
-// NOTE: The adapter's SRAM, M5M5278DVP, is 32kB.
 
 /* Reset the lan adapter and set it up for send/receive */
 static int bb_init() {
@@ -236,7 +222,6 @@ static int bb_init() {
 	net_sleep_ms(2);
 
 	/* Power up the chip */
-	// Also use little endian data mode, which does not byte swap (doesn't matter if using 8-bit mode, though)
 	// And otherwise set the default values
 	net_sleep_ms(2);
 	REGW(7) = (REG(7) & 0xc0) | 0x20;
@@ -338,7 +323,9 @@ void bb_stop() {
 	DEBUG("bb_stop exited\r\n");
 }
 
-static unsigned int total_pkts_rx = 0, total_pkts_tx = 0;
+// For stats
+//static unsigned int total_pkts_rx = 0, total_pkts_tx = 0;
+
 // Display stats if so desired
 /* static void draw_total() {
 	char buffer[16];
@@ -370,9 +357,8 @@ static int bb_tx(unsigned char *pkt, int len) {
 			;
 	}
 
-	len &= 0x07ff; // max length is 11 bits, meaning 4095 byte packets
-	// 4094 is the max size in 16-bit mode... but it does not really matter
-	// since a standard packet maxes at a grand total of 1514 bytes anyways.
+	len &= 0x07ff; // max length is 11 bits, meaning 4095 byte packets...but it does
+	// not really matter since a standard packet maxes at a grand total of 1514 bytes anyways.
 
 	/* Wait for queue to empty */
  // Not necessary in dual-bank mode
@@ -388,39 +374,26 @@ static int bb_tx(unsigned char *pkt, int len) {
 	/* Is the length less than the minimum? */
 	if (len < 60) {
 		/* Pad packets to minimum length of 60 bytes */
-		memset(tx_small_packet_zero_buffer, 0, 60); // Zero out our small packet buffer
-		memcpy(tx_small_packet_zero_buffer, pkt, len); // Copy the data to the small packet buffer
+		memset_zeroes_64bit(raw_tx_small_packet_zero_buffer, 64/8); // Zero out our small packet buffer
+//		memcpy(tx_small_packet_zero_buffer, pkt, len); // Copy the data to the small packet buffer
+		// Copy data up to 8 byte alignment, then do 8-byte aligned copy
+		memcpy_16bit(tx_small_packet_zero_buffer, pkt, 6/2);
+		SH4_aligned_memcpy(tx_small_packet_zero_buffer + 6, pkt + 6, len - 6);
 		len = 60;
 		pkt = tx_small_packet_zero_buffer; // Small packet buffer has the data and padding bytes
 		// NOTE: The reason this is hardcoded to 60 is because the minimum frame
 		// size allowed is 46 bytes + 14 byte ethernet header.
 	}
-	else if(len & 1)
-	{
-		// This is a very dcload-specific thing, since we reuse the transmit buffer
-		// and we need to write an even number of bytes in 16-bit mode: append a zero
-		// to odd-sized packets.
-		pkt[len] = 0;
-		len++;
-	}
 
 	/* Poke the length */
-
 	REGW(8) = (len & 0x00ff);
 	REGW(8) = (len & 0xff00) >> 8;
-
-//	unsigned short len16 = (unsigned short)len; // length is number of bytes, even in 16-bit mode
-//	REGW16(8) = htons(len16);
 
 	// Is this really how the lan adapter transfers packet data to its internal transmit buffer?
 	// Wow.
 	/* Write the packet */
-
 	for (i=0; i<len; i++)
 		REGW(8) = pkt[i];
-
-//	for (i=0; i<len; i+=2)
-//		REGW16(8) = ((unsigned short*)pkt)[i];
 
 	// This will be blocked on the first transmit because setting ENA DLC (REG(6) bit 0x80) clears TMT OK...
 	// So keep track of whether this is the first transmit or not
@@ -440,7 +413,8 @@ static int bb_tx(unsigned char *pkt, int len) {
 	/* Start the transmitter */
 	REGW(10) = 0x80 | 1;	/* 1 packet, 0x80 = start */
 
-	total_pkts_tx++;
+// For stats
+//	total_pkts_tx++;
 	/* if (!running)
 		draw_total(); */
 
@@ -449,7 +423,8 @@ static int bb_tx(unsigned char *pkt, int len) {
 }
 
 /* Check for received packets */
-static int bb_rx() {
+static int bb_rx()
+{
 	int i, len, count;
 	unsigned short status;
 
@@ -462,54 +437,50 @@ static int bb_rx() {
 			;
 	}
 
-	for (count = 0; ; count++) {
+	for (count = 0; ; count++)
+	{
+
 		/* Is the buffer empty? */
-		if (REG(5) & 0x40) {
+		if(REG(5) & 0x40)
+		{
 			DEBUG("bb_rx exited, no more packets\r\n");
 			return count;
 		}
 
 		/* Get the receive status byte */
-
 		status = REG(8);
 		(void)REG(8);
 
-//		status = ntohs(REG16(8));
-
 		/* Get the packet length */
 		// This value is always in bytes
-
 		len = REG(8);
 		len |= REG(8) << 8;
 
-//		len = ntohs(REG16(8));
-
 		/* Check for errors */
-		// TODO darc might get a receive error if REG16 works
-		// actually, maybe not because status byte I think may be the LSB
-		if ( (status & 0xF0) != 0x20 ) {
+		if(__builtin_expect((status & 0x3e) != 0x20, 0))
+		{
 			DEBUG("bb_rx exited: error\r\n");
 			return -1;
 		}
 
 		/* Read the packet */
-		if (len > RX_PKT_BUF_SIZE) {
+		if(__builtin_expect(len > RX_PKT_BUF_SIZE, 0))
+		{
 			DEBUG("bb_rx exited: big packet\r\n");
 			return -2;
 		}
 
-		for (i=0; i<len; i++) {
+		// This loop is dumb, but we are able to max out the LAN adapter with it, so that's neat
+		for (i=0; i<len; i++)
+		{
 			current_pkt[i] = REG(8);
 		}
-
-//		for (i=0; i<len; i+=2) {
-//			((unsigned short*)current_pkt)[i] = REG16(8);
-//		}
 
 		/* Submit it for processing */
 		process_pkt(current_pkt);
 
-		total_pkts_rx++;
+// For stats
+//		total_pkts_rx++;
 		/* if (!running)
 			draw_total(); */
 	}
@@ -551,7 +522,7 @@ static void bb_loop(int is_main_loop) {
 		if(REG(1) & 0x80) // Do we have a packet in the receive buffer?
 		{
 			result = bb_rx();
-			if ((result < 0) && booted && (!running))
+			if(__builtin_expect((result < 0) && booted && (!running), 0))
 			{
 				clear_lines(320, 24, LAN_BG_COLOR);
 				draw_string(30, 320, "receive error!", 0xffff);
@@ -562,7 +533,7 @@ static void bb_loop(int is_main_loop) {
 
 		// Check for ethernet cable
 		// 10Base-T heartbeat signal is this chip's LINK FAIL mechanism, not the "carrier sense" stuff
-		if(REG(15) & 0x40)
+		if(__builtin_expect(REG(15) & 0x40, 0))
 		{
 			if ((!link_change_message) && booted && (!running))
 			{
@@ -576,7 +547,7 @@ static void bb_loop(int is_main_loop) {
 			// No link
 			lan_link_up = 0;
 		}
-		else if(!lan_link_up)
+		else if(__builtin_expect(!lan_link_up, 0))
 		{
 			// There is an excellent thread on U-Boot's mailing list about how long to
 			// wait for autonegotiation to complete:
@@ -598,9 +569,6 @@ static void bb_loop(int is_main_loop) {
 			{
 				net_sleep_ms(115); // 0.1 sec
 			}
-			// ...It seems as though this delay, when returning from a program, shows up
-			// BEFORE the screen gets re-initted. So it seems like there is a 2-second
-			// pause before dcload comes back.
 
 			if (booted && (!running))
 			{
@@ -634,7 +602,7 @@ static void bb_loop(int is_main_loop) {
 }
 
 adapter_t adapter_la = {
-	"Lan Adapter (HIT-0300)",
+	"LAN Adapter (HIT-0300)",
 	{ 0 },		// Mac address
 	bb_detect,
 	bb_init,

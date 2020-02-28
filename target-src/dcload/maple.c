@@ -10,7 +10,8 @@
  */
 
 #include "maple.h"
-#include <string.h>
+//#include <string.h>
+#include "memfuncs.h"
 
 #define MAPLE(x) (*((volatile unsigned long *)(0xa05f6c00+(x))))
 
@@ -119,7 +120,10 @@ void *maple_docmd(int port, int unit, int cmd, int datalen, void *data)
 
   /* Copy parameter data, if any */
   if(datalen > 0) {
-    memcpy(sendbuf, data, datalen << 2);
+//    memcpy(sendbuf, data, datalen << 2); // sendbuf is 32-byte aligned, offset by 12. data is 8-byte aligned, offset by 4
+    // So memcpy_32bit the first 4 bytes to make it all 8-byte aligned (sendbuf will be 16-byte aligned, but that's fine, too)
+    memcpy_32bit(sendbuf, data, 4/4);
+    SH4_aligned_memcpy((unsigned char *)sendbuf + 4, (unsigned char *)data + 4, datalen - 1);
   }
 
   /* Frame is finished, and DMA list is terminated with the flag bit.
