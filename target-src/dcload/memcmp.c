@@ -1,105 +1,63 @@
-/*
-FUNCTION
-        <<memcmp>>---compare two memory areas
-
-INDEX
-        memcmp
-
-ANSI_SYNOPSIS
-        #include <string.h>
-        int memcmp(const void *<[s1]>, const void *<[s2]>, size_t <[n]>);
-
-TRAD_SYNOPSIS
-        #include <string.h>
-        int memcmp(<[s1]>, <[s2]>, <[n]>)
-        void *<[s1]>;
-        void *<[s2]>;
-        size_t <[n]>;
-
-DESCRIPTION
-        This function compares not more than <[n]> characters of the
-        object pointed to by <[s1]> with the object pointed to by <[s2]>.
-
-
-RETURNS
-        The function returns an integer greater than, equal to or
-        less than zero according to whether the object pointed to by
-        <[s1]> is greater than, equal to or less than the object
-        pointed to by <[s2]>.
-
-PORTABILITY
-<<memcmp>> is ANSI C.
-
-<<memcmp>> requires no supporting OS subroutines.
-
-QUICKREF
-        memcmp ansi pure
-*/
+/* Public Domain memcmp, memset, and memmove */
+// GCC needs these functions (and memcpy) to exist somewhere when using -ffreestanding.
+// These are just small ones that don't take up very much space. They aren't exactly the fastest
+// ones as a result, but dcload has fast ones defined in adapter.h. :)
 
 #include <string.h>
 
-
-/* Nonzero if either X or Y is not aligned on a "long" boundary.  */
-#define UNALIGNED(X, Y) \
-  (((long)X & (sizeof (long) - 1)) | ((long)Y & (sizeof (long) - 1)))
-
-/* How many bytes are copied each iteration of the word copy loop.  */
-#define LBLOCKSIZE (sizeof (long))
-
-/* Threshhold for punting to the byte copier.  */
-#define TOO_SMALL(LEN)  ((LEN) < LBLOCKSIZE)
-
-int
-_DEFUN(memcmp, (m1, m2, n),
-       _CONST _PTR m1 _AND _CONST _PTR m2 _AND size_t n)
+// dcload doesn't need a fancy one here (it already has two in adapter.h).
+// Return values: -1 -> str1 is less, 0 -> equal, 1 -> str1 is greater.
+int _DEFUN(memcmp, (str1, str2, count), _CONST _PTR str1 _AND _CONST _PTR str2 _AND size_t count)
 {
-#if defined(PREFER_SIZE_OVER_SPEED) || defined(__OPTIMIZE_SIZE__)
-	unsigned char *s1 = (unsigned char *) m1;
-	unsigned char *s2 = (unsigned char *) m2;
+  const unsigned char *s1 = (unsigned char *)str1;
+  const unsigned char *s2 = (unsigned char *)str2;
 
-	while (n--) {
-		if (*s1 != *s2) {
-			return *s1 - *s2;
-		}
-		s1++;
-		s2++;
-	}
-	return 0;
-#else
-	unsigned char *s1 = (unsigned char *) m1;
-	unsigned char *s2 = (unsigned char *) m2;
-	unsigned long *a1;
-	unsigned long *a2;
+  while (count--)
+  {
+    if (*s1++ != *s2++)
+    {
+      return s1[-1] < s2[-1] ? -1 : 1;
+    }
+  }
 
-	/* If the size is too small, or either pointer is unaligned,
-	then we punt to the byte compare loop.  Hopefully this will
-	not turn up in inner loops.  */
-	if (!TOO_SMALL(n) && !UNALIGNED(s1, s2)) {
-		/* Otherwise, load and compare the blocks of memory one
-		word at a time.  */
-		a1 = (unsigned long *) s1;
-		a2 = (unsigned long *) s2;
-		while (n >= LBLOCKSIZE) {
-			if (*a1 != *a2)
-				break;
-			a1++;
-			a2++;
-			n -= LBLOCKSIZE;
-		}
+  return 0;
+}
 
-		/* check m mod LBLOCKSIZE remaining characters */
+// Returns a pointer to dest
+_PTR _DEFUN(memset, (dest, val, len), _PTR dest _AND int val _AND size_t len)
+{
+  unsigned char *ptr = (unsigned char*)dest;
 
-		s1 = (unsigned char *) a1;
-		s2 = (unsigned char *) a2;
-	}
+  while (len--)
+  {
+    *ptr++ = val;
+  }
 
-	while (n--) {
-		if (*s1 != *s2)
-			return *s1 - *s2;
-		s1++;
-		s2++;
-	}
+  return dest;
+}
 
-	return 0;
-#endif /* not PREFER_SIZE_OVER_SPEED */
+// Returns a pointer to dest, and this *does* handle overlapping memory regions
+_PTR _DEFUN(memmove, (dest, src, len), _PTR dest _AND _CONST _PTR src _AND size_t len)
+{
+  const char *s = (char *)src;
+  char *d = (char *)dest;
+
+  const char *nexts = s + len;
+  char *nextd = d + len;
+
+  if (d < s)
+  {
+    while (d != nextd)
+    {
+      *d++ = *s++;
+    }
+  }
+  else
+  {
+    while (nextd != d)
+    {
+      *--nextd = *--nexts;
+    }
+  }
+  return dest;
 }

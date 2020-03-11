@@ -61,7 +61,7 @@ typedef struct __attribute__ ((packed)) {
 	unsigned short checksum;
 } ip_udp_pseudo_header_t;
 
-unsigned short checksum(unsigned short *buf, int count);
+unsigned short checksum(unsigned short *buf, int count, int is_odd);
 unsigned short checksum_udp(unsigned short *buf_pseudo, unsigned short *buf_data, int datacount, int is_odd); // For is odd, pass length%2 where datacount is length/2 (remember: integer divdes)
 void make_ether(unsigned char *dest, unsigned char *src, ether_header_t *ether);
 void make_ip(int dest, int src, int length, char protocol, ip_header_t *ip);

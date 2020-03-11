@@ -5,7 +5,7 @@
 // 'KallistiOS stuff', which is specifically KOS-licensed, to be in the public
 // domain. It would always be great to give credit back to the original source!!
 //
-// Note that DCLOAD-IP is actually GPLv2 licensed, and both public domain and
+// Note that dcload-ip is actually GPLv2 licensed, and both public domain and
 // KOS-licensed code are compatible with that.
 //
 // --Moopthehedgehog
@@ -26,6 +26,7 @@
 #include "adapter.h"
 #include "dhcp.h"
 #include "perfctr.h"
+#include "memfuncs.h"
 #include "dcload.h"
 
 // Need to uniquely identify renewal in build_send_dhcp_packet(),
@@ -71,10 +72,13 @@ static unsigned char router_mac[6] = {0}; // BE
 
 static volatile unsigned int time_array[2] = {0};
 
-//unsigned char dhcp_pkt_buf[1514] = {0};
 #define DHCP_TX_PKT_BUF_SIZE TX_PKT_BUF_SIZE
 #define dhcp_pkt_buf pkt_buf
 // Save 1.5kB of space by reusing an existing packet buffer!
+
+// Small optimization: both TX packets are 342 bytes, round to nearest multiple of 8 bytes for zeroing
+// Don't forget tx buffer is offset by 2, so 344, which is actually exactly a multiple of 8. Perfect!
+#define DHCP_TX_PKT_BUF_ZEROING_SIZE 344
 
 static unsigned int get_some_time(int which)
 {
@@ -329,7 +333,8 @@ int dhcp_renew(unsigned int *dhcp_ip_address_buffer)
 // Heavily modified from KOS
 static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint8 msgtype)
 {
-		memset(dhcp_pkt_buf, 0, DHCP_TX_PKT_BUF_SIZE); // Zero out the TX packet buffer, that way we don't need to explicitly set zeros later
+		// Zero out the TX packet buffer, that way we don't need to explicitly set zeros later
+		memset_zeroes_64bit(raw_pkt_buf, DHCP_TX_PKT_BUF_ZEROING_SIZE/8);
 
 		uint32 serverid = 0, reqip = 0;
     int pos = 0;
@@ -413,10 +418,10 @@ static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint
     req->options[pos++] = (1500 >> 8) & 0xFF;
     req->options[pos++] = (1500 >> 0) & 0xFF;
 
-    /* Host Name: DCLoad-IP */
+    /* Host Name: dcload-ip */
     req->options[pos++] = DHCP_OPTION_HOST_NAME;
     req->options[pos++] = 9; /* Length = 9 */
-    memcpy((char *)req->options + pos, "DCLoad-IP", 9);
+    memcpy((char *)req->options + pos, "dcload-ip", 9);
     pos += 9;
 
     /* Client Identifier: The network adapter's MAC address */

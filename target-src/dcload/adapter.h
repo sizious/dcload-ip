@@ -1,6 +1,16 @@
 #ifndef __ADAPTER_H__
 #define __ADAPTER_H__
 
+// Raw receive buffer array size
+// 1514 bytes is not a multiple of 8.
+// Ethernet header (14) + ip header (20) + udp header (8) + command struct (12) = 54 bytes before command->data
+// So to align the actual command->data to 8 bytes, need to align the array to 8 bytes and offset the start
+// by 2 bytes. 1516 - 2 = 1514, and 54 bytes later (56 bytes from the start of the array) is aligned to 8 bytes since 56 = 8 * 7.
+// Also: ip header is aligned to 8 bytes, udp/icmp header is aligned to 4 bytes, and command struct (or other payload header) is aligned to 4 bytes
+//#define RAW_RX_PKT_BUF_SIZE 1516
+#define RAW_RX_PKT_BUF_SIZE 1520
+
+// Receive buffer size
 #define RX_PKT_BUF_SIZE 1514
 
 // Defines a "network adapter". There will be one of these for each of the
@@ -36,11 +46,45 @@ int adapter_detect();
 
 // The configured adapter, to be used in all other funcs.
 extern adapter_t * bb;
+extern adapter_t adapter_la;
+extern adapter_t adapter_bba;
 
 // Set this variable to non-zero if you want the loop to exit.
 extern volatile unsigned char escape_loop;
 
 // All adapter drivers should use this shared buffer to receive.
-extern unsigned char current_pkt[RX_PKT_BUF_SIZE];
+extern unsigned char raw_current_pkt[RAW_RX_PKT_BUF_SIZE];
+extern unsigned char * current_pkt;
+
+extern unsigned char raw_tx_small_packet_zero_buffer[64];
+extern unsigned char * tx_small_packet_zero_buffer;
+
+/*
+// This is useful code to use the perf counters to time stuff (cycle count)
+// Using the DCLOAD PMCR in CPU Cycle mode, 1 count = 1 cycle = roughly 5ns (really 1/199.5MHz)
+
+#define LOOP_TIMING
+
+#ifdef LOOP_TIMING
+#include "perfctr.h"
+#include "video.h"
+static unsigned int first_array[2] = {0};
+static unsigned int second_array[2] = {0};
+static char uint_string_array[9] = {0};
+#endif
+
+#ifdef LOOP_TIMING
+    PMCR_Read(DCLOAD_PMCR, first_array);
+#endif
+
+#ifdef LOOP_TIMING
+		PMCR_Read(DCLOAD_PMCR, second_array);
+		unsigned int loop_difference = (unsigned int)(*(unsigned long long int*)second_array - *(unsigned long long int*)first_array);
+
+		clear_lines(222, 24, global_bg_color);
+		uint_to_string(loop_difference, (unsigned char*)uint_string_array);
+		draw_string(30, 222, uint_string_array, STR_COLOR);
+#endif
+*/
 
 #endif

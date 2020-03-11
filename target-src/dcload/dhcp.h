@@ -5,7 +5,7 @@
 // 'KallistiOS stuff', which is specifically KOS-licensed, to be in the public
 // domain. It would always be great to give credit back to the original source!!
 //
-// Note that DCLOAD-IP is actually GPLv2 licensed, and both public domain and
+// Note that dcload-ip is actually GPLv2 licensed, and both public domain and
 // KOS-licensed code are compatible with that.
 //
 // --Moopthehedgehog

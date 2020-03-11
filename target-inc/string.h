@@ -21,18 +21,18 @@ extern "C" {
 #endif
 
 // Used = used by & defined in dcload-ip. They may have certain restrictions
-// (e.g. memset() defined in memset.s certainly does. See memset.s for details).
+// (e.g. memcpy() defined in memcpy.S certainly does. See memcpy.S for details).
 // All the other, unmarked functions are not defined and can't be used.
 // Looks like string.h is just here for convenient prototypes or something.
 
 _PTR 	 _EXFUN(memchr,(const _PTR, int, size_t));
 
-int 	 _EXFUN(memcmp,(const _PTR, const _PTR, size_t)); // Used
+int 	 _EXFUN(memcmp,(const _PTR, const _PTR, size_t)); // Not used, but needed by GCC
 _PTR 	 _EXFUN(memcpy,(_PTR, const _PTR, size_t)); // Used
 
-_PTR	 _EXFUN(memmove,(_PTR, const _PTR, size_t));
+_PTR	 _EXFUN(memmove,(_PTR, const _PTR, size_t)); // Not used, but needed by GCC
 
-_PTR	 _EXFUN(memset,(_PTR, int, size_t)); // Used
+_PTR	 _EXFUN(memset,(_PTR, int, size_t)); // Not used, but needed by GCC
 
 char 	*_EXFUN(strcat,(char *, const char *));
 char 	*_EXFUN(strchr,(const char *, int));
