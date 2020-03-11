@@ -46,6 +46,15 @@ WHAT'S NEW IN 1.1.0
   it's probably more like 20-30. The whole Dreamcast side of the program got a
   pretty major backend overhaul. [Moopthehedgehog]
 
+WHAT'S NEW IN 1.0.6
+
+* Complete redesign of the build system and compatibility improvements for
+  various OS, including: BSD (FreeBSD), GNU/Linux (Debian/Ubuntu), macOS, 
+  MinGW/MSYS (i.e. DreamSDK), MinGW-w64/MSYS2 and Cygwin. The build system is
+  now shared between dcload-ip and dcload-serial. [SiZiOUS]
+* Various improvements on the GDB remote debugging feature. [SiZiOUS]
+* Some minor fixes. [SiZiOUS]
+
 WHAT'S NEW IN 1.0.5
 
 * Maple passthrough support.
