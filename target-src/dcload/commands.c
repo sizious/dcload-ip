@@ -13,6 +13,7 @@
 #include "maple.h"
 
 #include "perfctr.h"
+#include "memfuncs.h"
 
 volatile unsigned int our_ip = 0; // To be clear, this needs to be zero for init. Make that explicit here. Also, this value should be kept LE.
 unsigned int tool_ip = 0;
@@ -29,7 +30,8 @@ typedef struct {
 	unsigned char map[BIN_INFO_MAP_SIZE];
 } bin_info_t;
 
-static bin_info_t bin_info; // Here's a global array. This one is massive, but please don't shrink it. It's meant to act as a map where each 1024B maps into 16MB RAM, and 1024B fits into a packet...
+// Align huge map array to 8 bytes (it's already after 2x unsigned ints)
+__attribute__((aligned(8))) static bin_info_t bin_info; // Here's a global array. This one is massive, but please don't shrink it. It's meant to act as a map where each 1024B maps into 16MB RAM, and 1024B fits into a packet...
 
 //unsigned char buffer[COMMAND_LEN + 1024]; /* buffer for response */
 // pkt_buf is plenty big enough. The headers take up 42 bytes of 1514. :) Needs to be a local variable, though.
@@ -53,7 +55,7 @@ void cmd_execute(ether_header_t * ether, ip_header_t * ip, udp_header_t * udp, c
 		our_ip = ntohl(ip->dest);
 
 		make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
-		make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) command, COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 0);
+		make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) command, COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 0); // _0_
 		bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
 
 		if (!booted)
@@ -82,12 +84,12 @@ void cmd_loadbin(ip_header_t * ip, udp_header_t * udp, command_t * command)
 {
 	bin_info.load_address = ntohl(command->address);
 	bin_info.load_size = ntohl(command->size);
-	memset(bin_info.map, 0, BIN_INFO_MAP_SIZE);
+	memset_zeroes_64bit(bin_info.map, BIN_INFO_MAP_SIZE/8);
 
 	our_ip = ntohl(ip->dest);
 
 	make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
-	make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) command, COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 0);
+	make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) command, COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 0); // _0_
 	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
 
 	if (!running) {
@@ -100,10 +102,14 @@ void cmd_loadbin(ip_header_t * ip, udp_header_t * udp, command_t * command)
 void cmd_partbin(command_t * command)
 {
 	int index = 0;
+	unsigned int cmd_addr = ntohl(command->address);
 
-	memcpy((unsigned char *)ntohl(command->address), command->data, ntohl(command->size));
+	// Thanks to packet buffer alignment, command->data is guaranteed to be 8-byte aligned.
+	// If the destination address is 8-byte aligned, this will be a rocket.
+//	memcpy((unsigned char *)cmd_addr, command->data, ntohl(command->size));
+	SH4_aligned_memcpy((unsigned char *)cmd_addr, command->data, ntohl(command->size));
 
-	index = (ntohl(command->address) - bin_info.load_address) >> 10;
+	index = (cmd_addr - bin_info.load_address) >> 10;
 	bin_info.map[index] = 1;
 }
 
@@ -123,7 +129,7 @@ void cmd_donebin(ip_header_t * ip, udp_header_t * udp, command_t * command)
 	}
 
 	make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
-	make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) command, COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 0);
+	make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) command, COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 0); // _0_
 	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
 
 	if (!running) {
@@ -148,15 +154,20 @@ void cmd_sendbinq(ip_header_t * ip, udp_header_t * udp, command_t * command)
 	ptr = (unsigned char *)ntohl(command->address);
 
 	memcpy(response->id, CMD_SENDBIN, 4);
-	for(i = 0; i < numpackets; i++) {
+	for(i = 0; i < numpackets; i++)
+	{
 		if (bytes_left >= 1024)
 			bytes_thistime = 1024;
 		else
 			bytes_thistime = bytes_left;
 		bytes_left -= bytes_thistime;
 
+		// By aligning the transmit buffer, response->data is always aligned to 8 bytes.
+		// ptr may or may not be, but if it is, this will be a rocket.
+//		memcpy(response->data, ptr, bytes_thistime);
+		SH4_aligned_memcpy(response->data, ptr, bytes_thistime);
+
 		response->address = htonl((unsigned int)ptr);
-		memcpy(response->data, ptr, bytes_thistime);
 		response->size = htonl(bytes_thistime);
 		make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN + bytes_thistime, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
 		make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) response, COMMAND_LEN + bytes_thistime, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 1); // 1
@@ -191,25 +202,37 @@ void cmd_sendbin(ip_header_t * ip, udp_header_t * udp, command_t * command)
 
 void cmd_version(ip_header_t * ip, udp_header_t * udp, command_t * command)
 {
-	int i;
+	int datalength, j;
 	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
 	command_t * response = (command_t *)buffer;
 
-	i = strlen("DCLOAD-IP " DCLOAD_VERSION) + 1;
+	datalength = strlen("dcload-ip " DCLOAD_VERSION " using "); // no '+1' because adapter name will be appended
 	memcpy(response, command, COMMAND_LEN);
-	//strcpy(response->data, "DCLOAD-IP " DCLOAD_VERSION); // There is no strcpy
-	memcpy(response->data, "DCLOAD-IP " DCLOAD_VERSION, i);
-	response->size = htonl(i);
-	make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN + i, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
-	make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) response, COMMAND_LEN + i, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 1); // 1
-	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN + i);
+	memcpy(response->data, "dcload-ip " DCLOAD_VERSION " using ", datalength);
+
+	// Append adapter type
+	j = strlen(bb->name) + 1;
+	// the 'data' member is an unsigned char pointer
+	memcpy(response->data + datalength, bb->name, j);
+
+	datalength += j;
+
+	response->size = htonl(datalength);
+	// Stuff the adapter type inside the otherwise unused address field. :)
+	// Added in version 1.1.2 for dc-tool-ip to be able to do performance tuning
+	// based on which adapter is installed.
+	response->address = htonl(installed_adapter);
+
+	make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN + datalength, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
+	make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) response, COMMAND_LEN + datalength, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 1); // 1
+	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN + datalength);
 }
 
 void cmd_retval(ip_header_t * ip, udp_header_t * udp, command_t * command)
 {
 	if (running) {
 		make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
-		make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) command, COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 0);
+		make_udp(ntohs(udp->src), ntohs(udp->dest),(unsigned char *) command, COMMAND_LEN, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 0); // _0_
 		bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
 
 		bb->stop();
@@ -236,7 +259,10 @@ void cmd_maple(ip_header_t * ip, udp_header_t * udp, command_t * command) {
 	/* Send response back over socket */
 	i = ((res[0] < 0) ? 4 : ((res[3] + 1) << 2));
 	response->size = htonl(i);
-	memcpy(response->data, res, i);
+	// By aligning the transmit buffer, response->data is always aligned to 8 bytes.
+	// ptr may or may not be, but if it is, this will be a rocket.
+//	memcpy(response->data, res, i);
+	SH4_aligned_memcpy(response->data, res, i);
 	make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN + i, IP_UDP_PROTOCOL, (ip_header_t *)(pkt_buf + ETHER_H_LEN));
 	make_udp(ntohs(udp->src), ntohs(udp->dest), (unsigned char *)response, COMMAND_LEN + i, (ip_header_t *)(pkt_buf + ETHER_H_LEN), (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN), 1); // 1
 	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN + i);

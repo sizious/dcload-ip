@@ -17,6 +17,7 @@
 //
 
 #if __GNUC__ <= 4
+extern void __set_fpscr(unsigned int value);
 
 void __call_builtin_sh_set_fpscr(unsigned int value)
 {

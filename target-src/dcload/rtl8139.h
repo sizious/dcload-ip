@@ -1,8 +1,6 @@
 #ifndef __RTL8139_H__
 #define __RTL8139_H__
 
-#include "adapter.h"
-
 /* RTL8139C register definitions */
 #define RT_IDR0                0x00       /* Mac address */
 #define RT_MAR0                0x08       /* Multicast filter */
@@ -86,7 +84,11 @@
 
 /* Configuration definitions */
 // RTL8139 RX buffer size. DCLOAD uses 16kB.
-#define RX_BUFFER_LEN        16384
+// Well, it used to. It's using 32kB now.
+//#define RX_BUFFER_LEN        16384
+#define RX_BUFFER_LEN        32768
+
+#define GAPSPCI_ID "GAPSPCI_BRIDGE_2"
 
 /* RTL8139C Config/Status info */
 typedef struct {
@@ -94,7 +96,5 @@ typedef struct {
 	unsigned short cur_tx;                /* Current available Tx slot */
 	unsigned char  mac[6];                /* Mac address */
 } rtl_status_t;
-
-extern adapter_t adapter_bba;
 
 #endif

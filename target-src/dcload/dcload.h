@@ -1,7 +1,9 @@
 #ifndef __DCLOAD_H__
 #define __DCLOAD_H__
 
+//==============================================================================
 // ---- Start of user-changeable definitions ----
+//==============================================================================
 
 // Desired on-screen refresh interval for DHCP lease time
 // In seconds, minimum is 1 second.
@@ -14,7 +16,13 @@
 #define DCLOAD_PMCR 1
 
 // Background color
-#define BG_COLOR 0x0010
+// In RGB0555 format
+// BBA default blue is 0x0010
+// LAN default green is 0x0100
+// Error default red is 0x2000
+#define BBA_BG_COLOR 0x0010
+#define LAN_BG_COLOR 0x0100
+#define ERROR_BG_COLOR 0x2000
 
 // String color (0xffff = white)
 #define STR_COLOR 0xffff
@@ -74,11 +82,18 @@
 // all SH7091 CPUs (works on mine).
 //#define UNDEFINED_DOUBLES
 
+//==============================================================================
 // ---- End of user-changeable definitions ----
+//==============================================================================
+
+#define LAN_MODEL 0300
+#define BBA_MODEL 0400
 
 // Globally-important variables
 extern volatile unsigned char booted;
 extern volatile unsigned char running;
+extern volatile unsigned int global_bg_color;
+extern volatile unsigned int installed_adapter;
 
 // Called by asm functions
 char * exception_code_to_string(unsigned int expevt);

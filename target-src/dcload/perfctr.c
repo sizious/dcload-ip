@@ -7,7 +7,12 @@
 // The performance counter module is hereby released into the public domain in
 // the hope that it may prove useful. Now go profile some code and hit 60 fps! :)
 //
+// This file has been adapted to meet the specific needs of dcload. Namely, the
+// PMCR_Read() function uses an array to store values. This allows data to persist
+// across program loads, since the entirety of dcload is technically "volatile."
+//
 // --Moopthehedgehog
+//
 
 // See perfctr.h for more of my notes and documentation on these counters.
 #include "perfctr.h"
@@ -89,19 +94,17 @@ void PMCR_Enable(int which, unsigned short mode, unsigned char count_type, unsig
 // #define PMCTR2H_REG 0xFF10000C
 // #define PMCTR2L_REG 0xFF100010
 
-static const unsigned int pmcr1_regh = PMCTR1H_REG;
-static const unsigned int pmcr1_regl = PMCTR1L_REG;
-
-static const unsigned int pmcr2_regh = PMCTR2H_REG;
-static const unsigned int pmcr2_regl = PMCTR2L_REG;
-
 // Sorry, can only read one counter at a time!
 // out_array should be an array consisting of 2x unsigned ints.
 void PMCR_Read(int which, volatile unsigned int *out_array)
 {
- // if a pmcr is disabled, it will just return 0
+	// if a counter is disabled, it will just return 0
 
-	// little endian (big endian would need to flip [0] and [1])
+	unsigned int pmcr1_regh = PMCTR1H_REG;
+	unsigned int pmcr1_regl = PMCTR1L_REG;
+
+	unsigned int pmcr2_regh = PMCTR2H_REG;
+	unsigned int pmcr2_regl = PMCTR2L_REG;
 
 	// Note: These reads really do need to be done in assembly: unfortunately it
 	// appears that using C causes GCC to insert a branch right smack in between
@@ -117,16 +120,15 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 		// counter 1
 //		out_array[1] = *((volatile unsigned int*)PMCTR1H_REG) & 0xffff;
 //		out_array[0] = *((volatile unsigned int*)PMCTR1L_REG);
-		asm volatile("mov.l %[reg1h],r1\n\t" // load counter address (high)
-								 "mov.l %[reg1l],r2\n\t" // load counter address (low)
-								 "mov.l @r1,r1\n\t" // read counter (high)
-								 "mov.l @r2,r2\n\t" // read counter (low)
-								 "extu.w r1,r1\n\t" // zero-extend high, aka high & 0xffff
-								 "mov.l r1,%[outh]\n\t" // get data to memory
-								 "mov.l r2,%[outl]\n\t" // get data to memory
-		: [outh] "=m" (out_array[1]), [outl] "=m" (out_array[0])
-		: [reg1h] "m" (pmcr1_regh), [reg1l] "m" (pmcr1_regl) // SH4 can't mov an immediate longword into a register...
-		: "r1", "r2"
+		asm volatile(
+			"mov.l @%[reg1h],%[reg1h]\n\t" // read counter (high)
+			"mov.l @%[reg1l],%[reg1l]\n\t" // read counter (low)
+			"extu.w %[reg1h],%[reg1h]\n\t" // zero-extend high, aka high & 0xffff
+			"mov.l %[reg1h],%[outh]\n\t" // get data to memory
+			"mov.l %[reg1l],%[outl]\n\t" // get data to memory
+		: [outh] "=m" (out_array[1]), [outl] "=m" (out_array[0]), [reg1h] "+&r" (pmcr1_regh), [reg1l] "+r" (pmcr1_regl) // SH4 can't mov an immediate longword into a register...
+		: // no inputs
+		: // no clobbers
 		);
 	}
 	else if(which == 2)
@@ -134,16 +136,15 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 		// counter 2
 //		out_array[1] = *((volatile unsigned int*)PMCTR2H_REG) & 0xffff;
 //		out_array[0] = *((volatile unsigned int*)PMCTR2L_REG);
-		asm volatile("mov.l %[reg2h],r1\n\t" // load counter address (high)
-								 "mov.l %[reg2l],r2\n\t" // load counter address (low)
-								 "mov.l @r1,r1\n\t" // read counter (high)
-								 "mov.l @r2,r2\n\t" // read counter (low)
-								 "extu.w r1,r1\n\t" // zero-extend high, aka high & 0xffff
-								 "mov.l r1,%[outh]\n\t" // get data to memory
-								 "mov.l r2,%[outl]\n\t" // get data to memory
-		: [outh] "=m" (out_array[1]), [outl] "=m" (out_array[0])
-		: [reg2h] "m" (pmcr2_regh), [reg2l] "m" (pmcr2_regl) // SH4 can't mov an immediate longword into a register...
-		: "r1", "r2"
+		asm volatile(
+			"mov.l @%[reg2h],%[reg2h]\n\t" // read counter (high)
+			"mov.l @%[reg2l],%[reg2l]\n\t" // read counter (low)
+			"extu.w %[reg2h],%[reg2h]\n\t" // zero-extend high, aka high & 0xffff
+			"mov.l %[reg2h],%[outh]\n\t" // get data to memory
+			"mov.l %[reg2l],%[outl]\n\t" // get data to memory
+		: [outh] "=m" (out_array[1]), [outl] "=m" (out_array[0]), [reg2h] "+&r" (pmcr2_regh), [reg2l] "+r" (pmcr2_regl) // SH4 can't mov an immediate longword into a register...
+		: // no inputs
+		: // no clobbers
 		);
 	}
 	else // Invalid
