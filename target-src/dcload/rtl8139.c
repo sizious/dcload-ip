@@ -51,6 +51,9 @@ static void rtl_init()
 {
 	unsigned int tmp;
 
+	/* Soft-reset the chip to clear any garbage from power on */
+	rtl_reset();
+
 	/* Read MAC address */
 	// Don't need to do anything with the eeprom if we're just reading it.
 	tmp = nic32[RT_IDR0];
@@ -62,9 +65,6 @@ static void rtl_init()
 	rtl.mac[4] = tmp & 0xff;
 	rtl.mac[5] = (tmp >> 8) & 0xff;
 	memcpy(adapter_bba.mac, rtl.mac, 6);
-
-	/* Soft-reset the chip to clear any garbage from power on */
-	rtl_reset();
 
 // Why reset it twice? is this a GAPS thing?
 	/* Do another reset */
