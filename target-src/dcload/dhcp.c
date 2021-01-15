@@ -80,6 +80,7 @@ static volatile unsigned int time_array[2] = {0};
 // Don't forget tx buffer is offset by 2, so 344, which is actually exactly a multiple of 8. Perfect!
 #define DHCP_TX_PKT_BUF_ZEROING_SIZE 344
 
+// Used as a kind-of pseudo-RNG
 static unsigned int get_some_time(int which)
 {
 
@@ -143,8 +144,8 @@ static void build_send_dhcp_packet(unsigned char kind)
 	}
 
 	make_ether(dhcp_out_mac, bb->mac, dhcp_ether_header);
-	make_ip(dhcp_out_ip, our_ip, UDP_H_LEN + DHCP_PKT_LEN, IP_UDP_PROTOCOL, dhcp_ip_header); // IP header: dest & src IP addr, header length (hardcoded), packet length excluding ethernet header (IP header size hardcoded), IP protocol type
-	make_udp(DHCP_DEST_PORT, DHCP_SOURCE_PORT, dhcp_out_pkt, DHCP_PKT_LEN, dhcp_ip_header, dhcp_udp_header, 1);
+	make_ip(dhcp_out_ip, our_ip, UDP_H_LEN + DHCP_PKT_LEN, IP_UDP_PROTOCOL, dhcp_ip_header, 0); // IP header: dest & src IP addr, header length (hardcoded), packet length excluding ethernet header (IP header size hardcoded), IP protocol type, IP packet ID
+	make_udp(DHCP_DEST_PORT, DHCP_SOURCE_PORT, DHCP_PKT_LEN, dhcp_ip_header, dhcp_udp_header);
 	bb->tx(dhcp_pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + DHCP_PKT_LEN);
 }
 
@@ -173,7 +174,7 @@ int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t* pkt_data, unsigne
 	else if(msg_type == DHCP_MSG_DHCPACK) // DHCP ACK is 342 bytes
 	{
 		// Verify that IP address matches and we're all done with this handshake!
-		if( (pkt_data->xid == dhcpoffer_xid) && ((ntohl(pkt_data->yiaddr) == dhcpoffer_ip_from_pkt) || (dhcp_renewal == 1)) )
+		if( (pkt_data->xid == dhcpoffer_xid) && ((dhcp_renewal == 1) || (ntohl(pkt_data->yiaddr) == dhcpoffer_ip_from_pkt)) )
 		{
 			//
 			// Ideally there would be an ARP done here to ensure that the provided IP address is not already taken
@@ -181,6 +182,12 @@ int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t* pkt_data, unsigne
 			// that for some reason has an IP in the DHCP range. A cause of this could also be if DHCP reservations
 			// aren't working right on the network, etc.
 			//
+
+			if(dhcp_renewal)
+			{
+				// Refresh IP with result from renewal
+				dhcpoffer_ip_from_pkt = ntohl(pkt_data->yiaddr); // This is where we get our IP address from for renewal
+			}
 
 			// Get the lease time from ACK
 			// dhcp_lease_time is usable in little endian
@@ -194,19 +201,7 @@ int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t* pkt_data, unsigne
 			PMCR_Restart(DCLOAD_PMCR, PMCR_ELAPSED_TIME_MODE, PMCR_COUNT_RATIO_CYCLES);
 #endif
 			dhcp_acked = 1;
-		}
 
-		// It would be more compact to incorporate this part into the above if() block.
-		// Unfortunately it appears that GCC has difficulty with triple-nested if()
-		// statements on SH4, so this does the same thing.
-		if(dhcp_acked && dhcp_renewal)
-		{
-			// Refresh IP with result from renewal
-			dhcpoffer_ip_from_pkt = ntohl(pkt_data->yiaddr); // This is where we get our IP address from for renewal
-			return 0; // success
-		}
-		else if(dhcp_acked)
-		{
 			return 0; // success
 		}
 
@@ -249,9 +244,8 @@ int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t* pkt_data, unsigne
 	return -1; // Something's up
 }
 
-// Don't need this, it stops receipt of packets
-// bb->stop(); // Don't need to receive broadcast & physical match packets any more
-
+// DHCP process:
+//
 // Step 1: DHCP DISCOVER packet
 // STEP 2: Wait for DHCP OFFER packet from router
 // STEP 3: DHCP REQUEST packet
@@ -319,14 +313,38 @@ int dhcp_renew(unsigned int *dhcp_ip_address_buffer)
 
 // The following functions are adapted from KOS, so they need to be licensed properly
 
-// --  START KOS STUFF --
+//==============================================================================
+// START KOS STUFF
+//==============================================================================
 
-// NOTE: ##version## == 2.1.0
-/* KallistiOS ##version##
+/* KallistiOS 2.1.0
 
    kernel/net/net_dhcp.c
    Copyright (C) 2008, 2009, 2013 Lawrence Sebald
 
+	 Redistribution and use in source and binary forms, with or without
+	 modification, are permitted provided that the following conditions
+	 are met:
+	 1. Redistributions of source code must retain the above copyright
+	    notice, this list of conditions and the following disclaimer.
+	 2. Redistributions in binary form must reproduce the above copyright
+	    notice, this list of conditions and the following disclaimer in the
+	    documentation and/or other materials provided with the distribution.
+	 3. Neither the name of Cryptic Allusion nor the names of its contributors
+	    may be used to endorse or promote products derived from this software
+	    without specific prior written permission.
+
+	 THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS ``AS IS'' AND
+	 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+	 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+	 ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE
+	 FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+	 DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+	 OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+	 HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+	 LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+	 OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+	 SUCH DAMAGE.
 */
 
 // For serverid and reqip, this does htonl() on them
@@ -466,12 +484,12 @@ static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint
     return pos;
 }
 
-// Not modified from KOS
+// Modified very slightly from KOS
 static int kos_net_dhcp_get_message_type(dhcp_pkt_t *pkt, int len)
 {
     int i;
 
-    len -= sizeof(dhcp_pkt_t);
+    len -= DHCP_H_LEN;
 
     /* Read each byte of the options field looking for the message type option.
        when we find it, return the message type. */
@@ -495,7 +513,7 @@ static uint32 kos_net_dhcp_get_32bit(dhcp_pkt_t *pkt, uint8 opt, int len)
 {
     int i;
 
-    len -= sizeof(dhcp_pkt_t);
+    len -= DHCP_H_LEN;
 
     /* Read each byte of the options field looking for the specified option,
        return it when found. */
@@ -519,4 +537,6 @@ static uint32 kos_net_dhcp_get_32bit(dhcp_pkt_t *pkt, uint8 opt, int len)
     return 0;
 }
 
-// --  END KOS STUFF --
+//==============================================================================
+// END KOS STUFF
+//==============================================================================

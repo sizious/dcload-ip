@@ -177,7 +177,7 @@ general_1:
 	mov.l	dcloadsyscall_k,r0
 	mov.l	@r0,r0
 	jsr	@r0
-	 mov	#15,r4 ! dcload's exit syscall is syscall 15
+	 mov #15,r4 ! dcload's exit syscall is syscall 15
 ! Let's add a few seconds delay here to be able to read the screen
 ! ...or at least take a photo of it
 	mov #0,r0
@@ -200,7 +200,7 @@ return_to_loader:
 	jmp @r0
 	 nop
 
-.align 4
+.align 2
 stack_addr:
 	.long 0x8d000000
 exc_to_string_k:
@@ -496,7 +496,7 @@ regdump:
 	rts
 	 nop
 
-.align 4
+.align 2
 fpscr_val_fr:
 	.long 0x00040001
 fpscr_val_xf:

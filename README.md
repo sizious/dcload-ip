@@ -1,18 +1,19 @@
 
-# dcload-ip 1.1.2 (with DHCP)
+# dcload-ip 2.0.0
 
 A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/).
+Updated and overhauled by Moopthehedgehog
 
 ## Features
 
 * Load  `elf`, `srec`, and `bin`
 * PC I/O (read, write, etc to PC - compatible with original dcload)
 * Exception handler
-* Extremely fast (at least for me - I get 1130Kbyte/sec on 10mbit half-duplex)
-* Now works on 100mbit (I get 2580Kbyte/sec on 100mbit half-duplex)
+* Extremely fast
+* Now works on 100mbit
 * Supports both the **Broadband Adapter** (HIT-0400) and **LAN Adapter** (HIT-0300)
   in a single binary
-- DHCP support (use an IP address of 000.000.000.000 in `Makefile.cfg` to enable it)
+- DHCP support (use an IP address of 0.0.0.0 in `Makefile.cfg` to enable it)
 - NTSC 480i, PAL 576i, and VGA display output modes supported
 - Dumping exceptions over the network if the dcload console is enabled
 
@@ -44,10 +45,10 @@ options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
 
 * The correct display is something like:
 
-  `dcload-ip 1.1.2 - with DHCP`  <- name/version  
+  `dcload-ip 2.0.0`  <- name/version  
   `Broadband Adapter (HIT-0400)`  <- adapter driver in use  
   `00:d0:f1:02:ab:dd`  <- dc hardware address  
-  `192.168.001.004`  <- dc ip address  
+  `192.168.1.92`  <- dc ip address  
   `idle...`  <- status  
 
   The background of the screen will be blue (Broadband Adapter) or green (LAN Adapter).
@@ -137,35 +138,39 @@ Regarding the data field, it should be formatted according to the following info
 
 The 6 performance counter control functions are:
 ```
-  // Clear counter and enable
-  void PMCR_Init(int which, unsigned short mode, unsigned char count_type);
+	// (I) Clear counter and enable
+	void PMCR_Init(unsigned char which, unsigned char mode, unsigned char count_type);
 
-  // Enable one or both of these "undocumented" performance counters.
-  void PMCR_Enable(int which, unsigned short mode, unsigned char count_type, unsigned char reset_counter);
+	// (E) Enable one or both of these "undocumented" performance counters
+	void PMCR_Enable(unsigned char which, unsigned char mode, unsigned char count_type, unsigned char reset_counter);
 
-  // Disable, clear, and re-enable with new mode (or same mode)
-  void PMCR_Restart(int which, unsigned short mode, unsigned char count_type);
+	// (B) Disable, clear, and re-enable with new mode (or same mode)
+	void PMCR_Restart(unsigned char which, unsigned char mode, unsigned char count_type);
 
-  // Read a counter
-  void PMCR_Read(int which, volatile unsigned int *out_array);
+	// (R) Read a counter
+	unsigned long long int PMCR_Read(unsigned char which);
 
-  // Stop counter(s) (without clearing)
-  void PMCR_Stop(int which);
+	// (G) Get a counter's current configuration
+	unsigned short PMCR_Get_Config(unsigned char which);
 
-  // Disable counter(s) (without clearing)
-  void PMCR_Disable(int which);
+	// (S) Stop counter(s) (without clearing)
+	void PMCR_Stop(unsigned char which);
+
+	// (D) Disable counter(s) (without clearing)
+	void PMCR_Disable(unsigned char which);
 ```
-The command is the first letter of the function (capitalized) plus the counter
-number, plus a byte with the mode (if applicable). Except restart--read is 'R',
-so restart is 'B' (think reBoot).
+The command is the first letter of the function name (capitalized), followed by
+each of the function's parameters. Note that restart's command letter is 'B'--read
+is 'R', so restart is 'B' (think reBoot). The command letters are included in
+parentheses for each function in the above comment block.
 
 - Sending command data of 'D' 0x1 (2 bytes) disables ('D') perf counter 1 (0x1)   
 - Sending command data 'E' 0x3 0x23 0x0 0x1 (5 bytes) enables ('E') both perf
 counters (0x3) to elapsed time mode (0x23) where count is 1 cpu cycle = 1 count
 (0x0) and continue the counter from its current value (0x1)
 - Sending command data 'B' 0x2 0x23 0x1 (4 bytes) restarts ('B') perf counter 2
-(0x2) to elapsed time mode (0x23) and count is CPU/bus ratio method (0x1)
-...
+(0x2) to elapsed time mode (0x23) and count is CPU/bus ratio method (0x1)  
+...  
 etc.
 
 Notes:

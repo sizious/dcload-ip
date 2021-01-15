@@ -23,7 +23,7 @@ disable_cache:
 	rts
 	nop
 
-	.align 4
+	.align 2
 
 disable_cache_k:
 	.long   disable_cache

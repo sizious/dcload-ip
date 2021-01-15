@@ -3,7 +3,7 @@
 
 #include "packet.h"
 
-typedef struct __attribute__ ((packed)) {
+typedef struct __attribute__ ((packed, aligned(4))) {
 	unsigned char id[4];
 	unsigned int address;
 	unsigned int size;
@@ -27,10 +27,17 @@ typedef struct __attribute__ ((packed)) {
 extern unsigned int tool_ip;
 extern unsigned char tool_mac[6];
 extern unsigned short tool_port;
+// Format is a uint, encoded like this: (major << 16) | (minor << 8) | patch
+extern unsigned int tool_version;
+
+#define DCTOOL_MAJOR ((tool_version & 0x00ff0000) >> 16)
+#define DCTOOL_MINOR ((tool_version & 0x0000ff00) >> 8)
+#define DCTOOL_PATCH (tool_version & 0x000000ff)
 
 void cmd_reboot(void);
 void cmd_execute(ether_header_t * ether, ip_header_t * ip, udp_header_t * udp, command_t * command);
 void cmd_loadbin(ip_header_t * ip, udp_header_t * udp, command_t * command);
+void cmd_highspeed_partbin(udp_header_t * udp, unsigned int udp_data_size);
 void cmd_partbin(command_t * command);
 void cmd_donebin(ip_header_t * ip, udp_header_t * udp, command_t * command);
 void cmd_sendbinq(ip_header_t * ip, udp_header_t * udp, command_t * command);

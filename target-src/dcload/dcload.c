@@ -19,6 +19,8 @@
  *
  */
 
+// Significantly overhauled by Moopthehedgehog, 2019-2020
+
 /* uncomment following line to enable crappy screensaver (it just blanks) */
 /* #define SCREENSAVER */
 
@@ -36,8 +38,8 @@
 #include "dhcp.h"
 #include "perfctr.h"
 
-// Modify the branding slightly to prevent confusing it with stock dcload-ip
-#define NAME "dcload-ip " DCLOAD_VERSION " - with DHCP"
+// This is stock dcload now, no more need to explicitly mention "with DHCP"
+#define NAME "dcload-ip " DCLOAD_VERSION
 
 // Scale up the onscreen refresh interval
 #define ONSCREEN_REFRESH_SCALED ((unsigned long long int)ONSCREEN_DHCP_LEASE_TIME_REFRESH_INTERVAL * (unsigned long long int)PERFCOUNTER_SCALE)
@@ -79,7 +81,7 @@ static volatile unsigned int old_dhcp_lease_updater_array[2] = {0}; // To update
 static volatile unsigned char dont_renew = 0;
 
 static char *mac_string = "de:ad:be:ef:ba:be";
-static char *ip_string = "000.000.000.000";
+static char *ip_string = "000.000.000.000"; // Reserve this much memory for max-size IP address
 
 static const char *waiting_string = "Waiting for IP..."; // Waiting for IP indicator. 15 visible characters to match IP address string's visible 15 characters
 static const char *dhcp_mode_string = " (DHCP Mode)"; // Indicator that DHCP is active
@@ -156,7 +158,7 @@ void uint_to_string(unsigned int foo, unsigned char *bar)
 // 'bar' buffer is assumed to be large enough.
 // The biggest decimal number is 4294967295, which is 10 characters‬ (excluding null term).
 // So the buffer should be able to hold 11 characters.
-static void uint_to_string_dec(unsigned int foo, char *bar)
+void uint_to_string_dec(unsigned int foo, char *bar)
 {
 	char decdigit[11] = "0123456789";
 	int i;
@@ -185,14 +187,46 @@ static void uchar_to_string_hex(unsigned int foo, char *bar)
 }
 
 // For IP string printing (IP address is in host byteorder)
-static void uchar_to_string_dec(unsigned int foo, char *bar)
+static void ip_to_string(unsigned int ip_addr, char *out_string)
 {
-	char decdigit[11] = "0123456789";
+	ip_addr = htonl(ip_addr); // Make life easier since strings are always stored MSB-first
 
-	bar[2] = decdigit[foo % 10]; // Ones
-	bar[1] = decdigit[(foo / 10) % 10]; // Tens
-	bar[0] = decdigit[foo / 100]; // Hundreds
-	// Max is 255, anyways.
+	char decdigit[11] = "0123456789";
+	int c = 0, i = 0;
+	unsigned char* ip_octet = (unsigned char*)&ip_addr;
+	unsigned char ones, tens, hundreds;
+
+	while(i < 4)
+	{
+		ones = ip_octet[i] % 10;
+		tens = (ip_octet[i] / 10) % 10;
+		hundreds = ip_octet[i] / 100;
+
+		if(hundreds)
+		{
+			out_string[c++] = decdigit[hundreds];
+			out_string[c++] = decdigit[tens];
+			out_string[c++] = decdigit[ones];
+		}
+		else if(tens)
+		{
+			out_string[c++] = decdigit[tens];
+			out_string[c++] = decdigit[ones];
+		}
+		else
+		{
+			out_string[c++] = decdigit[ones];
+		}
+
+		if(i < 3)
+		{
+			out_string[c++] = '.';
+		}
+
+		i++;
+	}
+
+	out_string[c] = '\0';
 }
 
 /* set n lines starting at line y to value c */
@@ -228,15 +262,12 @@ static void error_bb(char *msg)
 
 void disp_info(void)
 {
-	int c;
-	unsigned char *ip = (unsigned char *)&our_ip;
-
 	setup_video(FB_RGB0555, global_bg_color);
 	draw_string(30, 54, NAME, STR_COLOR);
 	draw_string(30, 78, bb->name, STR_COLOR);
 	draw_string(30, 102, mac_string, STR_COLOR);
-	for(c = 0; c < 4; c++)
-		uchar_to_string_dec(ip[3-c], &ip_string[c*4]);
+
+	ip_to_string(our_ip, ip_string);
 	draw_string(30, 126, ip_string, STR_COLOR);
 
 	booted = 1;
@@ -257,6 +288,7 @@ void disp_status(const char * status) {
 // It does also allow the "arp" trick to continue functioning if needed, but the
 // IP address for arp is not allowed to be 0.x.x.x any more, as mentioned in
 // various other comments in this file.
+// --Moopthehedgehog
 
 // This function looks to be the primary initializer of the our_ip variable...
 static void set_ip_from_file(void)
@@ -273,33 +305,21 @@ static void set_ip_from_file(void)
 	i = 0;
 	c = 0;
 
-// So THAT'S why 192.168.0.x never worked!!
-/*
-	while(DREAMCAST_IP[c] != 0) {
-		if (DREAMCAST_IP[c] != '.') {
-			ip[i] *= 10;
-			ip[i] += DREAMCAST_IP[c] - '0';
+	// Any IP will work now
+
+	while(DREAMCAST_IP[c] != '\0')
+	{
+		if (DREAMCAST_IP[c] == '.')
+		{
+			i++;
+			c++;
 		}
 		else
-			i++;
-		c++;
-	}
-
-	our_ip = ntohl(our_ip);
-*/
-
-	// Any IP will work now, but the string must be 16 chars, including null term.
-	// So format an IP in Makefile.cfg with leading zeros in each octet like this:
-	// 192.168.001.058 or 010.000.076.002, etc.
-
-	while(c < 15) {
-		if (DREAMCAST_IP[c] != '.') {
+		{
 			ip[i] *= 10;
 			ip[i] += DREAMCAST_IP[c] - '0';
+			c++;
 		}
-		else
-			i++;
-		c++;
 	}
 
 	// IP is currently stored, for example, ip[0] 192-168-0-11 ip[3] (this is big endian data on a little endian system), which is what networking packets expect
@@ -307,21 +327,14 @@ static void set_ip_from_file(void)
 	// Now it's stored ip[0] 11-0-168-192 ip[3] (this is little endian data on a little endian system), which make_ip handles when building packets.
 }
 
-static void update_ip_display(unsigned char *new_ip, const char *mode_string)
+static void update_ip_display(unsigned int new_ip, const char *mode_string)
 {
-	int c;
-
 	clear_lines(126, 24, global_bg_color);
-	for(c = 0; c < 4; c++)
-	{
-		uchar_to_string_dec(new_ip[3-c], &ip_string[c*4]);
-	}
+	ip_to_string(new_ip, ip_string);
 	draw_string(30, 126, ip_string, STR_COLOR);
 	draw_string(210, 126, mode_string, STR_COLOR);
 }
 
-// Not merging this with update_ip_display because GCC might inline them and
-// cause a triple-nested if(), which will then break things.
 static void dhcp_waiting_mode_display(void)
 {
 	clear_lines(126, 24, global_bg_color);
@@ -357,8 +370,6 @@ void set_ip_dhcp(void)
 		disp_info();
 		disp_status("idle...");
 	}
-
-	unsigned char *ip = (unsigned char *)&our_ip;
 
 	// Check renewal condition. Only matters if dhcp_lease_time has been set before.
 	// The counter is 48-bit, so the max lease time allowed in 1 count = 1 cycle
@@ -405,7 +416,7 @@ void set_ip_dhcp(void)
 			our_ip = 0xffffffff;
 
 			// Update IP, change DHCP active indicator to timeout.
-			update_ip_display(ip, dhcp_timeout_string);
+			update_ip_display(our_ip, dhcp_timeout_string);
 			// Display lease time of 0
 			update_lease_time_display(dhcp_lease_time);
 
@@ -421,7 +432,7 @@ void set_ip_dhcp(void)
 		else
 		{
 			// Not in waiting mode any more
-			update_ip_display(ip, dhcp_mode_string);
+			update_ip_display(our_ip, dhcp_mode_string);
 			// Didn't time out! Display new lease time.
 			update_lease_time_display(dhcp_lease_time);
 		}
@@ -651,7 +662,7 @@ void set_ip_dhcp(void)
 	// IP of some sort. It also checks if the DHCP lease expired per above. DOUBLE WHAMMY!!
 	// Only need to check the first octet of IP since it's a /8 range
 	// Also check if renew was NAK'd, and if it was, are we at the 87.5% threshold for a new discover?
-	if(__builtin_expect((ip[3] == 0) || (dont_renew && (eighty_seven_point_five < (*current_counter))), 0))
+	if(__builtin_expect(((our_ip & 0xff000000) == 0) || (dont_renew && (eighty_seven_point_five < (*current_counter))), 0))
 	{
 		dont_renew = 0;
 		dhcp_waiting_mode_display();
@@ -670,7 +681,7 @@ void set_ip_dhcp(void)
 			our_ip = 0xffffffff;
 
 			// Change DHCP active indicator to timeout.
-			update_ip_display(ip, dhcp_timeout_string);
+			update_ip_display(our_ip, dhcp_timeout_string);
 
 			// At this point DHCP is disabled.
 			// Don't need the counter anymore.
@@ -680,7 +691,7 @@ void set_ip_dhcp(void)
 		{
  			// Else we didn't time out and probably got an address, hurray!
 			// Overwrite displayed IP with DHCP-provided IP
-			update_ip_display(ip, dhcp_mode_string);
+			update_ip_display(our_ip, dhcp_mode_string);
 			// Display time until IP lease ends.
 			update_lease_time_display(dhcp_lease_time);
 		}
@@ -717,6 +728,7 @@ int main(void)
 	} else {
 		booted = 0;
 	}
+
 	/*
 		scif_puts(NAME);
 		scif_puts("\n");

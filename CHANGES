@@ -1,11 +1,32 @@
-WHAT'S NEW IN 1.1.2
+WHAT'S NEW IN 2.0.0
 
-* LAN Adapter is now bug fixed and fully supported. Functions just like the BBA.
+* The number of packets dc-tool sends per burst, as well as the delay between
+  packet bursts, can now be configured in Makefile.cfg. Not all networks are the
+  same, so this allows customizing dc-tool per-network. [Moopthehedgehog]
+* dcload packet payload sizes have been changed to 1452 bytes from 1036 bytes,
+  increasing data transfer performance by over 1.4x. This will break for networks
+  that use MTUs < 1500, so there's now a -l switch that will force legacy 1024-byte
+  payloads. Also, legacy mode data is now limited to 11MB, while RAM is the limit
+  for standard mode. [Moopthehedgehog]
+* The UDP port that dcload uses can now be set by the dc-tool '-t' option; just use
+  '-t <ip>:<port>' and it will override the default UDP port (53535 for v2.0.0+, it
+  was 31313 for legacy 1.x versions) with the specified one. Using -t without the
+  port will simply use the default port. [Moopthehedgehog]
+* BBA now runs at its full 100Mbps, and the LAN adapter is maxed at 10Mbps. Due
+  to the way dc-tool achieves high performance, ethernet cables that are too long
+  and complicated network topologies may cause problems like dropped packets.
+  [Moopthehedgehog]
+* LAN Adapter is now bug fixed and fully supported. Functions just like the BBA,
+  but slower. Note that it tends to hang up or error out when data is sent to it
+  too quickly, necessitating a console reboot. It's just not the greatest piece
+  of equipment. Hang check: A 10MB program should not take more than about 9-12
+  seconds to transfer. [Moopthehedgehog]
+* LAN Adapter now has a green background; the BBA still has its blue one.
   [Moopthehedgehog]
 * Automatic detection and performance tuning depending on which adapter is installed.
-  WARNING: This is a semi-major change, and though dc-tool-ip 1.1.2 is still
+  WARNING: This is a semi-major change, and though dc-tool-ip 2.0.0 is still
   backwards compatible with older versions of dcload-ip, it will not work
-  optimally unless used with dcload-ip 1.1.2. [Moopthehedgehog]
+  optimally unless used with dcload-ip 2.0.0. [Moopthehedgehog]
 
 WHAT'S NEW IN 1.1.1
 
@@ -45,15 +66,6 @@ WHAT'S NEW IN 1.1.0
 * Presumably many tens of issues were fixed. Feels like a hundred, honestly, but
   it's probably more like 20-30. The whole Dreamcast side of the program got a
   pretty major backend overhaul. [Moopthehedgehog]
-
-WHAT'S NEW IN 1.0.6
-
-* Complete redesign of the build system and compatibility improvements for
-  various OS, including: BSD (FreeBSD), GNU/Linux (Debian/Ubuntu), macOS, 
-  MinGW/MSYS (i.e. DreamSDK), MinGW-w64/MSYS2 and Cygwin. The build system is
-  now shared between dcload-ip and dcload-serial. [SiZiOUS]
-* Various improvements on the GDB remote debugging feature. [SiZiOUS]
-* Some minor fixes. [SiZiOUS]
 
 WHAT'S NEW IN 1.0.5
 

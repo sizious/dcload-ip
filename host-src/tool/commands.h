@@ -5,7 +5,7 @@ struct _command_t {
 	unsigned char id[4];
 	unsigned int address;
 	unsigned int size;
-	unsigned char data[1];
+	unsigned char data[]; // Make flexible array member
 } __attribute__ ((packed));
 
 typedef struct _command_t command_t;

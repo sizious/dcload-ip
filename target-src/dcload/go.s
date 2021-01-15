@@ -33,7 +33,7 @@ _go:
 	jmp	@r4
 	mov	r0,r4
 
-	.align 4
+	.align 2
 stack_addr_k:
 	.long	stack_addr
 stack_addr:
@@ -41,7 +41,7 @@ stack_addr:
 entry_addr_k:
 	.long	entry_addr
 entry_addr:
-	.long	0x8c004000
+	.long	0xac004000
 sr_data_k:
 	.long	sr_data
 sr_data:
@@ -53,4 +53,4 @@ vbr_data:
 fpscr_data_k:
 	.long	fpscr_data
 fpscr_data:
-	.long	0x40001
+	.long	0x40000

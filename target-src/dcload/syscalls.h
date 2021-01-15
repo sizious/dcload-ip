@@ -24,7 +24,8 @@
 
 #define CMD_EXIT     "DC00"
 #define CMD_FSTAT    "DC01"
-#define CMD_WRITE    "DD02"
+#define CMD_WRITE_OLD    "DD02"
+#define CMD_WRITE    "DC02"
 #define CMD_READ     "DC03"
 #define CMD_OPEN     "DC04"
 #define CMD_CLOSE    "DC05"
@@ -45,40 +46,42 @@
 #define CMD_GDBPACKET "DC20"
 #define CMD_REWINDDIR "DC21"
 
+extern unsigned short dcload_syscall_port;
+
 extern unsigned int syscall_retval;
 extern unsigned char* syscall_data;
 
-typedef struct __attribute__ ((packed)) {
+typedef struct __attribute__ ((packed, aligned(4))) {
 	unsigned char id[4];
 	unsigned int value0;
 	unsigned int value1;
 	unsigned int value2;
 } command_3int_t;
 
-typedef struct __attribute__ ((packed)) {
+typedef struct __attribute__ ((packed, aligned(4))) {
 	unsigned char id[4];
 	unsigned int value0;
 	unsigned int value1;
 	unsigned char string[1];
 } command_2int_string_t;
 
-typedef struct __attribute__ ((packed)) {
+typedef struct __attribute__ ((packed, aligned(4))) {
 	unsigned char id[4];
 	unsigned int value0;
 } command_int_t;
 
-typedef struct __attribute__ ((packed)) {
+typedef struct __attribute__ ((packed, aligned(4))) {
 	unsigned char id[4];
 	unsigned int value0;
 	unsigned char string[1];
 } command_int_string_t;
 
-typedef struct __attribute__ ((packed)) {
+typedef struct __attribute__ ((packed, aligned(4))) {
 	unsigned char id[4];
 	unsigned char string[1];
 } command_string_t;
 
-typedef struct __attribute__ ((packed)) {
+typedef struct __attribute__ ((packed, aligned(4))) {
 	unsigned char id[4];
 	unsigned int value0;
 	unsigned int value1;
@@ -86,6 +89,9 @@ typedef struct __attribute__ ((packed)) {
 	unsigned char string[1];
 } command_3int_string_t;
 
+// Functions that are not in unistd.h, but are used by other parts of dcload
+// (exempting dcload-crt0.s, which uses all of the syscalls in assembly code and doesn't need prototypes in a header)
 void build_send_packet(int command_len);
+void dcexit(void);
 
 #endif

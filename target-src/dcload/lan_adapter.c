@@ -26,16 +26,46 @@
 //
 // --Moopthehedgehog
 
+// TEMP
+//#define LAN_LOOP_TIMING
+//#define LAN_TX_LOOP_TIMING
+//#define LAN_RX_LOOP_TIMING
+//#define LAN_FULL_TRIP_TIMING
+
+#ifdef LAN_LOOP_TIMING
+#include "perfctr.h"
+static char uint_string_array[11] = {0};
+#endif
+// end TEMP
+
+adapter_t adapter_la = {
+	"LAN Adapter (HIT-0300)",
+	{ 0 },		// Mac address
+	{ 0 },		// 2-byte alignment pad
+	la_bb_detect,
+	la_bb_init,
+	la_bb_start,
+	la_bb_stop,
+	la_bb_loop,
+	la_bb_tx
+};
+
 static volatile unsigned char lan_link_up = 0;
 // This needs to persist across program loads and resets, so it needs to go in .data section
 static volatile unsigned char first_transmit = 2;
+static int bb_started = 0;
 
-typedef volatile unsigned int vuint32;
-typedef volatile unsigned short vuint16;
-typedef volatile unsigned char vuint8;
+static void net_strobe_eeprom(void);
+static void net_read_eeprom(uint8 *data);
+static void net_sleep_ms(int ms);
+static int la_bb_rx(void);
 
 // This is in dhcp.h now
 //typedef unsigned char uint8;
+// Still need these for this file only
+typedef volatile unsigned int vuint32;
+typedef volatile unsigned short vuint16;
+typedef volatile unsigned char vuint8;
 
 /* Some basic macros to assist with register access */
 #undef REGL
@@ -46,19 +76,21 @@ typedef volatile unsigned char vuint8;
 #define REGC(a) (vuint8 *)(a)
 
 static vuint8 *xpc = REGC(0xa0600000);
-static vuint16 *xps = REGS(0xa0600000);
-static vuint32 *xpl = REGL(0xa0600000);
+//static vuint16 *xps = REGS(0xa0600000);
+//static vuint32 *xpl = REGL(0xa0600000);
 #define REG(x) ( xpc[(x)*4 + 0x400] )
 #define REGW(x) ( xpc[(x)*4 + 0x400] )
 
-static void net_strobe_eeprom() {
+static void net_strobe_eeprom(void)
+{
 	REGW(16) = FE_B16_SELECT;
 	REGW(16) = FE_B16_SELECT | FE_B16_CLOCK;
 	REGW(16) = FE_B16_SELECT | FE_B16_CLOCK;
 	REGW(16) = FE_B16_SELECT;
 }
 
-static void net_read_eeprom(uint8 *data) {
+static void net_read_eeprom(uint8 *data)
+{
 	//uint8 save16, save17;
 	uint8 val, n, bit;
 
@@ -111,11 +143,10 @@ static void net_read_eeprom(uint8 *data) {
 	REGW(7) = i; \
 } while(0)
 
-static int bb_started = 0;
-
 /* Libdream-style sleep function */
 // In units of milliseconds, max 245 (about 0.21 secs)
-static void net_sleep_ms(int ms) {
+static void net_sleep_ms(int ms)
+{
 	int i, cnt;
 	vuint32 *a05f688c = (vuint32*)0xa05f688c;
 
@@ -126,7 +157,8 @@ static void net_sleep_ms(int ms) {
 
 #ifdef LAN_ADAPTER_DEBUG
 
-static void disp_status2(const char * status) {
+static void disp_status2(const char * status)
+{
 	clear_lines(222, 24, LAN_BG_COLOR);
 	draw_string(30, 222, status, STR_COLOR);
 }
@@ -141,7 +173,8 @@ static void disp_status2(const char * status) {
 #endif
 
 /* Reset the lan adapter and verify that it's there and alive */
-static int bb_detect() {
+int la_bb_detect(void)
+{
 	uint8 type;
 
 	DEBUG("bb_detect entered\r\n");
@@ -182,7 +215,8 @@ static int bb_detect() {
 }
 
 /* Reset the lan adapter and set it up for send/receive */
-static int bb_init() {
+int la_bb_init(void)
+{
 	uint8 i;
 	//uint8 type;
 	uint8 mac[6];
@@ -262,7 +296,7 @@ static int bb_init() {
 	REGW(12) = 0;
 	REGW(13) = 0; // Don't change base address, all other params should be 0 (DMA burst is single)
 	REGW(14) = 0x01; // Filter packets transmitted from self
-	REGW(15) = 0; // Writing 0 to this one does nothing (using full duplex, now, so SQE doesn't matter. Polarity is auto-corrected and LINK FAIL is checked by bb_loop())
+	REGW(15) = 0; // Writing 0 to this one does nothing (using full duplex, now, so SQE doesn't matter. Polarity is auto-corrected and LINK FAIL is checked by la_bb_loop())
 
 	/* Enable transmitter / receiver */
 	net_sleep_ms(2);
@@ -281,7 +315,8 @@ static int bb_init() {
 }
 
 /* Start lan adapter */
-void bb_start() {
+void la_bb_start(void)
+{
 	DEBUG("bb_start entered\r\n");
 
 	if (bb_started != 3) {
@@ -297,7 +332,8 @@ void bb_start() {
 }
 
 /* Stop lan adapter */
-void bb_stop() {
+void la_bb_stop(void)
+{
 	DEBUG("bb_stop entered\r\n");
 
 	if (bb_started != 2) {
@@ -344,20 +380,21 @@ void bb_stop() {
 /* Transmit a packet */
 /* Note that it's technically possible to queue up more than one packet
    at a time for transmission, but this is the simple way. */
-static int bb_tx(unsigned char *pkt, int len) {
+int la_bb_tx(unsigned char *pkt, int len)
+{
 	int i;
 /*	char buffer[16]; */
 
 	DEBUG("bb_tx entered\r\n");
-
-	if (bb_started != 2) {
+	// transmission CAN still occur if RX is stopped (bb_started == 3)
+	if (bb_started < 2) {
 		clear_lines(168, 24, LAN_BG_COLOR);
 		draw_string(30, 168, "bb_tx() called out of sequence!", 0xf800);
 		for (;;)
 			;
 	}
 
-	len &= 0x07ff; // max length is 11 bits, meaning 4095 byte packets...but it does
+	len &= 0x07ff; // max length is 11 bits, meaning 4095-byte packets...but it does
 	// not really matter since a standard packet maxes at a grand total of 1514 bytes anyways.
 
 	/* Wait for queue to empty */
@@ -371,29 +408,59 @@ static int bb_tx(unsigned char *pkt, int len) {
 	uint_to_string(len, buffer);
 	draw_string(0, 192, buffer, 0xffff); */
 
+	unsigned char *copyback_pkt = (unsigned char*)((unsigned int)pkt & 0x1fffffff);
+
+// Tx time
+#ifdef LAN_TX_LOOP_TIMING
+		unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
+#endif
+
 	/* Is the length less than the minimum? */
-	if (len < 60) {
-		/* Pad packets to minimum length of 60 bytes */
-		memset_zeroes_64bit(raw_tx_small_packet_zero_buffer, 64/8); // Zero out our small packet buffer
-//		memcpy(tx_small_packet_zero_buffer, pkt, len); // Copy the data to the small packet buffer
-		// Copy data up to 8 byte alignment, then do 8-byte aligned copy
-		memcpy_16bit(tx_small_packet_zero_buffer, pkt, 6/2);
-		SH4_aligned_memcpy(tx_small_packet_zero_buffer + 6, pkt + 6, len - 6);
-		len = 60;
-		pkt = tx_small_packet_zero_buffer; // Small packet buffer has the data and padding bytes
+	if(len < 60)
+	{
+		/* Poke the length */
+		REGW(8) = 60; // Low byte (LE)
+		REGW(8) = 00; // High byte (LE)
+
+		/* Write the packet */
+		for (i=0; i<len; i++)
+		{
+			//REGW(8) = pkt[i];
+			REGW(8) = copyback_pkt[i];
+		}
+
+		// Pad with zeroes to 60 bytes
+		for (i=len; i<60; i++)
+		{
+			REGW(8) = 0x00;
+		}
 		// NOTE: The reason this is hardcoded to 60 is because the minimum frame
-		// size allowed is 46 bytes + 14 byte ethernet header.
+		// size allowed is 46 bytes + 14 byte ethernet header. Well, it's actually 64,
+		// but the NIC is configured to auto-append a 4-byte CRC.
+	}
+	else
+	{
+		/* Poke the length */
+		REGW(8) = (len & 0x00ff);
+		REGW(8) = (len & 0x0700) >> 8;
+
+		/* Write the packet */
+		for (i=0; i<len; i++)
+		{
+			//REGW(8) = pkt[i];
+			REGW(8) = copyback_pkt[i];
+		}
 	}
 
-	/* Poke the length */
-	REGW(8) = (len & 0x00ff);
-	REGW(8) = (len & 0xff00) >> 8;
+// Tx time end
+#ifdef LAN_TX_LOOP_TIMING
+		unsigned long long int second_array = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned int loop_difference = (unsigned int)(second_array - first_array);
 
-	// Is this really how the lan adapter transfers packet data to its internal transmit buffer?
-	// Wow.
-	/* Write the packet */
-	for (i=0; i<len; i++)
-		REGW(8) = pkt[i];
+		clear_lines(222, 24, global_bg_color);
+		uint_to_string_dec(loop_difference, (char*)uint_string_array);
+		draw_string(30, 222, uint_string_array, STR_COLOR);
+#endif
 
 	// This will be blocked on the first transmit because setting ENA DLC (REG(6) bit 0x80) clears TMT OK...
 	// So keep track of whether this is the first transmit or not
@@ -423,7 +490,7 @@ static int bb_tx(unsigned char *pkt, int len) {
 }
 
 /* Check for received packets */
-static int bb_rx()
+static int la_bb_rx(void)
 {
 	int i, len, count;
 	unsigned short status;
@@ -446,6 +513,11 @@ static int bb_rx()
 			DEBUG("bb_rx exited, no more packets\r\n");
 			return count;
 		}
+
+// Full loop timing
+#ifdef LAN_FULL_TRIP_TIMING
+    unsigned long long int first_array1 = PMCR_RegRead(DCLOAD_PMCR);
+#endif
 
 		/* Get the receive status byte */
 		status = REG(8);
@@ -470,19 +542,49 @@ static int bb_rx()
 			return -2;
 		}
 
+		unsigned char *copyback_current_pkt = (unsigned char*)((unsigned int)current_pkt & 0x1fffffff); // copyback pkt in cached memory area
+
+// Rx time
+#ifdef LAN_RX_LOOP_TIMING
+			unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
+#endif
+
 		// This loop is dumb, but we are able to max out the LAN adapter with it, so that's neat
 		for (i=0; i<len; i++)
 		{
-			current_pkt[i] = REG(8);
+			//current_pkt[i] = REG(8);
+			copyback_current_pkt[i] = REG(8);
 		}
+		// Ensure cached data is written to memory
+		CacheBlockWriteBack((unsigned char*) ((unsigned int)raw_current_pkt & 0x1fffffe0), (2 + len + 31)/32);
+
+// Rx time end
+#ifdef LAN_RX_LOOP_TIMING
+		unsigned long long int second_array = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned int loop_difference = (unsigned int)(second_array - first_array);
+
+		clear_lines(246, 24, global_bg_color);
+		uint_to_string_dec(loop_difference, (char*)uint_string_array);
+		draw_string(30, 246, uint_string_array, STR_COLOR);
+#endif
 
 		/* Submit it for processing */
-		process_pkt(current_pkt);
+		//process_pkt(current_pkt);
+		process_pkt(copyback_current_pkt);
 
 // For stats
 //		total_pkts_rx++;
 		/* if (!running)
 			draw_total(); */
+
+#ifdef LAN_FULL_TRIP_TIMING
+		unsigned long long int second_array1 = PMCR_RegRead(DCLOAD_PMCR);
+		unsigned int loop_difference1 = (unsigned int)(second_array1 - first_array1);
+
+		clear_lines(412, 24, global_bg_color);
+		uint_to_string_dec(loop_difference1, (char*)uint_string_array);
+		draw_string(30, 412, uint_string_array, STR_COLOR);
+#endif
 	}
 
 	return count;
@@ -493,7 +595,8 @@ static char reg_agg_temp[9] = {0};
 #endif
 
 /* Loop doing something interesting */
-static void bb_loop(int is_main_loop) {
+void la_bb_loop(int is_main_loop)
+{
 	int result;
 	int link_change_message = 0;
 
@@ -521,7 +624,7 @@ static void bb_loop(int is_main_loop) {
 		/* Check for received packets */
 		if(REG(1) & 0x80) // Do we have a packet in the receive buffer?
 		{
-			result = bb_rx();
+			result = la_bb_rx();
 			if(__builtin_expect((result < 0) && booted && (!running), 0))
 			{
 				clear_lines(320, 24, LAN_BG_COLOR);
@@ -600,14 +703,3 @@ static void bb_loop(int is_main_loop) {
 
 	escape_loop = 0;
 }
-
-adapter_t adapter_la = {
-	"LAN Adapter (HIT-0300)",
-	{ 0 },		// Mac address
-	bb_detect,
-	bb_init,
-	bb_start,
-	bb_stop,
-	bb_loop,
-	bb_tx
-};

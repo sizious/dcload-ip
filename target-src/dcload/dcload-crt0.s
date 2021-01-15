@@ -41,7 +41,7 @@
 
 start:
 	bra	realstart
-	nop
+	 nop
 
 ! for checking if dcload is present
 
@@ -73,13 +73,20 @@ realstart:
 	mov.l	sr_mask,r1
 	and	r1,r0
 	or	#0xf0,r0
-	ldc	r0,sr
-	! register banks may flip here if returning from an exception (but that's ok)
+	ldc	r0,sr ! register banks may flip here if returning from an exception (but that's ok)
+
+	! Disable the cache with invalidation before setting it back up to clear out any stale
+	! entries from returning programs
+	mov.l disable_cache_addr,r1
+	jsr @r1
+	 nop
+
+! Set up the cache
 	mov.l	setup_cache_k,r0
 	mov.l	p2_mask,r1
 	or	r1,r0
 	jmp	@r0
-	nop
+	 nop
 
 setup_cache:
 	mov.l	ccr_addr,r0
@@ -94,7 +101,7 @@ setup_cache:
 	nop
 	nop
 	jmp	@r0
-	mov	r1,r0
+	 mov	r1,r0
 
 start_2:
 	mov.l	stack_k,r15
@@ -112,25 +119,28 @@ start_l:
 	bt	start_l
 no_bss:
 
+! Treat denormals as 0, round to nearest, disable FPU exceptions, FR = PR = SZ = 0
 	mov.l set_fpscr_k, r1
+	mov #4,r4
 	jsr @r1
-	mov #0,r4
-!	lds r3,fpscr ! This isn't necessary.
+	 shll16 r4
 
 	! call main
 	mov.l	main_k,r0
 	jsr	@r0
-	or	r0,r0
+	 or	r0,r0
 	! bootloader should never exit, but what the hell
 	bra	realstart
-	nop
+	 nop
 
 _atexit:
 	rts
-	nop
+	 nop
 
 
-	.align 4
+	.align 2
+disable_cache_addr:
+	.long _disable_cache
 sr_mask:
 	.long	0xcfff7fff ! want to be in bank 0, especially after exception handler runs
 set_fpscr_k:
@@ -153,7 +163,11 @@ p2_mask:
 ccr_addr:
 	.long	0xff00001c
 ccr_data:
-	.word	0x090b
+! Make P1 write-through and P0/P3/U0 write-back/copy-back. This way, since the
+! linkerscript maps RAM to P1, by default things get stored into WT memory to
+! minimize stale caches going awry. Manually specifying an address in P0 activates
+! copy-back enhancements as-needed.
+	.word	0x0909
 
 _dcloadsyscall:
 	mov.l	dcloadmagic_k,r1
@@ -167,22 +181,22 @@ _dcloadsyscall:
 	mov	r6,r5
 	mov	r7,r6
 
-	mov	#21,r1
-	cmp/hs	r0,r1
+	mov	#22,r1 ! There are 22 syscalls
+	cmp/hs	r0,r1 ! Check r1 >= r0 ?
 	bf	badsyscall
 
 	mov.l	first_syscall,r1
 	shll2	r0
 	mov.l	@(r0,r1),r0
 	jmp	@r0
-	nop
+	 nop
 
 badsyscall:
 	mov	#-1,r0
 	rts
-	nop
+	 nop
 
-.align 4
+.align 2
 dcloadmagic_k:
 	.long dcloadmagic
 correctmagic:

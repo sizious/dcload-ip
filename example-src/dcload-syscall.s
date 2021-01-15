@@ -5,6 +5,6 @@ _dcloadsyscall:
 	mov.l @r0,r0
 	jmp @r0
 	nop
-.align 4
+.align 2
 dcloadsyscall_k:
 	.long	0x8c004008

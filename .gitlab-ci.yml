@@ -29,17 +29,7 @@ build:kos-scramble:
    
 build:dcload-gcc4:
   stage: "Building Dreamcast Tool"
-  image: segadreamcast/toolchains:binutils-2.31.1-gcc-4.7.4-newlib-2.0.0-gdb-8.3.1  
-  script:
-    - git clone ${KOS_URL} ${KOS_PATH}
-    - cd ${KOS_PATH} && tar -xvf ${KOS_PACKAGE}
-    - source ${ENVIRON_SH}    
-    - cd ${GIT_CLONE_PATH} && make && make install
-   
-build:dcload-gcc5:
-  stage: "Building Dreamcast Tool"
-  image: segadreamcast/toolchains:binutils-2.31.1-gcc-5.2.0-newlib-2.2.0-gdb-8.3.1
-  allow_failure: true  
+  image: segadreamcast/toolchains:binutils-2.34-gcc-4.7.4-newlib-2.0.0-gdb-9.1
   script:
     - git clone ${KOS_URL} ${KOS_PATH}
     - cd ${KOS_PATH} && tar -xvf ${KOS_PACKAGE}
@@ -48,7 +38,7 @@ build:dcload-gcc5:
    
 build:dcload-gcc9:
   stage: "Building Dreamcast Tool"
-  image: segadreamcast/toolchains:binutils-2.31.1-gcc-9.2.0-newlib-2.2.0-gdb-8.3.1  
+  image: segadreamcast/toolchains:binutils-2.34-gcc-9.3.0-newlib-3.3.0-gdb-9.1
   script:
     - git clone ${KOS_URL} ${KOS_PATH}
     - cd ${KOS_PATH} && tar -xvf ${KOS_PACKAGE}

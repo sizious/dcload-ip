@@ -42,7 +42,7 @@ start:
     ldc         r0, sr
     mov.l       disable_cache, r4
     jsr         @r4
-    nop
+     nop
     ! Clear out the whole area
     mov.l       dcload_base, r2
     mov.l       dcload_max_sz, r1
@@ -51,7 +51,7 @@ cl_loop:
     dt          r1
     mov.l       r0, @r2
     bf/s        cl_loop
-    add         #4, r2
+     add         #4, r2
     ! Copy the exception binary over to the appropriate location
     mov.l       exception_base, r2
     mov.l       exception_size, r1
@@ -61,7 +61,7 @@ ex_loop:
     dt          r1
     mov.l       r3, @r2
     bf/s        ex_loop
-    add         #4, r2
+     add         #4, r2
     ! Copy the binary over to the appropriate location
     mov.l       dcload_base, r2
     mov.l       dcload_size, r1
@@ -71,11 +71,11 @@ loop:
     dt          r1
     mov.l       r3, @r2
     bf/s        loop
-    add         #4, r2
+     add         #4, r2
     ! Jump to the main dcload binary.
     mov.l       dcload_base, r4
     jmp         @r4
-    nop
+     nop
 
     .balign     4
 init_sr:
@@ -86,13 +86,13 @@ exception_ptr:
     .long       exception
 exception_base:
 ! FYI: exception.bin is exactly 2048 bytes
-    .long       0x8c00f400
+    .long       0xac00f400
 dcload_size:
     .long       (dcload_end - dcload) >> 2
 dcload_ptr:
     .long       dcload
 dcload_base:
-    .long       0x8c004000
+    .long       0xac004000
 disable_cache:
     .long       _disable_cache
 dcload_max_sz:

@@ -1,12 +1,12 @@
 include ../../Makefile.cfg
 
 CC	= $(TARGETCC)
-CFLAGS	= $(TARGETCFLAGS) -DDCLOAD_VERSION=\"$(VERSION)\" -DDREAMCAST_IP=\"$(DREAMCAST_IP)\" -DEXCEPTION_SECONDS=$(EXCEPTION_SECONDS) -Wall -Wextra -Wno-unused -ffreestanding -fno-zero-initialized-in-bss -fomit-frame-pointer -fno-strict-aliasing -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-exceptions -fno-delete-null-pointer-checks -fno-stack-protector -fno-stack-check -fmerge-constants -fmerge-all-constants -std=gnu11
+CFLAGS	= $(TARGETCFLAGS) -DDCLOAD_VERSION=\"$(VERSION)\" -DDREAMCAST_IP=\"$(DREAMCAST_IP)\" -DEXCEPTION_SECONDS=$(EXCEPTION_SECONDS) -Wall -Wextra -ffreestanding -fno-zero-initialized-in-bss -fno-common -fomit-frame-pointer -fno-strict-aliasing -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-exceptions -fno-delete-null-pointer-checks -fno-stack-protector -fno-stack-check -fno-merge-constants -fno-merge-all-constants -std=gnu11
 INCLUDE	= -I../../target-inc
 
 OBJCOPY	= $(TARGETOBJCOPY)
 
-DCLOBJECTS	= dcload-crt0.o startup_support.o syscalls.o memcpy.o memcmp.o memfuncs.o disable.o go.o video.o dcload.o cdfs_redir.o cdfs_syscalls.o bswap.o packet.o rtl8139.o net.o commands.o adapter.o lan_adapter.o maple.o dhcp.o perfctr.o
+DCLOBJECTS	= dcload-crt0.o disable.o startup_support.o go.o video.o memcpy.o memcmp.o memfuncs.o packet.o net.o adapter.o rtl8139.o lan_adapter.o dhcp.o dcload.o perfctr.o cdfs_redir.o cdfs_syscalls.o syscalls.o maple.o commands.o
 EXCOBJECTS	= exception.o
 
 %.o : %.c

@@ -80,7 +80,7 @@ _atexit:
 	rts
 	nop
 
-	.align 4
+	.align 2
 sr_mask:
 	.long	0xefff7fff
 #if defined (__SH3E__) || defined(__SH4_SINGLE__) || defined(__SH4__) || defined(__SH4_SINGLE_ONLY__)
@@ -120,7 +120,7 @@ ccr_addr:
 ccr_data:
 	.word	0x090b
 
-	.align 4
+	.align 2
 
 #ifdef __ELF__
 	.section .stack,"aw"

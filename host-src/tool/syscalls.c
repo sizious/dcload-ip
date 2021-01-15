@@ -300,9 +300,7 @@ int dc_lseek(unsigned char * buffer)
 
 int dc_time(unsigned char * buffer)
 {
-    time_t t;
-
-    time(&t);
+    time_t t = time(NULL);
 
     send_cmd(CMD_RETVAL, t, t, NULL, 0);
 

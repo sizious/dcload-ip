@@ -18,8 +18,15 @@
 // "slow" SRAM time of 150ns.
 // Also, because 2x2kB = 4kB is used for the TX buffer, 28kB is used for the RX buffer.
 
-// For debugging LAN Adapter driver (may not compile on GCC < 9, and GCC 9 needs
+// For debugging LAN Adapter driver (may not compile on GCC < 9, and GCC 9 may need
 // to use -Os or the binary will be too big)
 //#define LAN_ADAPTER_DEBUG
+
+int la_bb_detect(void);
+int la_bb_init(void);
+void la_bb_start(void);
+void la_bb_stop(void);
+int la_bb_tx(unsigned char *pkt, int len);
+void la_bb_loop(int is_main_loop);
 
 #endif

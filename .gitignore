@@ -4,6 +4,8 @@
 *.srec
 *.exe
 *.elf
+*.asm
+*.map
 example-src/console-test
 example-src/exception-test
 example-src/gethostinfo

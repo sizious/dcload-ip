@@ -39,9 +39,9 @@ _cdfs_redir_enable:
 	rts
 	nop
 
-.align 4
+.align 2
 cdfs_entry_k:
-	.long 0x8c0000bc
+	.long 0xac0000bc
 cdfs_saved_k:
 	.long cdfs_saved
 cdfs_saved:
@@ -64,6 +64,7 @@ badsyscall:
 	rts
 	nop
 
+.align 2
 gd_first_k:
 	.long gdGdcReqCmd
 gdGdcReqCmd:

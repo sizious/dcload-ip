@@ -34,12 +34,14 @@
 #include "scif.h"
 #include "adapter.h"
 
+unsigned short dcload_syscall_port = 31313; // Legacy mode default port, gets overridn in v2.0.0+ by value from dc-tool
 unsigned int syscall_retval = 0;
-unsigned char* syscall_data;
+unsigned char* syscall_data; // Used by cmd_retval and gdbpacket syscall
 
 static struct dirent our_dir; // Here's a global array
 
 /* send command, enable bb, bb_loop(), then return */
+// Not all commands do bb_loop, though, like dcexit
 
 // This does not include null-termination in the output value
 size_t strlen(const char *s)
@@ -59,7 +61,8 @@ void build_send_packet(int command_len)
 	ip_header_t * ip = (ip_header_t *)(pkt_buf + ETHER_H_LEN);
 	udp_header_t * udp = (udp_header_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN);
 
-	unsigned char * command = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
+	// Unused
+	//unsigned char * command = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
 /*
 	scif_puts("build_send_packet\n");
 	scif_putchar(command[0]);
@@ -69,24 +72,25 @@ void build_send_packet(int command_len)
 	scif_puts("\n");
 */
 	make_ether(tool_mac, bb->mac, ether);
-	make_ip(tool_ip, our_ip, UDP_H_LEN + command_len, IP_UDP_PROTOCOL, ip);
-	make_udp(tool_port, 31313, command, command_len, ip, udp, 1);
-	bb->start();
+	make_ip(tool_ip, our_ip, UDP_H_LEN + command_len, IP_UDP_PROTOCOL, ip, 0);
+	make_udp(tool_port, dcload_syscall_port, command_len, ip, udp);
+	bb->start(); // Enable packet RX, and do it before TX because RTL is full duplex--so it may receive a response before the TX function is finished
 	bb->tx(pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + command_len);
-
 }
 
 void dcexit(void)
 {
+	bb->stop(); // Disable packet RX
+
 	command_t * command = (command_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
 	memcpy(command->id, CMD_EXIT, 4);
-	command->address = htonl(0);
-	command->size = htonl(0);
-	build_send_packet(COMMAND_LEN);
-	bb->stop();
+	command->address = 0;
+	command->size = 0;
+	build_send_packet(COMMAND_LEN); // Send exit packet to dc-tool
 }
 
+// Receive a buffer from dc-tool
 int read(int fd, void *buf, size_t count)
 {
 	command_3int_t * command = (command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
@@ -101,11 +105,22 @@ int read(int fd, void *buf, size_t count)
 	return syscall_retval;
 }
 
+// Send a buffer to dc-tool
 int write(int fd, const void *buf, size_t count)
 {
 	command_3int_t * command = (command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
-	memcpy(command->id, CMD_WRITE, 4);
+	// Version is encoded as (major << 16) | (minor << 8) | patch
+	// Legacy check for version < 2.0.0
+	if(DCTOOL_MAJOR < 2)
+	{ // Legacy version
+		memcpy(command->id, CMD_WRITE_OLD, 4);
+	}
+	else
+	{ // New version
+		memcpy(command->id, CMD_WRITE, 4);
+	}
+
 	command->value0 = htonl(fd);
 	command->value1 = htonl((unsigned int)buf);
 	command->value2 = htonl(count);
@@ -269,8 +284,15 @@ time_t time(time_t * t)
 	command_int_t * command = (command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
 
 	memcpy(command->id, CMD_TIME, 4);
+	command->value0 = htonl((unsigned int)t);
+
 	build_send_packet(sizeof(command_int_t));
 	bb->loop(0);
+
+	if(t != NULL)
+	{
+		*t = syscall_retval;
+	}
 
 	return syscall_retval;
 }
@@ -358,19 +380,6 @@ struct dirent *readdir(DIR *dir)
 		return 0;
 }
 
-int rewinddir(DIR *dir)
-{
-	command_int_t * command = (command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
-
-	memcpy(command->id, CMD_REWINDDIR, 4);
-	command->value0 = htonl((unsigned int)dir);
-
-	build_send_packet(sizeof(command_int_t));
-	bb->loop(0);
-
-	return syscall_retval;
-}
-
 int gethostinfo(unsigned int *ip, unsigned int *port)
 {
 	*ip = tool_ip;
@@ -393,6 +402,19 @@ size_t gdbpacket(const char *in_buf, unsigned int size_pack, char* out_buf)
 
 	if (syscall_retval <= out_size)
 		memcpy(out_buf, syscall_data, syscall_retval);
+
+	return syscall_retval;
+}
+
+int rewinddir(DIR *dir)
+{
+	command_int_t * command = (command_int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+
+	memcpy(command->id, CMD_REWINDDIR, 4);
+	command->value0 = htonl((unsigned int)dir);
+
+	build_send_packet(sizeof(command_int_t));
+	bb->loop(0);
 
 	return syscall_retval;
 }

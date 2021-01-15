@@ -48,7 +48,8 @@ int dc_gdbpacket(unsigned char * buffer);
 
 #define CMD_EXIT     "DC00"
 #define CMD_FSTAT    "DC01"
-#define CMD_WRITE    "DD02"
+#define CMD_WRITE_OLD    "DD02"
+#define CMD_WRITE    "DC02"
 #define CMD_READ     "DC03"
 #define CMD_OPEN     "DC04"
 #define CMD_CLOSE    "DC05"

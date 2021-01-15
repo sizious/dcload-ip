@@ -19,14 +19,38 @@ typedef unsigned int uint32;
 
 // The following definitions come from KOS, so they need to be licensed properly
 
-// --  START KOS STUFF --
+//==============================================================================
+// START KOS STUFF
+//==============================================================================
 
-// NOTE: ##version## == 2.1.0
-/* KallistiOS ##version##
+/* KallistiOS 2.1.0
 
    kernel/net/net_dhcp.h
    Copyright (C) 2008, 2013 Lawrence Sebald
 
+	 Redistribution and use in source and binary forms, with or without
+	 modification, are permitted provided that the following conditions
+	 are met:
+	 1. Redistributions of source code must retain the above copyright
+	    notice, this list of conditions and the following disclaimer.
+	 2. Redistributions in binary form must reproduce the above copyright
+	    notice, this list of conditions and the following disclaimer in the
+	    documentation and/or other materials provided with the distribution.
+	 3. Neither the name of Cryptic Allusion nor the names of its contributors
+	    may be used to endorse or promote products derived from this software
+	    without specific prior written permission.
+
+	 THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS ``AS IS'' AND
+	 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+	 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+	 ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE
+	 FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+	 DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+	 OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+	 HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+	 LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+	 OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+	 SUCH DAMAGE.
 */
 
 /* Available values for the op fields of dhcp_pkt_t */
@@ -140,7 +164,7 @@ typedef unsigned int uint32;
 #define DHCP_STATE_INIT_REBOOT  6
 #define DHCP_STATE_REBOOTING    7
 
-typedef struct dhcp_pkt {
+typedef struct __attribute__((packed, aligned(4))) {
     uint8   op;
     uint8   htype;
     uint8   hlen;
@@ -156,9 +180,13 @@ typedef struct dhcp_pkt {
     char    sname[64];
     char    file[128];
     uint8   options[];
-} __attribute__((packed)) dhcp_pkt_t;
+} dhcp_pkt_t;
 
-// --  END KOS STUFF --
+//==============================================================================
+// END KOS STUFF
+//==============================================================================
+
+#define DHCP_H_LEN 236
 
 extern volatile unsigned int dhcp_lease_time;
 extern unsigned char dhcp_nest_counter_maxed;

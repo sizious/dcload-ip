@@ -45,9 +45,10 @@ struct maple_devinfo {
 };
 
 
-extern void maple_init(void);
-extern void maple_wait_dma(void);
-extern void *maple_docmd(int port, int unit, int cmd, int datalen, void *data);
+void maple_init(void);
+void maple_wait_dma(void);
+void *maple_docmd(int port, int unit, int cmd, int datalen, void *data);
 
+#define MAPLE_DMA_SIZE (1024 + 1024 + 4 + 4 + 4)
 
-
+extern __attribute__((aligned(32))) volatile unsigned char dmabuffer[MAPLE_DMA_SIZE];

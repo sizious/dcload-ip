@@ -1,4 +1,4 @@
-// ---- perfctr.c - SH7091 Performance Counter Module Code ----
+// ---- perfctr.c - SH7750/SH7091 Performance Counter Module Code ----
 //
 // This file is part of the DreamHAL project, a hardware abstraction library
 // primarily intended for use on the SH7091 found in hardware such as the SEGA
@@ -30,7 +30,7 @@ static unsigned char pmcr_enabled = 0;
 // clearing and have it keep going, continuing from where it left off.
 //
 
-void PMCR_Init(int which, unsigned short mode, unsigned char count_type) // Will do nothing if perfcounter is already running!
+void PMCR_Init(unsigned char which, unsigned char mode, unsigned char count_type) // Will do nothing if perfcounter is already running!
 {
 	// Don't do anything if being asked to enable an already-enabled counter
 	if( (which == 1) && ((!pmcr_enabled) || (pmcr_enabled == 2)) )
@@ -51,7 +51,7 @@ void PMCR_Init(int which, unsigned short mode, unsigned char count_type) // Will
 }
 
 // Enable "undocumented" performance counters (well, they were undocumented at one point. They're documented now!)
-void PMCR_Enable(int which, unsigned short mode, unsigned char count_type, unsigned char reset_count) // Will do nothing if perfcounter is already running!
+void PMCR_Enable(unsigned char which, unsigned char mode, unsigned char count_type, unsigned char reset_count) // Will do nothing if perfcounter is already running!
 {
 	// Don't do anything if count_type or reset_count are invalid
 	if((count_type | reset_count) > 1)
@@ -87,6 +87,30 @@ void PMCR_Enable(int which, unsigned short mode, unsigned char count_type, unsig
 	}
 }
 
+// Reset counter to 0 and start it again
+// NOTE: It does not appear to be possible to clear a counter while it is running.
+void PMCR_Restart(unsigned char which, unsigned char mode, unsigned char count_type)
+{
+	if( (which == 1) && (pmcr_enabled & 0x1) )
+ 	{
+ 		// counter 1
+		PMCR_Stop(1);
+		PMCR_Enable(1, mode, count_type, PMCR_RESET_COUNTER);
+ 	}
+	else if( (which == 2) && (pmcr_enabled & 0x2) )
+ 	{
+ 		// counter 2
+		PMCR_Stop(2);
+		PMCR_Enable(2, mode, count_type, PMCR_RESET_COUNTER);
+ 	}
+	else if( (which == 3) && (pmcr_enabled == 3) )
+ 	{
+		// Both
+		PMCR_Stop(3);
+		PMCR_Enable(3, mode, count_type, PMCR_RESET_COUNTER);
+ 	}
+}
+
 // For reference:
 // #define PMCTR1H_REG 0xFF100004
 // #define PMCTR1L_REG 0xFF100008
@@ -96,7 +120,8 @@ void PMCR_Enable(int which, unsigned short mode, unsigned char count_type, unsig
 
 // Sorry, can only read one counter at a time!
 // out_array should be an array consisting of 2x unsigned ints.
-void PMCR_Read(int which, volatile unsigned int *out_array)
+// Return value of 0xffffffffffff means invalid 'which'
+void PMCR_Read(unsigned char which, volatile unsigned int *out_array)
 {
 	// if a counter is disabled, it will just return 0
 
@@ -154,28 +179,73 @@ void PMCR_Read(int which, volatile unsigned int *out_array)
 	}
 }
 
-// Reset counter to 0 and start it again
-// NOTE: It does not appear to be possible to clear a counter while it is running.
-void PMCR_Restart(int which, unsigned short mode, unsigned char count_type)
+
+unsigned long long int PMCR_RegRead(unsigned char which)
 {
-	if( (which == 1) && (pmcr_enabled & 0x1) )
- 	{
- 		// counter 1
-		PMCR_Stop(1);
-		PMCR_Enable(1, mode, count_type, PMCR_RESET_COUNTER);
- 	}
-	else if( (which == 2) && (pmcr_enabled & 0x2) )
- 	{
- 		// counter 2
-		PMCR_Stop(2);
-		PMCR_Enable(2, mode, count_type, PMCR_RESET_COUNTER);
- 	}
-	else if( (which == 3) && (pmcr_enabled == 3) )
- 	{
-		// Both
-		PMCR_Stop(3);
-		PMCR_Enable(3, mode, count_type, PMCR_RESET_COUNTER);
- 	}
+	// if a counter is disabled, it will just return 0
+
+	union _union_32_and_64 {
+		unsigned int output32[2];
+		unsigned long long int output64;
+	} output_value = {0};
+
+	if(which == 1)
+	{
+		output_value.output32[1] = PMCTR1H_REG;
+		output_value.output32[0] = PMCTR1L_REG;
+
+		// counter 1
+ 		// output value = (unsigned long long int)(*((volatile unsigned int*)PMCTR1H_REG) & 0xffff) << 32 | (unsigned long long int)(*((volatile unsigned int*)PMCTR1L_REG));
+		asm volatile (
+			"mov.l @%[reg1h],%[reg1h]\n\t" // read counter (high)
+			"mov.l @%[reg1l],%[reg1l]\n\t" // read counter (low)
+			"extu.w %[reg1h],%[reg1h]\n" // zero-extend high, aka high & 0xffff
+			: [reg1h] "+&r" (output_value.output32[1]), [reg1l] "+r" (output_value.output32[0])
+			: // no inputs
+			: // no clobbers
+		);
+	}
+	else if(which == 2)
+	{
+		output_value.output32[1] = PMCTR2H_REG;
+		output_value.output32[0] = PMCTR2L_REG;
+
+		// counter 2
+		// output value = (unsigned long long int)(*((volatile unsigned int*)PMCTR2H_REG) & 0xffff) << 32 | (unsigned long long int)(*((volatile unsigned int*)PMCTR2L_REG));
+		asm volatile (
+			"mov.l @%[reg2h],%[reg2h]\n\t" // read counter (high)
+			"mov.l @%[reg2l],%[reg2l]\n\t" // read counter (low)
+			"extu.w %[reg2h],%[reg2h]\n" // zero-extend high, aka high & 0xffff
+			: [reg2h] "+&r" (output_value.output32[1]), [reg2l] "+r" (output_value.output32[0])
+			: // no inputs
+			: // no clobbers
+		);
+	}
+	else // Invalid
+	{
+		output_value.output64 = 0xffffffffffff;
+	}
+
+	return output_value.output64;
+}
+
+// Get a counter's current configuration
+// Can only get the config for one counter at a time.
+// Return value of 0xffff means invalid 'which'
+unsigned short PMCR_Get_Config(unsigned char which)
+{
+	if(which == 1)
+	{
+		return *(volatile unsigned short*)PMCR1_CTRL_REG;
+	}
+	else if(which == 2)
+	{
+		return *(volatile unsigned short*)PMCR2_CTRL_REG;
+	}
+	else // Invalid
+	{
+		return 0xffff;
+	}
 }
 
 // Clearing only works when the counter is disabled. Otherwise, stopping the
@@ -184,7 +254,7 @@ void PMCR_Restart(int which, unsigned short mode, unsigned char count_type)
 // clear the counters for next start). This function just stops a running
 // counter and does nothing if the counter is already stopped or disabled, as
 // clearing is handled by PMCR_Enable().
-void PMCR_Stop(int which)
+void PMCR_Stop(unsigned char which)
 {
 	if( (which == 1) && (pmcr_enabled & 0x1) )
 	{
@@ -213,7 +283,7 @@ void PMCR_Stop(int which)
 // Note that disabling does NOT clear the counter.
 // It may appear that way because reading a disabled counter returns 0, but re-
 // enabling without first clearing will simply continue where it left off.
-void PMCR_Disable(int which)
+void PMCR_Disable(unsigned char which)
 {
 	if(which == 1)
 	{

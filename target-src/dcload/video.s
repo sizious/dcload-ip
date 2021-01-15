@@ -177,7 +177,7 @@ clrloop:
 	rts
 	nop
 
-	.align	4
+	.align	2
 vrambase:
 	.long	0xa5000000
 clrcount:
@@ -193,7 +193,7 @@ _get_font_address:
 	jmp	@r0
 	mov	#0,r1
 
-	.align	4
+	.align	2
 syscall_b4:
 	.long	0x8c0000b4
 

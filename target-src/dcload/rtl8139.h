@@ -32,6 +32,8 @@
 #define RT_AS_ADVERT           0x66       /* Auto-negotiation advertisement reg (16 bits) */
 #define RT_AS_LPAR             0x68       /* Auto-negotiation link partner reg (16 bits) */
 #define RT_AS_EXPANSION        0x6A       /* Auto-negotiation expansion reg (16 bits) */
+// There are many more...
+#define RT_CONFIG5             0xD8       /* Config register 5 */
 
 /* RTL8193C command bits; or these together and write teh resulting value
    into CHIPCMD to execute it. */
@@ -83,10 +85,9 @@
 #define vuc volatile unsigned char
 
 /* Configuration definitions */
-// RTL8139 RX buffer size. DCLOAD uses 16kB.
-// Well, it used to. It's using 32kB now.
-//#define RX_BUFFER_LEN        16384
-#define RX_BUFFER_LEN        32768
+// RTL8139 RX buffer size.
+#define RX_BUFFER_LEN        16384U
+//#define RX_BUFFER_LEN        32768U
 
 #define GAPSPCI_ID "GAPSPCI_BRIDGE_2"
 
@@ -96,5 +97,12 @@ typedef struct {
 	unsigned short cur_tx;                /* Current available Tx slot */
 	unsigned char  mac[6];                /* Mac address */
 } rtl_status_t;
+
+int rtl_bb_detect(void);
+int rtl_bb_init(void);
+void rtl_bb_start(void);
+void rtl_bb_stop(void);
+int rtl_bb_tx(unsigned char * pkt, int len);
+void rtl_bb_loop(int is_main_loop);
 
 #endif

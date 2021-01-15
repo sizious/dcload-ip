@@ -46,14 +46,12 @@ void maple_wait_dma()
    simple design, the buffer need only to be large enough to
    hold one maximal request frame (1024 bytes), one maximal
    response frame (1024 bytes), and the two control longwords
-   for the single transfer.  In addition, DMA addresses need
-   to be aligned to a 32 byte boundary, so we add some padding
-   to account for extra aligning.                              */
+   and header for the single transfer. In addition, DMA
+   addresses need to be aligned to a 32 byte boundary.
+*/
 
-// Make GCC align it in the .data section. Keep the extra alignment padding bytes for safety when using "-Os"
-//...Although it's very possible we just don't need those extra padding bytes anymore, since GCC aligns the binary relative to 0x8c010000.
-#define MAPLE_DMA_SIZE (1024 + 1024 + 4 + 4 + 32)
-__attribute__((aligned(32))) static volatile unsigned char dmabuffer[MAPLE_DMA_SIZE]; // Here's a global array
+// Make GCC 32-byte align it in the .data section since GCC aligns the binary relative to 0x8c010000.
+__attribute__((aligned(32))) volatile unsigned char dmabuffer[MAPLE_DMA_SIZE]; // Here's a global array
 
 
 /*
@@ -68,7 +66,7 @@ __attribute__((aligned(32))) static volatile unsigned char dmabuffer[MAPLE_DMA_S
  */
 void *maple_docmd(int port, int unit, int cmd, int datalen, void *data)
 {
-  unsigned long *sendbuf, *recvbuf;
+  unsigned int *sendbuf, *recvbuf;
   int to, from;
 
   port &= 3;
@@ -87,18 +85,18 @@ void *maple_docmd(int port, int unit, int cmd, int datalen, void *data)
      dmabuffer, with proper alignment.  Also mark the buffer as
      uncacheable.                                               */
   recvbuf =
-    (unsigned long *) (((((unsigned long)dmabuffer)+31) & ~31) | 0xa0000000);
+    (unsigned int *) ((unsigned int)dmabuffer | 0xa0000000);
 
   /* Place the send buffer right after the receive buffer.  This
      automatically gives proper alignment and uncacheability.    */
   sendbuf =
-    (unsigned long *) (((unsigned char *)recvbuf) + 1024);
+    (unsigned int *) ((unsigned int)recvbuf + 1024);
 
   /* Make sure no DMA operation is currently in progress */
   maple_wait_dma();
 
   /* Set hardware DMA pointer to beginning of send buffer */
-  MAPLE(0x04) = ((unsigned long)sendbuf) & 0xfffffff;
+  MAPLE(0x04) = (unsigned int)sendbuf & 0x0fffffff;
 
   /* Setup DMA data.  Each message consists of two control words followed
      by the request frame.  The first control word determines the port,
@@ -109,21 +107,24 @@ void *maple_docmd(int port, int unit, int cmd, int datalen, void *data)
 
   /* Here we know only one frame should be send and received, so
      the final message control bit will always be set...          */
-  *sendbuf++ = datalen | (port << 16) | 0x80000000;
+  *sendbuf++ = datalen | (port << 16) | 0x80000000; // NOTE: These 3 writes use the uncacheable area
 
   /* Write address to receive buffer where the response frame should be put */
-  *sendbuf++ = ((unsigned long)recvbuf) & 0xfffffff;
+  *sendbuf++ = ((unsigned int)recvbuf & 0x0fffffff);
 
   /* Create the frame header.  The fields are assembled "backwards"
      because of the Maple Bus big-endianness.                       */
   *sendbuf++ = (cmd & 0xff) | (to << 8) | (from << 16) | (datalen << 24);
 
   /* Copy parameter data, if any */
-  if(datalen > 0) {
-//    memcpy(sendbuf, data, datalen << 2); // sendbuf is 32-byte aligned, offset by 12. data is 8-byte aligned, offset by 4
-    // So memcpy_32bit the first 4 bytes to make it all 8-byte aligned (sendbuf will be 16-byte aligned, but that's fine, too)
+  if(datalen > 0)
+  {
+//    memcpy(sendbuf, data, datalen << 2); // sendbuf is 32-byte aligned, offset by 12. data is 8-byte aligned, offset by 4 due to port, unit, cmd, & datalen
+    // So memcpy_32bit the first 4 bytes to make it all 8-byte aligned (remaining sendbuf will be 16-byte aligned and remaining data will be 8-byte aligned)
     memcpy_32bit(sendbuf, data, 4/4);
-    SH4_aligned_memcpy((unsigned char *)sendbuf + 4, (unsigned char *)data + 4, datalen - 1);
+    SH4_aligned_memcpy((void*) (((unsigned int)sendbuf + 4) & 0x1fffffff), (void*) (((unsigned int)data + 4) & 0x1fffffff), datalen - 1); // use copy-back memory area for speed boost
+    CacheBlockWriteBack((unsigned char*) ((unsigned int)sendbuf & 0x1fffffe0), ((datalen * 4) + 31)/32); // Synchronize memory with opcache in 32-byte blocks, sendbuf is already 32-byte aligned
+    // Need to do that so DMA sees the data in memory
   }
 
   /* Frame is finished, and DMA list is terminated with the flag bit.

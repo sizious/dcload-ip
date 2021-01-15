@@ -61,6 +61,9 @@ int _nl_msg_cat_cntr;
 #define CatchError(x) if(x) return -1;
 
 #define VERSION PACKAGE_VERSION
+#define DCTOOL_LEGACY_SYSCALL_PORT 31313
+// Really should be using ports in the range 49152-65535, so dcload v2 does.
+#define DCTOOL_DEFAULT_SYSCALL_PORT 53535
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -188,19 +191,26 @@ int getopt(int nargc, char * const *nargv, const char *ostr)
         }
         return (optopt);                        /* dump back option letter */
 }
+#else
+// This is defined elsewhere if the above #if isn't used...
+extern char *optarg;
 #endif
 
 int gdb_socket_started = 0;
-#ifndef __MINGW32__
-int dcsocket = 0;
-int socket_fd = 0;
-int gdb_server_socket = -1;
-#else
+#ifdef __MINGW32__
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
 /* Winsock SOCKET is defined as an unsigned int, so -1 won't work here */
+SOCKET dcsocket_legacy = 0;
 SOCKET dcsocket = 0;
 SOCKET gdb_server_socket = 0;
-SOCKET socket_fd = 0;
+SOCKET socket_fd = 0; // For GDB
+SOCKET global_socket = 0; // Stores whichever global socket gets used
+#else
+int dcsocket_legacy = 0;
+int dcsocket = 0;
+int gdb_server_socket = -1;
+int socket_fd = 0; // For GDB
+int global_socket = 0; // Stores whichever global socket gets used
 #endif
 
 void cleanup(char **fnames)
@@ -208,17 +218,38 @@ void cleanup(char **fnames)
     int counter = 0;
 
     for(; counter < 4; counter++)
-	if(fnames[counter] != 0)
-	    free(fnames[counter]);
+    {
+      if(fnames[counter] != 0)
+      {
+	       free(fnames[counter]);
+      }
+    }
+
+#ifdef __MINGW32__
     if(dcsocket)
-#ifndef __MINGW32__
-    close(dcsocket);
+    {
+      closesocket(dcsocket);
+    }
+
+    if(dcsocket_legacy)
+    {
+      closesocket(dcsocket_legacy);
+    }
 #else
-    closesocket(dcsocket);
+    if(dcsocket)
+    {
+      close(dcsocket);
+    }
+
+    if(dcsocket_legacy)
+    {
+      close(dcsocket_legacy);
+    }
 #endif
 
 	// Handle GDB
-	if (gdb_socket_started) {
+	if (gdb_socket_started)
+  {
 		gdb_socket_started = 0;
 
 		// Send SIGTERM to the GDB Client, telling remote DC program has ended
@@ -243,8 +274,6 @@ void cleanup(char **fnames)
 #endif
 }
 
-extern char *optarg;
-
 unsigned int time_in_usec()
 {
     struct timeval thetime;
@@ -256,106 +285,375 @@ unsigned int time_in_usec()
 
 /* 250000 = 0.25 seconds */
 #define PACKET_TIMEOUT 250000
+struct timeval starttime = {0}, endtime = {0};
 
-/* receive total bytes from dc and store in data */
-int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int quiet)
-{
-    unsigned char buffer[2048];
-    unsigned char *i;
-    int c;
-    unsigned char *map = (unsigned char *)malloc((total+1023)/1024);
-    int packets = 0;
-    unsigned int start;
-    int retval;
-
-    memset(map, 0, (total+1023)/1024);
-
-    if (!quiet) {
-	send_cmd(CMD_SENDBIN, dcaddr, total, NULL, 0);
-    }
-    else {
-	send_cmd(CMD_SENDBINQ, dcaddr, total, NULL, 0);
-    }
-
-    start = time_in_usec();
-
-    while (((time_in_usec() - start) < PACKET_TIMEOUT)&&(packets < ((total+1023)/1024 + 1))) {
-	memset(buffer, 0, 2048);
-
-	while(((retval = recv(dcsocket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
-
-	if (retval > 0) {
-	    start = time_in_usec();
-	    if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4)) {
-		if ( ((ntohl(((command_t *)buffer)->address) - dcaddr)/1024) >= ((total + 1024)/1024) ) {
-		    printf("Obviously bad packet, avoiding segfault\n");
-		    fflush(stdout);
-		}
-		else {
-		    map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1024 ] = 1;
-		    i = data + (ntohl(((command_t *)buffer)->address) - dcaddr);
-
-		    memcpy(i, buffer + 12, ntohl(((command_t *)buffer)->size));
-	        }
-	    }
-	    packets++;
-	}
-    }
-
-    for(c = 0; c < (total+1023)/1024; c++)
-	if (!map[c]) {
-	    if ( (total - c*1024) >= 1024) {
-		send_cmd(CMD_SENDBINQ, dcaddr + c*1024, 1024, NULL, 0);
-	    }
-	    else {
-		send_cmd(CMD_SENDBINQ, dcaddr + c*1024, total - c*1024, NULL, 0);
-	    }
-
-	    start = time_in_usec();
-	    while(((retval = recv(dcsocket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
-
-	    if (retval > 0) {
-		start = time_in_usec();
-
-		if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4)) {
-		    map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1024 ] = 1;
-		    /* printf("recv_data: got chunk for %p, %d bytes\n",
-			(void *)ntohl(((command_t *)buffer)->address), ntohl(((command_t *)buffer)->size)); */
-		    i = data + (ntohl(((command_t *)buffer)->address) - dcaddr);
-
-		    memcpy(i, buffer + 12, ntohl(((command_t *)buffer)->size));
-		}
-
-		// Get the DONEBIN
-		while(((retval = recv(dcsocket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
-	    }
-
-	    // Force us to go back and recheck
-	    // XXX This should be improved after recv_data can return errors.
-	    c = -1;
-	}
-
-    free(map);
-
-    return 0;
-}
-
-// Adapter type detection for RX FIFO stuff (each adapter needs different values)
+// Adapter type detection
+// Each adapter needs different values for things like Dreamcast RX FIFO sizes
 #define BBA_MODEL 0400
 #define LAN_MODEL 0300
 
 unsigned int installed_adapter = 0;
+unsigned int legacy = 0; // To know if this should use old 1024-byte sizes for packets or new 1440-sizes
+unsigned int force_legacy = 0; // To force dcload and dc-tool into legacy mode with -l flag
 
-// Division factor for how long to wait for DC to empty its RX FIFO
-#define BBA_RX_FIFO_DELAY_DIV DREAMCAST_BBA_RX_FIFO_DELAY_DIV
-#define LAN_RX_FIFO_DELAY_DIV DREAMCAST_LAN_RX_FIFO_DELAY_DIV
+// How long to wait for DC to empty its RX FIFO, in microseconds
+#define BBA_RX_FIFO_DELAY_TIME DREAMCAST_BBA_RX_FIFO_DELAY_TIME
+#define LAN_RX_FIFO_DELAY_TIME DREAMCAST_LAN_RX_FIFO_DELAY_TIME
 
 unsigned int rx_fifo_delay = PACKET_TIMEOUT/51; // Default for compatibility with old dcload-ip versions
 
 #define BBA_RX_FIFO_DELAY_COUNT DREAMCAST_BBA_RX_FIFO_DELAY_COUNT
 #define LAN_RX_FIFO_DELAY_COUNT DREAMCAST_LAN_RX_FIFO_DELAY_COUNT
 // Number of packets to send before waiting for DC to empty its RX FIFO
+
 unsigned int rx_fifo_delay_count = 15; // Default for compatibility with old dcload-ip versions
+
+// Get the version of dc-tool encoded in a uint as (major << 16) | (minor << 8) | patch,
+// since this program is more likely to get patch version bumps than either of the other two.
+// Presumably a max version of 255.255.255 is OK. :P
+unsigned int encoded_tool_ver = 0;
+
+void make_encoded_tool_version()
+{
+  if(!force_legacy) // Force legacy forces 1024-size packets by using the legacy system
+  {
+    int i = 1, c = 0; // Indices
+    unsigned char *ver_uchar = (unsigned char *)&encoded_tool_ver;
+    unsigned short *ver_ushort = (unsigned short *)&encoded_tool_ver;
+
+    // 1 byte per version unit
+    while(VERSION[c] != '\0')
+    {
+      if(VERSION[c] == '.')
+      {
+        c++;
+        i++;
+      }
+      else
+      {
+        ver_uchar[i] *= 10;
+        ver_uchar[i] += VERSION[c] - '0';
+        c++;
+      }
+    }
+
+    encoded_tool_ver = ntohl(encoded_tool_ver);
+  }
+  // force_legacy forces the version to 0, causing dcload and dc-tool to use legacy 1024-size mode
+}
+
+// Both send_data() and recv_data() use this to set up communications between dc-tool and dc-load
+int prepare_comms(unsigned char *buffer)
+{
+  if(!installed_adapter) // This is how we know that this function has run before
+  {
+    // First check for the type of adapter installed (only need to do this once)
+    make_encoded_tool_version(); // Only need to set encoded dc-tool version once, and it's only needed for this version info handshake
+
+    // Unless 'force_legacy' is set, first we use the v2.0.0+ socket to determine whether or not dcload is v2.0.0+ or legacy:
+    // Legacy dcload will reply on 31313. Note that response port is not the primary means of version detection,
+    // so, in the event that something ever changes about this in the future, ports won't come back to bite anyone.
+    if(force_legacy)
+    {
+      global_socket = dcsocket_legacy;
+    }
+    else
+    {
+      global_socket = dcsocket;
+    }
+
+    int flip = 0;
+
+    do
+    {
+      // Stuff the encoded dc-tool version into the address field
+      // dcload v2.0.0 will know what to do with this; prior versions will ignore it
+      send_cmd(CMD_VERSION, encoded_tool_ver, 0, NULL, 0);
+    }
+    while(recv_response(buffer, PACKET_TIMEOUT) == -1);
+
+    while(memcmp(((command_t *)buffer)->id, CMD_VERSION, 4))
+    {
+      printf("prepare_comms: No response to CMD_VERSION, retrying... %c%c%c%c\n",buffer[0],buffer[1],buffer[2],buffer[3]);
+      do
+      {
+        // Alternate checking each socket
+        flip ^= 0x1;
+        if(flip)
+        {
+          global_socket = dcsocket_legacy;
+        }
+        else
+        {
+          global_socket = dcsocket;
+        }
+        send_cmd(CMD_VERSION, encoded_tool_ver, 0, NULL, 0);
+      }
+      while (recv_response(buffer, PACKET_TIMEOUT) == -1);
+    }
+
+    // Close the socket we don't need, then set parameters
+    if(global_socket == dcsocket)
+    {
+#ifdef __MINGW32__
+      closesocket(dcsocket_legacy);
+#else
+      close(dcsocket_legacy);
+#endif
+    }
+    else // global_socket == dcsocket_legacy
+    {
+#ifdef __MINGW32__
+        closesocket(dcsocket);
+#else
+        close(dcsocket);
+#endif
+    }
+
+    // As of version 2.0.0 the 'version' command now stuffs a numeric adapter
+    // type into the previously unused command->address field :)
+    installed_adapter = ntohl(((command_t*)buffer)->address);
+
+    if(installed_adapter == BBA_MODEL)
+    {
+      printf("%s\n", ((command_t*)buffer)->data);
+      if(force_legacy)
+      {
+        printf("Forcing 1024-byte payloads...\n");
+        legacy = 1;
+      }
+
+      rx_fifo_delay = BBA_RX_FIFO_DELAY_TIME; // microseconds
+      rx_fifo_delay_count = BBA_RX_FIFO_DELAY_COUNT; // packets per burst
+    }
+    else if(installed_adapter == LAN_MODEL)
+    {
+      printf("%s\n", ((command_t*)buffer)->data);
+      if(force_legacy)
+      {
+        printf("Forcing 1024-byte payloads...\n");
+        legacy = 1;
+      }
+
+      rx_fifo_delay = LAN_RX_FIFO_DELAY_TIME; // microseconds
+      rx_fifo_delay_count = LAN_RX_FIFO_DELAY_COUNT; // packets per burst
+    }
+    else // legacy dcload has 0 there
+    {
+      // Alternatively, it means someone is using an old version of dcload-ip and really needs to upgrade.
+      printf("Unknown adapter or old version of dcload-ip detected.\nDefaulting to legacy Broadband Adapter settings...\n");
+      installed_adapter = BBA_MODEL;
+      legacy = 1;
+      // Default rx_fifo_delay and rx_fifo_delay_count are already set for legacy
+    }
+  }
+}
+
+/* receive total bytes from dc and store in data */
+int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int quiet)
+{
+  unsigned char buffer[2048];
+  unsigned char *i;
+  int c;
+  int packets = 0;
+  unsigned int start;
+  int retval;
+
+  // v2.0.0: set up the socket, do version and adapter identification, set globals
+  prepare_comms(buffer);
+
+  // old 1024 sizes
+  // This if() looks awful because some ARM chips don't have integer divide, so
+  // hardcoding 1024 and 1440 sizes removes those divides. This is because GCC
+  // has some tricks for certain "nice" numbers (I don't know if there's an
+  // official GCC term for them), and both 1024 and 1440 count as nice numbers.
+  if(legacy)
+  {
+    unsigned char *map = (unsigned char *)malloc((total+1023)/1024);
+    memset(map, 0, (total+1023)/1024);
+
+    // Start thropughput timer
+    gettimeofday(&starttime, 0);
+
+    // Receive the data!
+
+    if (!quiet)
+    {
+      send_cmd(CMD_SENDBIN, dcaddr, total, NULL, 0);
+    }
+    else
+    {
+      send_cmd(CMD_SENDBINQ, dcaddr, total, NULL, 0);
+    }
+
+    start = time_in_usec();
+
+    while (((time_in_usec() - start) < PACKET_TIMEOUT)&&(packets < ((total+1023)/1024 + 1)))
+    {
+      memset(buffer, 0, 2048);
+
+      while(((retval = recv(global_socket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+
+      if (retval > 0)
+      {
+        start = time_in_usec();
+        if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
+        {
+          if ( ((ntohl(((command_t *)buffer)->address) - dcaddr)/1024) >= ((total + 1024)/1024) )
+          {
+            printf("Obviously bad packet, avoiding segfault\n");
+            fflush(stdout);
+          }
+          else
+          {
+            map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1024 ] = 1;
+            i = data + (ntohl(((command_t *)buffer)->address) - dcaddr);
+
+            memcpy(i, buffer + 12, ntohl(((command_t *)buffer)->size));
+          }
+        }
+        packets++;
+      }
+    }
+
+    for(c = 0; c < (total+1023)/1024; c++)
+    {
+      if (!map[c])
+      {
+        if ( (total - c*1024) >= 1024)
+        {
+          send_cmd(CMD_SENDBINQ, dcaddr + c*1024, 1024, NULL, 0);
+        }
+        else
+        {
+          send_cmd(CMD_SENDBINQ, dcaddr + c*1024, total - c*1024, NULL, 0);
+        }
+
+        start = time_in_usec();
+        while(((retval = recv(global_socket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+
+        if (retval > 0)
+        {
+          start = time_in_usec();
+
+          if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
+          {
+            map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1024 ] = 1;
+            /* printf("recv_data: got chunk for %p, %d bytes\n",
+            (void *)ntohl(((command_t *)buffer)->address), ntohl(((command_t *)buffer)->size)); */
+            i = data + (ntohl(((command_t *)buffer)->address) - dcaddr);
+
+            memcpy(i, buffer + 12, ntohl(((command_t *)buffer)->size));
+          }
+
+          // Get the DONEBIN
+          while(((retval = recv(global_socket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+        }
+
+        // Force us to go back and recheck
+        // XXX This should be improved after recv_data can return errors.
+        c = -1;
+      }
+    }
+
+    gettimeofday(&endtime, 0);
+
+    free(map);
+  }
+  else // New 1440 sizes
+  {
+    unsigned char *map = (unsigned char *)malloc((total+1439)/1440);
+    memset(map, 0, (total+1439)/1440);
+
+    // Start thropughput timer
+    gettimeofday(&starttime, 0);
+
+    // Receive the data!
+
+    if (!quiet)
+    {
+      send_cmd(CMD_SENDBIN, dcaddr, total, NULL, 0);
+    }
+    else
+    {
+      send_cmd(CMD_SENDBINQ, dcaddr, total, NULL, 0);
+    }
+
+    start = time_in_usec();
+
+    while (((time_in_usec() - start) < PACKET_TIMEOUT)&&(packets < ((total+1439)/1440 + 1)))
+    {
+      memset(buffer, 0, 2048);
+
+      while(((retval = recv(global_socket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+
+      if (retval > 0)
+      {
+        start = time_in_usec();
+        if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
+        {
+          if ( ((ntohl(((command_t *)buffer)->address) - dcaddr)/1440) >= ((total + 1440)/1440) )
+          {
+            printf("Obviously bad packet, avoiding segfault\n");
+            fflush(stdout);
+          }
+          else
+          {
+            map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1440 ] = 1;
+            i = data + (ntohl(((command_t *)buffer)->address) - dcaddr);
+
+            memcpy(i, buffer + 12, ntohl(((command_t *)buffer)->size));
+          }
+        }
+        packets++;
+      }
+    }
+
+    for(c = 0; c < (total+1439)/1440; c++)
+    if (!map[c])
+    {
+      if ( (total - c*1440) >= 1440)
+      {
+        send_cmd(CMD_SENDBINQ, dcaddr + c*1440, 1440, NULL, 0);
+      }
+      else
+      {
+        send_cmd(CMD_SENDBINQ, dcaddr + c*1440, total - c*1440, NULL, 0);
+      }
+
+      start = time_in_usec();
+      while(((retval = recv(global_socket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+
+      if (retval > 0)
+      {
+        start = time_in_usec();
+
+        if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
+        {
+          map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1440 ] = 1;
+          /* printf("recv_data: got chunk for %p, %d bytes\n",
+          (void *)ntohl(((command_t *)buffer)->address), ntohl(((command_t *)buffer)->size)); */
+          i = data + (ntohl(((command_t *)buffer)->address) - dcaddr);
+
+          memcpy(i, buffer + 12, ntohl(((command_t *)buffer)->size));
+        }
+
+        // Get the DONEBIN
+        while(((retval = recv(global_socket, (void *)buffer, 2048, 0)) == -1)&&((time_in_usec() - start) < PACKET_TIMEOUT));
+      }
+
+      // Force us to go back and recheck
+      // XXX This should be improved after recv_data can return errors.
+      c = -1;
+    }
+
+    gettimeofday(&endtime, 0);
+
+    free(map);
+  }
+
+  return 0;
+}
 
 /* send size bytes to dc from addr to dcaddr*/
 int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
@@ -369,54 +667,10 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
     if (!size)
 	   return -1;
 
-    if(!installed_adapter)
-    {
-      // First check for the type of adapter installed (only need to do this once)
-      do
-      {
-    send_cmd(CMD_VERSION, 0, 0, NULL, 0);
-      }
-      while(recv_response(buffer, PACKET_TIMEOUT) == -1);
-
-      while(memcmp(((command_t *)buffer)->id, CMD_VERSION, 4)) {
-  	printf("send_data: error in response to CMD_VERSION, retrying... %c%c%c%c\n",buffer[0],buffer[1],buffer[2],buffer[3]);
-  	do
-  	    send_cmd(CMD_VERSION, 0, 0, NULL, 0);
-  	while (recv_response(buffer, PACKET_TIMEOUT) == -1);
-      }
-
-      // As of version 1.1.2 the 'version' command now stuffs a numeric adapter
-      // type into the previously unused command->address field :)
-      installed_adapter = ntohl(((command_t*)buffer)->address);
-
-      if(installed_adapter == BBA_MODEL)
-      {
-        printf("%s\n", ((command_t*)buffer)->data);
-        rx_fifo_delay = PACKET_TIMEOUT/BBA_RX_FIFO_DELAY_DIV;
-        rx_fifo_delay_count = BBA_RX_FIFO_DELAY_COUNT;
-      }
-      else if(installed_adapter == LAN_MODEL)
-      {
-        printf("%s\n", ((command_t*)buffer)->data);
-        rx_fifo_delay = PACKET_TIMEOUT/LAN_RX_FIFO_DELAY_DIV;
-        rx_fifo_delay_count = LAN_RX_FIFO_DELAY_COUNT;
-      }
-      else
-      {
-        // "But most people have a BBA! Why not default to that?????"
-        // Because if they get this error then the network is massively screwed up and
-        // they'll probably see higher performance from using the LAN Adapter timings.
-        // It means, "buy a new router." Seriously: Gigabit-class hardware is less than $30 USD in 2020.
-
-        // Alternatively, it means someone is using an old version of dcload-ip and really needs to upgrade.
-        printf("Unknown adapter or old version of dcload-ip detected.\nDefaulting to Broadband Adapter...\n");
-        installed_adapter = BBA_MODEL;
-
-      }
-    }
+     // v2.0.0: Set up the socket, do version and adapter identification, set globals
+     prepare_comms(buffer);
 
     // Send the data!
-
     do
     {
 	send_cmd(CMD_LOADBIN, dcaddr, size, NULL, 0);
@@ -430,34 +684,70 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
 	while (recv_response(buffer, PACKET_TIMEOUT) == -1);
     }
 
-    for(i = addr; i < addr + size; i += 1024)
+    // Start throughput timer
+    gettimeofday(&starttime, 0);
+
+    // old 1024 sizes
+    if(legacy)
     {
-      if ((addr + size - i) >= 1024)
+      for(i = addr; i < (addr + size); i += 1024)
       {
-	       send_cmd(CMD_PARTBIN, dcaddr, 1024, i, 1024);
-	    }
-	    else
-      {
-	       send_cmd(CMD_PARTBIN, dcaddr, (addr + size) - i, i, (addr + size) - i);
-	    }
+        if ((addr + size - i) >= 1024)
+        {
+  	       send_cmd(CMD_PARTBIN, dcaddr, 1024, i, 1024);
+  	    }
+  	    else
+        {
+  	       send_cmd(CMD_PARTBIN, dcaddr, (addr + size) - i, i, (addr + size) - i);
+  	    }
 
-      dcaddr += 1024;
+        dcaddr += 1024;
 
-    	/* give the DC a chance to empty its rx fifo
-    	 * this increases transfer rate on 100mbit by about 3.4x
-    	 */
-    	count++;
-    	if (count == rx_fifo_delay_count)
+      	/* give the DC a chance to empty its rx fifo
+      	 * this prevents buffer overflows and dropped packets
+      	 */
+      	count++;
+      	if (count == rx_fifo_delay_count)
+        {
+    	    start = time_in_usec();
+    	    while ((time_in_usec() - start) < rx_fifo_delay);
+    		  count = 0;
+        }
+      }
+    }
+    else // 1440 sizes
+    {
+      for(i = addr; i < (addr + size); i += 1440)
       {
-  	    start = time_in_usec();
-  	    while ((time_in_usec() - start) < rx_fifo_delay);
-  		  count = 0;
+        if ((addr + size - i) >= 1440)
+        {
+           send_cmd(CMD_PARTBIN, dcaddr, 1440, i, 1440);
+        }
+        else
+        {
+           send_cmd(CMD_PARTBIN, dcaddr, (addr + size) - i, i, (addr + size) - i);
+        }
+
+        dcaddr += 1440;
+
+        /* give the DC a chance to empty its rx fifo
+         * this prevents buffer overflows and dropped packets
+         */
+        count++;
+        if (count == rx_fifo_delay_count)
+        {
+          start = time_in_usec();
+          while ((time_in_usec() - start) < rx_fifo_delay);
+          count = 0;
+        }
       }
     }
 
+    // Finish up sending and check for dropped packets
+
     start = time_in_usec();
     /* delay a bit to try to make sure all data goes out before CMD_DONEBIN */
-    while ((time_in_usec() - start) < PACKET_TIMEOUT/10);
+    while ((time_in_usec() - start) < PACKET_TIMEOUT/10); // 25ms
 
     do
 	send_cmd(CMD_DONEBIN, 0, 0, NULL, 0);
@@ -488,27 +778,30 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
 	}
     }
 
+    gettimeofday(&endtime, 0);
+
     return 0;
 }
 
 void usage(void)
 {
-    printf("\n%s %s by <andrewk@napalm-x.com>\n\n",PACKAGE,VERSION);
-    printf("-x <filename> Upload and execute <filename>\n");
-    printf("-u <filename> Upload <filename>\n");
-    printf("-d <filename> Download to <filename>\n");
-    printf("-a <address>  Set address to <address> (default: 0x8c010000)\n");
-    printf("-s <size>     Set size to <size>\n");
-    printf("-t <ip>       Communicate with <ip> (default is: %s)\n",DREAMCAST_IP);
-    printf("-n            Do not attach console and fileserver\n");
-    printf("-q            Do not clear screen before download\n");
+    printf("\n%s %s by Andrew \"ADK\" Kieschnick\nAugmented by Moopthehedgehog\n\n", PACKAGE, VERSION);
+    printf("-x <filename>  Upload and execute <filename>\n");
+    printf("-u <filename>  Upload <filename>\n");
+    printf("-d <filename>  Download to <filename>\n");
+    printf("-a <address>   Set address to <address> (default: 0x0c010000)\n");
+    printf("-s <size>      Set size to <size>\n");
+    printf("-t <ip>:<port> Connect to <ip>:<port> (port optional, default: %s:53535)\n",DREAMCAST_IP);
+    printf("-n             Do not attach console and fileserver\n");
+    printf("-q             Do not clear screen before download\n");
 #ifndef __MINGW32__
-    printf("-c <path>     Chroot to <path> (must be super-user)\n");
+    printf("-c <path>      Chroot to <path> (must be super-user)\n");
 #endif
-    printf("-i <isofile>  Enable cdfs redirection using iso image <isofile>\n");
-    printf("-r            Reset (only works when dcload is in control)\n");
-    printf("-g            Start a GDB server\n");
-    printf("-h            Usage information (you\'re looking at it)\n\n");
+    printf("-i <isofile>   Enable cdfs redirection using iso image <isofile>\n");
+    printf("-r             Reset (only works when dcload is in control)\n");
+    printf("-g             Start a GDB server\n");
+    printf("-l             Force legacy 1024-byte payload size (dcload-ip v2+ only)\n");
+    printf("-h             Usage information (you\'re looking at it)\n\n");
 }
 
 /* Got to make sure WinSock is initalized */
@@ -527,52 +820,83 @@ int start_ws()
 }
 #endif
 
-int open_socket(char *hostname)
+// dcload v2.0.0+ UDP port number
+unsigned int dcload_portnum = DCTOOL_DEFAULT_SYSCALL_PORT;
+
+// Legacy and new mode sockets
+int open_sockets(char *hostname)
 {
     struct sockaddr_in sin;
+    struct sockaddr_in sin_legacy;
     struct hostent *host = 0;
 
     dcsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    dcsocket_legacy = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
 
 #ifndef __MINGW32__
-    if (dcsocket < 0) {
+    if ((dcsocket < 0) || (dcsocket_legacy < 0)) {
 #else
-    if (dcsocket == INVALID_SOCKET) {
+    if ((dcsocket == INVALID_SOCKET) || (dcsocket_legacy == INVALID_SOCKET)) {
 #endif
 	log_error("socket");
 	return -1;
     }
 
     bzero(&sin, sizeof(sin));
+    bzero(&sin_legacy, sizeof(sin_legacy));
+
     sin.sin_family = AF_INET;
-    sin.sin_port = htons(31313);
+    sin_legacy.sin_family = AF_INET;
+
+    // So, dcload is actually the server in this client-server setup
+    // However, dc-tool gets to pick the port
+
+    sin.sin_port = htons(dcload_portnum);
+    sin_legacy.sin_port = htons(DCTOOL_LEGACY_SYSCALL_PORT);
+
+    // On many platforms, leading-zeros in an octet cause the octet to be
+    // interpreted as octal, so they should always be removed before trying to
+    // connect.
+    // --tsowell
 
     // Try to remove leading zeros from hostname...
-    cleanup_ip_address(hostname);
+		cleanup_ip_address(hostname);
     host = gethostbyname(hostname);
 
-    if (!host) {
-	log_error("gethostbyname");
+		if (!host) {
+			// definitely, we can't do nothing
+			log_error("gethostbyname");
+			return -1;
+		}
+
+    memcpy((char *)&sin.sin_addr, host->h_addr, host->h_length);
+    memcpy((char *)&sin_legacy.sin_addr, host->h_addr, host->h_length);
+
+    // Connect legacy port first so that v2.0.0+ port won't conflict
+    if (connect(dcsocket_legacy, (struct sockaddr *)&sin_legacy, sizeof(sin_legacy)) < 0) {
+	log_error("connect_legacy");
 	return -1;
     }
 
-    memcpy((char *)&sin.sin_addr, host->h_addr, host->h_length);
-
+    // Connect v2.0.0+ port
     if (connect(dcsocket, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-	log_error("connect");
-	return -1;
+  log_error("connect");
+  return -1;
     }
 
 #ifdef __MINGW32__
     unsigned long flags = 1;
-	int failed = 0;
+	  int failed = 0;
+    int failed_legacy = 0;
     failed = ioctlsocket(dcsocket, FIONBIO, &flags);
-    if ( failed == SOCKET_ERROR ) {
+    failed_legacy = ioctlsocket(dcsocket_legacy, FIONBIO, &flags);
+    if ((failed == SOCKET_ERROR) || (failed_legacy == SOCKET_ERROR)) {
 	log_error("ioctlsocket");
 	return -1;
     }
 #else
     fcntl(dcsocket, F_SETFL, O_NONBLOCK);
+    fcntl(dcsocket_legacy, F_SETFL, O_NONBLOCK);
 #endif
 
     return 0;
@@ -588,7 +912,7 @@ int recv_response(unsigned char *buffer, int timeout)
 
     while( ((time_in_usec() - start) < timeout) && (rv == -1))
 	  {
-       rv = recv(dcsocket, (void *)buffer, 2048, 0);
+       rv = recv(global_socket, (void *)buffer, 2048, 0);
        // 100Mbit/s is 10 nanoseconds, but that's reportedly a little slow.
        // 5 is better, but still a bit slow. So let's do 1 nanosecond.
        // There's no picosecond sleep, so this is about as good as it gets.
@@ -615,7 +939,7 @@ int send_command(char *command, unsigned int addr, unsigned int size, unsigned c
     if (data != 0)
 	memcpy(c_buff + 12, data, dsize);
 
-    error = send(dcsocket, (void *)c_buff, 12+dsize, 0);
+    error = send(global_socket, (void *)c_buff, 12+dsize, 0);
 
     if(error == -1) {
 #ifndef __MINGW32__
@@ -642,7 +966,6 @@ unsigned int upload(char *filename, unsigned int address)
     int size = 0;
     int sectsize;
     unsigned char *inbuf;
-    struct timeval starttime, endtime;
 
     double stime, etime;
 #ifdef WITH_BFD
@@ -666,13 +989,13 @@ unsigned int upload(char *filename, unsigned int address)
             printf("File format is %s, ", somebfd->xvec->name);
             address = somebfd->start_address;
             size = 0;
-            printf("start address is 0x%x\n", address);
+            printf("start address is 0x%08x\n", address);
 
             gettimeofday(&starttime, 0);
 
             for (section = somebfd->sections; section != NULL; section = section->next) {
                 if ((section->flags & SEC_HAS_CONTENTS) && (section->flags & SEC_LOAD)) {
-                    sectsize = bfd_section_size(somebfd, section);
+                    sectsize = bfd_section_size(section);
                     printf("Section %s, ",section->name);
                     printf("lma 0x%x, ", (unsigned int)section->lma);
                     printf("size %d\n",sectsize);
@@ -719,7 +1042,7 @@ unsigned int upload(char *filename, unsigned int address)
         }
 
         address = ehdr->e_entry;
-        printf("File format is ELF, start address is 0x%x\n", address);
+        printf("File format is ELF, start address is 0x%08x\n", address);
 
         /* Retrieve the index of the ELF section containing the string table of
            section names */
@@ -776,7 +1099,7 @@ unsigned int upload(char *filename, unsigned int address)
         return -1;
     }
 
-    printf("File format is raw binary, start address is 0x%x\n", address);
+    printf("File format is raw binary, start address is 0x%08x\n", address);
 
     size = lseek(inputfd, 0, SEEK_END);
     lseek(inputfd, 0, SEEK_SET);
@@ -785,18 +1108,15 @@ unsigned int upload(char *filename, unsigned int address)
     read(inputfd, inbuf, size);
     close(inputfd);
 
-    gettimeofday(&starttime, 0);
-
+    // v2.0.0+ Data transfer timekeeping is inside send_data() now
     if(send_data(inbuf, address, size) == -1)
         return -1;
 
 done_transfer:
-    gettimeofday(&endtime, 0);
-
     stime = starttime.tv_sec + starttime.tv_usec / 1000000.0;
     etime = endtime.tv_sec + endtime.tv_usec / 1000000.0;
 
-    printf("transferred %d bytes at %f bytes / sec\n", size, (double) size / (etime - stime));
+    printf("Transferred %d bytes at %f bytes / sec\n", size, (double) size / (etime - stime));
     fflush(stdout);
 
     return address;
@@ -808,7 +1128,6 @@ int download(char *filename, unsigned int address,
     int outputfd;
 
     unsigned char *data;
-    struct timeval starttime, endtime;
     double stime, etime;
 
     outputfd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
@@ -820,18 +1139,14 @@ int download(char *filename, unsigned int address,
 
     data = malloc(size);
 
-    gettimeofday(&starttime, 0);
-
     recv_data(data, address, size, 0);
-
-    gettimeofday(&endtime, 0);
 
     printf("Received %d bytes\n", size);
 
     stime = starttime.tv_sec + starttime.tv_usec / 1000000.0;
     etime = endtime.tv_sec + endtime.tv_usec / 1000000.0;
 
-    printf("transferred at %f bytes / sec\n", (double) size / (etime - stime));
+    printf("Transferred at %f bytes / sec\n", (double) size / (etime - stime));
     fflush(stdout);
 
     write(outputfd, data, size);
@@ -846,7 +1161,14 @@ int execute(unsigned int address, unsigned int console, unsigned int cdfsredir)
 {
     unsigned char buffer[2048];
 
-    printf("Sending execute command (0x%x, console=%d, cdfsredir=%d)...",address,console,cdfsredir);
+    if(!legacy || force_legacy) // dcload-ip v2+ conditions
+    {
+      printf("Sending execute command (0x%08x, console=%d, cdfsredir=%d)...",address | 0xa0000000,console,cdfsredir);
+    }
+    else
+    {
+      printf("Sending execute command (0x%08x, console=%d, cdfsredir=%d)...",address,console,cdfsredir);
+    }
 
     do
 	send_cmd(CMD_EXECUTE, address, (cdfsredir << 1) | console, NULL, 0);
@@ -884,7 +1206,9 @@ int do_console(char *path, char *isofile)
 	    return -1;
 	if (!(memcmp(buffer, CMD_FSTAT, 4)))
 	    CatchError(dc_fstat(buffer));
-	if (!(memcmp(buffer, CMD_WRITE, 4)))
+	if (!(memcmp(buffer, CMD_WRITE_OLD, 4)))
+	    CatchError(dc_write(buffer));
+  if (!(memcmp(buffer, CMD_WRITE, 4)))
 	    CatchError(dc_write(buffer));
 	if (!(memcmp(buffer, CMD_READ, 4)))
 	    CatchError(dc_read(buffer));
@@ -974,14 +1298,14 @@ int open_gdb_socket(int port)
 }
 
 #ifdef __MINGW32__
-#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:i:npqhrg"
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:i:nlqhrg"
 #else
-#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:c:i:npqhrg"
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:c:i:nlqhrg"
 #endif
 
 int main(int argc, char *argv[])
 {
-    unsigned int address = 0x8c010000;
+    unsigned int address = 0x0c010000;
     unsigned int size = 0;
     unsigned int console = 1;
     unsigned int quiet = 0;
@@ -993,17 +1317,13 @@ int main(int argc, char *argv[])
     char *filename = 0;
     char *isofile = 0;
     char *path = 0;
-    char *hostname = 0;
+    char *hostname = DREAMCAST_IP;
     char *cleanlist[4] = { 0, 0, 0, 0 };
 
     if (argc < 2) {
 	usage();
 	return 0;
     }
-
-    hostname = malloc(strlen(DREAMCAST_IP) + 1);
-    cleanlist[3] = hostname;
-    strcpy(hostname, DREAMCAST_IP);
 
 #ifdef __MINGW32__
 	if(start_ws())
@@ -1063,14 +1383,37 @@ int main(int argc, char *argv[])
 	    size = strtoul(optarg, NULL, 0);
 	    break;
 	case 't':
-	    free(hostname);
 	    hostname = malloc(strlen(optarg) + 1);
 	    cleanlist[3] = hostname;
 	    strcpy(hostname, optarg);
+
+      unsigned int portcheck = 0;
+      while((hostname[portcheck] != '\0') && (hostname[portcheck] != ':'))
+      {
+        portcheck++;
+      }
+
+      if(hostname[portcheck] == ':') // We have a dcload IP port override
+      {
+        // Null-terminate the IP string by overwriting the ':'
+        hostname[portcheck++] = '\0';
+        dcload_portnum = 0; // clear the v2.0.0+ default port
+
+        // Fill in port override
+        while(hostname[portcheck] != '\0')
+        {
+          dcload_portnum *= 10;
+          dcload_portnum += hostname[portcheck++] - '0';
+        }
+      }
+
 	    break;
 	case 'n':
 	    console = 0;
 	    break;
+  case 'l':
+      force_legacy = 1;
+      break;
 	case 'q':
 	    quiet = 1;
 	    break;
@@ -1117,9 +1460,9 @@ int main(int argc, char *argv[])
     if (cdfs_redir & (command=='x'))
 	printf("Cdfs redirection enabled\n");
 
-  if (open_socket(hostname)<0)
+  if (open_sockets(hostname)<0) // Random port socket for dcload >= 2.0.0
   {
-    fprintf(stderr, "Error opening socket\n");
+    fprintf(stderr, "Error opening sockets\n");
     goto doclean;
   }
 
@@ -1131,7 +1474,16 @@ int main(int argc, char *argv[])
 	if (address == -1)
 	    goto doclean;
 
-	printf("Executing at <0x%x>\n", address);
+  if(!legacy || force_legacy) // force_legacy is only valid for dcload-ip v2+
+  {
+    // Supposed to use the uncached area for this kind of thing, which dcload v2.0.0+ does
+    printf("Executing at <0x%x>\n", address | 0xa0000000);
+  }
+  else // legacy = 1
+  {
+    printf("Executing at <0x%x>\n", address);
+  }
+
 	if(execute(address, console, cdfs_redir))
 	    goto doclean;
 	if (console)

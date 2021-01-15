@@ -1,4 +1,4 @@
-// ---- perfctr.h - SH7091 Performance Counter Module Header ----
+// ---- perfctr.h - SH7750/SH7091 Performance Counter Module Header ----
 //
 // This file is part of the DreamHAL project, a hardware abstraction library
 // primarily intended for use on the SH7091 found in hardware such as the SEGA
@@ -299,22 +299,30 @@
 //
 
 // Clear counter and enable
-void PMCR_Init(int which, unsigned short mode, unsigned char count_type);
+void PMCR_Init(unsigned char which, unsigned char mode, unsigned char count_type);
 
-// Enable one or both of these "undocumented" performance counters.
-void PMCR_Enable(int which, unsigned short mode, unsigned char count_type, unsigned char reset_counter);
+// Enable one or both of these "undocumented" performance counters
+void PMCR_Enable(unsigned char which, unsigned char mode, unsigned char count_type, unsigned char reset_counter);
 
 // Disable, clear, and re-enable with new mode (or same mode)
-void PMCR_Restart(int which, unsigned short mode, unsigned char count_type);
+void PMCR_Restart(unsigned char which, unsigned char mode, unsigned char count_type);
 
 // Read a counter
 // out_array is specifically uint32 out_array[2] -- 48-bit value needs a 64-bit storage unit
-void PMCR_Read(int which, volatile unsigned int *out_array);
+// Return value of 0xffffffffffff means invalid 'which'
+void PMCR_Read(unsigned char which, volatile unsigned int *out_array);
+
+// Get a counter's current configuration
+// Return value of 0xffff means invalid 'which'
+unsigned short PMCR_Get_Config(unsigned char which);
 
 // Stop counter(s) (without clearing)
-void PMCR_Stop(int which);
+void PMCR_Stop(unsigned char which);
 
 // Disable counter(s) (without clearing)
-void PMCR_Disable(int which);
+void PMCR_Disable(unsigned char which);
+
+// TODO TEMP
+unsigned long long int PMCR_RegRead(unsigned char which);
 
 #endif /* __PERFCTR_H__ */
