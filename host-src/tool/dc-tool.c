@@ -1317,7 +1317,7 @@ int main(int argc, char *argv[])
     char *filename = 0;
     char *isofile = 0;
     char *path = 0;
-    char *hostname = DREAMCAST_IP;
+    char *hostname = strdup(DREAMCAST_IP);
     char *cleanlist[4] = { 0, 0, 0, 0 };
 
     if (argc < 2) {
