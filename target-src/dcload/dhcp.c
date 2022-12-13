@@ -49,6 +49,10 @@
 // stack space to get remotely close to that.
 #define DHCP_NAK_NEST_MAX 5
 
+// Minimum size in bytes for the DHCP options area
+#define DHCP_MIN_OPTIONS_SIZE 64
+
+
 static unsigned int get_some_time(int which);
 static void build_send_dhcp_packet(unsigned char kind);
 static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint8 msgtype);
@@ -481,7 +485,7 @@ static int kos_net_dhcp_fill_options(unsigned char *bbmac, dhcp_pkt_t *req, uint
     /* The End */
     req->options[pos++] = DHCP_OPTION_END;
 
-    return pos;
+    return (pos < DHCP_MIN_OPTIONS_SIZE) ? DHCP_MIN_OPTIONS_SIZE : pos;
 }
 
 // Modified very slightly from KOS
