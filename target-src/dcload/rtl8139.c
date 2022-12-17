@@ -835,6 +835,15 @@ void rtl_bb_loop(int is_main_loop)
 			if (booted && (!running))
 			{
 				disp_status("idle...");
+
+				/* sleep for 241ms to ensure link is really up; without this, some networks fail */
+
+				int i, cnt;
+				volatile unsigned int *a05f688c = (volatile unsigned int*)0xa05f688c;
+
+				cnt = 0x1800 * 0x58e * 241 / 1000;
+				for (i=0; i<cnt; i++)
+					(void)*a05f688c;
 			}
 
 			rtl_link_up = 1; // Good to go!
