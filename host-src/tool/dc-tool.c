@@ -24,7 +24,11 @@
 #ifdef WITH_BFD
 #include <bfd.h>
 #else
-#include <libelf.h>
+  #ifdef MACOS
+  #include <libelf/libelf.h>
+  #else
+  #include <libelf.h>
+  #endif
 #endif
 
 #include <sys/types.h>
