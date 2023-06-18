@@ -32,6 +32,10 @@ else
   INCLUDE	+= -I$(ELFINCLUDE)
 endif
 
+ifeq ($(MACOS),1)
+	CFLAGS += -DMACOS
+endif
+
 # Additional libraries for MinGW/MSYS or MinGW-w64/MSYS2
 ifdef MINGW32
   LDFLAGS	+= -lws2_32 -lwsock32 -liconv
