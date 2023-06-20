@@ -260,6 +260,22 @@ int dhcp_go(unsigned int *dhcp_ip_address_buffer) // Address buffer comes in as 
 	dhcp_acked = 0;
 	dhcp_nest_counter++;
 
+	// Sleep for 490ms to ensure link is really up before sending DHCP DISCOVER packet.
+	// Otherwise, the DC may send the packet before some switches are ready, and the
+	// Dreamcast will be stuck in bb->loop(0) forever waiting for a DHCP OFFER packet
+	// that will never be arriving. Previously this value was 241, but it was still not
+	// enough for some switches, so it has been changed to 490ms. If a network is still
+	// not responsive in time, this may be adjusted by 245ms increments by increasing
+	// the iterations in the j for-loop. This is a quick fix and ultimately the
+	// implementation should be rewritten to retry sending the DHCP DISCOVER packet in
+	// intervals before failing more gracefully.
+	int i, j;
+	volatile unsigned int *a05f688c = (volatile unsigned int*)0xa05f688c;
+	for (j=0; j < 2; j++) {
+		for (i=0; i < (0x1800 * 0x58e * 245 / 1000); i++)
+			(void)*a05f688c;
+	}
+
  	build_send_dhcp_packet(DHCP_MSG_DHCPDISCOVER);
 	bb->loop(0); // Wait for DHCP OFFER packet
  	build_send_dhcp_packet(DHCP_MSG_DHCPREQUEST);
