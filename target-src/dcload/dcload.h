@@ -103,6 +103,8 @@ void setup_video(unsigned int mode, unsigned int color);
 // Called by other parts of dcload
 void disp_info(void);
 void disp_status(const char * status);
+void disp_dhcp_attempts_count(void);
+void disp_dhcp_next_attempt(unsigned int);
 void clear_lines(unsigned int y, unsigned int n, unsigned int c);
 void uint_to_string_dec(unsigned int foo, char *bar);
 

@@ -58,6 +58,10 @@ extern adapter_t adapter_bba;
 
 // Set this variable to non-zero if you want the loop to exit.
 extern volatile unsigned char escape_loop;
+// If you want the loop to have a timeout, set this int to # of secs.
+// Else, leave it as zero. If loop times out, it will be set to -1 and need resetting.
+extern int timeout_loop;
+extern int loop_secs_elapsed;
 
 // All adapter drivers should use this shared buffer to receive.
 extern __attribute__((aligned(32))) unsigned char raw_current_pkt[RAW_RX_PKT_BUF_SIZE];

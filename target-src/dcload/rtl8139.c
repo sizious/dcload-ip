@@ -12,6 +12,7 @@
 
 #include "dhcp.h"
 #include "memfuncs.h"
+#include "perfctr.h"
 
 // TEMP
 //#define LOOP_TIMING
@@ -21,7 +22,6 @@
 //#define FULL_TRIP_TIMING
 
 #ifdef LOOP_TIMING
-#include "perfctr.h"
 #include "video.h"
 static char uint_string_array[11] = {0};
 #endif
@@ -780,10 +780,10 @@ static int rtl_bb_rx()
 
 void rtl_bb_loop(int is_main_loop)
 {
-	unsigned int intr;
-//	int i;
-
-	intr = 0;
+	unsigned int intr = 0;
+	unsigned int loop_start[2] = {0};
+	unsigned int loop_measure[2] = {0};
+	unsigned int prev_loop_elapsed = 0;
 
 	if(is_main_loop)
 	{
@@ -794,6 +794,10 @@ void rtl_bb_loop(int is_main_loop)
 
 		// Need to wait for a link change before it's OK to do anything
 		rtl_link_up = 0;
+	}
+
+	if (timeout_loop > 0) {
+		PMCR_Read(DCLOAD_PMCR, loop_start);
 	}
 
 	// OMG this is polling the network adapter. Well, ok then.
@@ -846,6 +850,14 @@ void rtl_bb_loop(int is_main_loop)
 					(void)*a05f688c;
 			}
 
+			/* if we were waiting in a loop with a timeout when link changed, timeout
+			 * immediately upon bringing link back up, so we can retry immediately */
+			if (timeout_loop > 0 )
+			{
+				timeout_loop = -1;
+				escape_loop = 1;
+			}
+
 			rtl_link_up = 1; // Good to go!
 		}
 
@@ -888,6 +900,26 @@ void rtl_bb_loop(int is_main_loop)
 			// Do we need to renew our IP address?
 			// This will override set_ip_from_file() if the ip is in the 0.0.0.0/8 range
 			set_ip_dhcp();
+		}
+
+		if(timeout_loop > 0)
+		{
+			PMCR_Read(DCLOAD_PMCR, loop_measure);
+			unsigned int loop_secs_elapsed = (unsigned int)((*(unsigned long long int*)loop_measure - *(unsigned long long int*)loop_start)/200000000);
+			if(prev_loop_elapsed != loop_secs_elapsed)
+			{
+				if(dhcp_attempts > 1) // Don't show a counter yet if it's the first attempt
+				{
+					disp_dhcp_attempts_count();
+					disp_dhcp_next_attempt(timeout_loop - loop_secs_elapsed + 1);
+				}
+				if(loop_secs_elapsed > (unsigned int) timeout_loop)
+				{
+					timeout_loop = -1;
+					escape_loop = 1;
+				}
+				prev_loop_elapsed = loop_secs_elapsed;
+			}
 		}
 
 	}

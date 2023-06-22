@@ -87,7 +87,11 @@ static const char *waiting_string = "Waiting for IP..."; // Waiting for IP indic
 static const char *dhcp_mode_string = " (DHCP Mode)"; // Indicator that DHCP is active
 static const char *dhcp_timeout_string = " (DHCP Timed Out!)"; // DHCP timeout indicator
 static const char *dhcp_lease_string = "DHCP Lease Time (sec): "; // DHCP lease time
+static const char *dhcp_attempts_string = "DHCP Attempts: "; // DHCP attempts amount
+static const char *dhcp_next_string = "Next attempt in... "; // DHCP attempt countdown
 static char dhcp_lease_time_string[11] = {0}; // For converting lease time to seconds. 10 characters + null term. Max lease is theoretically 4294967295, but really is 1410902 due to perf counters.
+static char dhcp_attempts_num[9] = {0};
+static char dhcp_next_counter[9] = {0};
 
 /* converts expevt value to description, used by exception handler */
 char * exception_code_to_string(unsigned int expevt)
@@ -278,6 +282,22 @@ void disp_status(const char * status) {
 	draw_string(30, 150, status, STR_COLOR);
 }
 
+void disp_dhcp_attempts_count(void)
+{
+	clear_lines(424, 24, global_bg_color);
+	draw_string(30, 424, dhcp_attempts_string, STR_COLOR);
+	uint_to_string_dec(dhcp_attempts, dhcp_attempts_num);
+	draw_string(160, 424, dhcp_attempts_num, STR_COLOR);
+}
+
+void disp_dhcp_next_attempt(unsigned int time_left)
+{
+	clear_lines(448, 24, global_bg_color);
+	draw_string(30, 448, dhcp_next_string, STR_COLOR);
+	uint_to_string_dec(time_left, dhcp_next_counter);
+	draw_string(160, 448, dhcp_next_counter, STR_COLOR);
+}
+
 // The C language technically requires that all uninitialized global variables
 // get initted to 0 via .bss, which is something I really don't like relying on.
 // 'our_ip' is declared in commands.c, of all places, and is not given an
@@ -346,7 +366,7 @@ static void update_lease_time_display(unsigned int new_time)
 {
 	// Casting to char gets rid of GCC warning.
 	uint_to_string_dec(new_time, dhcp_lease_time_string);
-	clear_lines(448, 24, global_bg_color);
+	clear_lines(424, 48, global_bg_color);
 	draw_string(30, 448, dhcp_lease_string, STR_COLOR);
 	draw_string(306, 448, dhcp_lease_time_string, STR_COLOR);
 }
