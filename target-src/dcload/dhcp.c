@@ -263,9 +263,11 @@ int dhcp_go(unsigned int *dhcp_ip_address_buffer) // Address buffer comes in as 
 	dhcp_attempts = 0;
 	timeout_loop = 1;   // Initial timeout in secs for waiting for DHCP response
 
-	while(!dhcp_acked) { // Loop DHCP attempts until acked
-		dhcp_attempts++;		// Increase the attempt count
-		if (timeout_loop < 0) { // If timeout_loop is -1, we arrived here from a timeout waiting for a DHCP response
+	while(!dhcp_acked)  // Loop DHCP attempts until acked
+	{
+		dhcp_attempts++; // Increase the attempt count
+		if (timeout_loop < 0) // If timeout_loop is -1, we arrived here from a timeout waiting for a DHCP response
+		{
 			timeout_loop = (dhcp_attempts > 10 ? 30 : 3*(dhcp_attempts)); // Increase the timeout for the next attempt, max 30 secs
 		}
 		build_send_dhcp_packet(DHCP_MSG_DHCPDISCOVER);
@@ -276,7 +278,8 @@ int dhcp_go(unsigned int *dhcp_ip_address_buffer) // Address buffer comes in as 
 		if (timeout_loop < 0) continue; // If timed out waiting for DHCP ACK, this will be -1, start over
 	}
 
-	timeout_loop = 0;
+	dhcp_attempts = 0; // Done with these variables now
+	timeout_loop = 0;  // Reset them for potential future use
 
 	if(dhcp_acked && dhcp_nest_counter)
 	{

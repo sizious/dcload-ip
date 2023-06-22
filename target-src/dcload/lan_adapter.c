@@ -34,6 +34,7 @@
 //#define LAN_FULL_TRIP_TIMING
 
 #ifdef LAN_LOOP_TIMING
+//#include "perfctr.h"
 static char uint_string_array[11] = {0};
 #endif
 // end TEMP
@@ -622,7 +623,8 @@ void la_bb_loop(int is_main_loop)
 		lan_link_up = 0;
 	}
 
-	if (timeout_loop > 0) {
+	if (timeout_loop > 0)
+	{
 		PMCR_Read(DCLOAD_PMCR, loop_start);
 	}
 
@@ -690,6 +692,7 @@ void la_bb_loop(int is_main_loop)
 			 * immediately upon bringing link back up, so we can retry immediately */
 			if (timeout_loop > 0 )
 			{
+				dhcp_attempts = 0;
 				timeout_loop = -1;
 				escape_loop = 1;
 			}

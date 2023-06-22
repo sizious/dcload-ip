@@ -22,6 +22,7 @@
 //#define FULL_TRIP_TIMING
 
 #ifdef LOOP_TIMING
+//#include "perfctr.h"
 #include "video.h"
 static char uint_string_array[11] = {0};
 #endif
@@ -796,7 +797,8 @@ void rtl_bb_loop(int is_main_loop)
 		rtl_link_up = 0;
 	}
 
-	if (timeout_loop > 0) {
+	if (timeout_loop > 0)
+	{
 		PMCR_Read(DCLOAD_PMCR, loop_start);
 	}
 
@@ -839,21 +841,13 @@ void rtl_bb_loop(int is_main_loop)
 			if (booted && (!running))
 			{
 				disp_status("idle...");
-
-				/* sleep for 241ms to ensure link is really up; without this, some networks fail */
-
-				int i, cnt;
-				volatile unsigned int *a05f688c = (volatile unsigned int*)0xa05f688c;
-
-				cnt = 0x1800 * 0x58e * 241 / 1000;
-				for (i=0; i<cnt; i++)
-					(void)*a05f688c;
 			}
 
 			/* if we were waiting in a loop with a timeout when link changed, timeout
 			 * immediately upon bringing link back up, so we can retry immediately */
 			if (timeout_loop > 0 )
 			{
+				dhcp_attempts = 0;
 				timeout_loop = -1;
 				escape_loop = 1;
 			}
@@ -921,7 +915,6 @@ void rtl_bb_loop(int is_main_loop)
 				prev_loop_elapsed = loop_secs_elapsed;
 			}
 		}
-
 	}
 	escape_loop = 0;
 }

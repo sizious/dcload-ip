@@ -366,7 +366,7 @@ static void update_lease_time_display(unsigned int new_time)
 {
 	// Casting to char gets rid of GCC warning.
 	uint_to_string_dec(new_time, dhcp_lease_time_string);
-	clear_lines(424, 48, global_bg_color);
+	clear_lines(424, 48, global_bg_color); // Clear 48 lines so DHCP retry attempts text is also cleared
 	draw_string(30, 448, dhcp_lease_string, STR_COLOR);
 	draw_string(306, 448, dhcp_lease_time_string, STR_COLOR);
 }
