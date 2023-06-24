@@ -12,6 +12,7 @@
 
 #include "dhcp.h"
 #include "memfuncs.h"
+#include "perfctr.h"
 
 // TEMP
 //#define LOOP_TIMING
@@ -21,7 +22,7 @@
 //#define FULL_TRIP_TIMING
 
 #ifdef LOOP_TIMING
-#include "perfctr.h"
+//#include "perfctr.h"
 #include "video.h"
 static char uint_string_array[11] = {0};
 #endif
@@ -780,10 +781,10 @@ static int rtl_bb_rx()
 
 void rtl_bb_loop(int is_main_loop)
 {
-	unsigned int intr;
-//	int i;
-
-	intr = 0;
+	unsigned int intr = 0;
+	unsigned int loop_start[2] = {0};
+	unsigned int loop_measure[2] = {0};
+	unsigned int prev_loop_elapsed = 0;
 
 	if(is_main_loop)
 	{
@@ -794,6 +795,11 @@ void rtl_bb_loop(int is_main_loop)
 
 		// Need to wait for a link change before it's OK to do anything
 		rtl_link_up = 0;
+	}
+
+	if (timeout_loop > 0)
+	{
+		PMCR_Read(DCLOAD_PMCR, loop_start);
 	}
 
 	// OMG this is polling the network adapter. Well, ok then.
@@ -835,15 +841,15 @@ void rtl_bb_loop(int is_main_loop)
 			if (booted && (!running))
 			{
 				disp_status("idle...");
+			}
 
-				/* sleep for 241ms to ensure link is really up; without this, some networks fail */
-
-				int i, cnt;
-				volatile unsigned int *a05f688c = (volatile unsigned int*)0xa05f688c;
-
-				cnt = 0x1800 * 0x58e * 241 / 1000;
-				for (i=0; i<cnt; i++)
-					(void)*a05f688c;
+			/* if we were waiting in a loop with a timeout when link changed, timeout
+			 * immediately upon bringing link back up, so we can retry immediately */
+			if (timeout_loop > 0 )
+			{
+				dhcp_attempts = 0;
+				timeout_loop = -1;
+				escape_loop = 1;
 			}
 
 			rtl_link_up = 1; // Good to go!
@@ -890,6 +896,25 @@ void rtl_bb_loop(int is_main_loop)
 			set_ip_dhcp();
 		}
 
+		if(timeout_loop > 0)
+		{
+			PMCR_Read(DCLOAD_PMCR, loop_measure);
+			unsigned int loop_secs_elapsed = (unsigned int)((*(unsigned long long int*)loop_measure - *(unsigned long long int*)loop_start)/200000000);
+			if(prev_loop_elapsed != loop_secs_elapsed)
+			{
+				if(dhcp_attempts > 1) // Don't show a counter yet if it's the first attempt
+				{
+					disp_dhcp_attempts_count();
+					disp_dhcp_next_attempt(timeout_loop - loop_secs_elapsed + 1);
+				}
+				if(loop_secs_elapsed > (unsigned int) timeout_loop)
+				{
+					timeout_loop = -1;
+					escape_loop = 1;
+				}
+				prev_loop_elapsed = loop_secs_elapsed;
+			}
+		}
 	}
 	escape_loop = 0;
 }

@@ -4,6 +4,8 @@
 
 // Loop escape flag, used by all drivers.
 volatile unsigned char escape_loop = 0;
+int timeout_loop = 0;
+int loop_secs_elapsed = 0;
 
 // The currently configured driver.
 adapter_t * bb;

@@ -14,6 +14,7 @@
 
 #include "dhcp.h"
 #include "memfuncs.h"
+#include "perfctr.h"
 
 // Here's a datasheet for the FUJITSU MB86967 chip:
 // https://pdf1.alldatasheet.com/datasheet-pdf/view/61702/FUJITSU/MB86967.html
@@ -33,7 +34,7 @@
 //#define LAN_FULL_TRIP_TIMING
 
 #ifdef LAN_LOOP_TIMING
-#include "perfctr.h"
+//#include "perfctr.h"
 static char uint_string_array[11] = {0};
 #endif
 // end TEMP
@@ -599,6 +600,9 @@ void la_bb_loop(int is_main_loop)
 {
 	int result;
 	int link_change_message = 0;
+	unsigned int loop_start[2] = {0};
+	unsigned int loop_measure[2] = {0};
+	unsigned int prev_loop_elapsed = 0;
 
 	DEBUG("bb_loop entered\r\n");
 
@@ -617,6 +621,11 @@ void la_bb_loop(int is_main_loop)
 		// In the event a user actually connects to something NOT using autonegotiation,
 		// set lan_link_up to 0 so that this loop can work with those, too.
 		lan_link_up = 0;
+	}
+
+	if (timeout_loop > 0)
+	{
+		PMCR_Read(DCLOAD_PMCR, loop_start);
 	}
 
 	while (!escape_loop)
@@ -679,6 +688,15 @@ void la_bb_loop(int is_main_loop)
 				link_change_message = 0;
 			}
 
+			/* if we were waiting in a loop with a timeout when link changed, timeout
+			 * immediately upon bringing link back up, so we can retry immediately */
+			if (timeout_loop > 0 )
+			{
+				dhcp_attempts = 0;
+				timeout_loop = -1;
+				escape_loop = 1;
+			}
+
 			// Good to go!
 			lan_link_up = 1;
 		}
@@ -696,6 +714,26 @@ void la_bb_loop(int is_main_loop)
 			// Do we need to renew our IP address?
 			// This will override set_ip_from_file() if the ip is in the 0.0.0.0/8 range
 			set_ip_dhcp();
+		}
+
+		if(timeout_loop > 0)
+		{
+			PMCR_Read(DCLOAD_PMCR, loop_measure);
+			unsigned int loop_secs_elapsed = (unsigned int)((*(unsigned long long int*)loop_measure - *(unsigned long long int*)loop_start)/200000000);
+			if(prev_loop_elapsed != loop_secs_elapsed)
+			{
+				if(dhcp_attempts > 1) // Don't show a counter yet if it's the first attempt
+				{
+					disp_dhcp_attempts_count();
+					disp_dhcp_next_attempt(timeout_loop - loop_secs_elapsed + 1);
+				}
+				if(loop_secs_elapsed > (unsigned int) timeout_loop)
+				{
+					timeout_loop = -1;
+					escape_loop = 1;
+				}
+				prev_loop_elapsed = loop_secs_elapsed;
+			}
 		}
 	}
 

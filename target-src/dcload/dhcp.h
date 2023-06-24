@@ -190,6 +190,7 @@ typedef struct __attribute__((packed, aligned(4))) {
 
 extern volatile unsigned int dhcp_lease_time;
 extern unsigned char dhcp_nest_counter_maxed;
+extern unsigned int dhcp_attempts;
 
 int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t *pkt_data, unsigned short len);
 int dhcp_go(unsigned int *dhcp_ip_address_buffer);

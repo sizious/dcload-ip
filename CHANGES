@@ -1,3 +1,13 @@
+WHAT'S NEW IN 2.0.1
+
+* dcload-ip now retries DHCP handshake if it doesn't get any response. This fixes
+  a bug present on many networks where dcload-ip sends out a DHCP DISCOVER packet
+  before the link is ready, then gets stuck in a loop waiting for a response that
+  will never come. The DHCP handshake will be retried at regular increasing
+  intervals up to 30 secs between retries. While retrying the handshake, a counter
+  will appear showing the retries. Upon receiving a DHCP acknowledgement, the
+  counter text will be cleared to then show the DHCP lease time.
+
 WHAT'S NEW IN 2.0.0
 
 * The number of packets dc-tool sends per burst, as well as the delay between

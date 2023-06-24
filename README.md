@@ -1,5 +1,5 @@
 
-# dcload-ip 2.0.0
+# dcload-ip 2.0.1
 
 A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/).
 Updated and overhauled by Moopthehedgehog
@@ -45,7 +45,7 @@ options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
 
 * The correct display is something like:
 
-  `dcload-ip 2.0.0`  <- name/version  
+  `dcload-ip 2.0.1`  <- name/version
   `Broadband Adapter (HIT-0400)`  <- adapter driver in use  
   `00:d0:f1:02:ab:dd`  <- dc hardware address  
   `192.168.1.92`  <- dc ip address  
@@ -284,7 +284,9 @@ section for that
 
 * [SiZiOUS](https://www.github.com/SiZiOUS) for maintaining this program
 * rtl8139 code based on code by Dan Potter
-* LAN Adapter driver code is derived from an early version of the KOS LA driver
+* LAN Adapter driver code, originally derived from early KOS, majorly overhauled by Moopthehedgehog
+* DHCP support, exception dumping, perf counters, performance improvements by Moopthehedgehog
+* DHCP retry functionality by darcagn
 * There are some various files from `newlib-1.8.2` here
 * `video.s`, `maple.c`, and `maple.h` were written by Marcus Comstedt
 * initial win32 porting and implementation of -t by Florian 'Proff' Schulze
