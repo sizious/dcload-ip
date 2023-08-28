@@ -49,7 +49,7 @@ endif
 
 DCTOOL	= dc-tool-ip$(EXECUTABLEEXTENSION)
 
-OBJECTS	= dc-tool.o syscalls.o unlink.o utils.o
+OBJECTS	= dc-tool.o syscalls.o unlink.o utils.o shim.o
 
 .c.o:
 	$(CC) $(CFLAGS) $(INCLUDE) -o $@ -c $<
