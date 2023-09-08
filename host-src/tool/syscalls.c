@@ -31,6 +31,7 @@
 #include <utime.h>
 #include <dirent.h>
 #include <string.h>
+#include <errno.h>
 #ifdef __MINGW32__
 #include <windows.h>
 #else
@@ -545,6 +546,11 @@ int dc_gdbpacket(unsigned char * buffer)
 	fprintf(stderr, "Got socket error: %d\n", WSAGetLastError());
 	return -1;
 	}
+#else
+    if(retval == -1) {
+        fprintf(stderr, "Got socket error: %s\n", strerror(errno));
+        return -1;
+    }
 #endif
     send_cmd(CMD_RETVAL, retval, retval, (unsigned char *)gdb_buf, retval);
 
