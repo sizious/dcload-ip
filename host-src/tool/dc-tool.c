@@ -1278,6 +1278,17 @@ int open_gdb_socket(int port)
 	return -1;
   }
 
+  const int enable_reuse_addr = 1;
+  int checkopt = setsockopt(gdb_server_socket, SOL_SOCKET, SO_REUSEADDR, 
+                            &enable_reuse_addr, sizeof(enable_reuse_addr));
+#ifdef __MINGW322__
+  if( checkopt == SOCKET_ERROR ) {
+#else 
+  if( checkopt < 0 ) {
+#endif 
+    log_error( "warning: failed to set gdb socket options" );
+  }
+
   int checkbind = bind( gdb_server_socket, (struct sockaddr*)&server_addr, sizeof( server_addr ) );
 #ifdef __MINGW32__
 	if( checkbind == SOCKET_ERROR ) {
