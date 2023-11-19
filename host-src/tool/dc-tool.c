@@ -1281,7 +1281,7 @@ int open_gdb_socket(int port)
   const int enable_reuse_addr = 1;
   int checkopt = setsockopt(gdb_server_socket, SOL_SOCKET, SO_REUSEADDR, 
                             &enable_reuse_addr, sizeof(enable_reuse_addr));
-#ifdef __MINGW322__
+#ifdef __MINGW32__
   if( checkopt == SOCKET_ERROR ) {
 #else 
   if( checkopt < 0 ) {
