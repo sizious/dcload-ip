@@ -19,16 +19,10 @@
 #if __GNUC__ <= 4
 extern void __set_fpscr(unsigned int value);
 
-void __call_builtin_sh_set_fpscr(unsigned int value)
-{
-  __set_fpscr(value);
-}
+void __call_builtin_sh_set_fpscr(unsigned int value) { __set_fpscr(value); }
 
 #else
 
-void __call_builtin_sh_set_fpscr(unsigned int value)
-{
-  __builtin_sh_set_fpscr(value);
-}
+void __call_builtin_sh_set_fpscr(unsigned int value) { __builtin_sh_set_fpscr(value); }
 
 #endif

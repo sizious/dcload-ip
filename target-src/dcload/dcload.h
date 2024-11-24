@@ -48,7 +48,7 @@
 
 // Uncomment this if the counters use the CPU/bus ratio for timing, otherwise
 // leave it commented out. Only set this if you know you need it.
-//#define BUS_RATIO_COUNTER
+// #define BUS_RATIO_COUNTER
 
 #ifndef BUS_RATIO_COUNTER
 // This would run for 16.3 days (1410902 seconds) if used.
@@ -73,14 +73,14 @@
 // Enable for perf counter debugging printouts, placed under the disp_status area
 // It's perf high stuck to perf low, and then the contents of the pmcr reg in use
 // (i.e. the reg specified by DCLOAD_PMCR)
-//#define PERFCTR_DEBUG
+// #define PERFCTR_DEBUG
 
 // Use FPSCR PR=1, SZ=1 to improve double-precision loading performance (use 2x
 // 64-bit "paired moves" via fmov.d versus 4x 32-bit "single moves" via fmov.s).
 // Disabled by default because it's technically undefined behavior, and using it
 // breaks compatibility with SH4A CPUs (lol). It also may not behave the same on
 // all SH7091 CPUs (works on mine).
-//#define UNDEFINED_DOUBLES
+// #define UNDEFINED_DOUBLES
 
 //==============================================================================
 // ---- End of user-changeable definitions ----
@@ -96,13 +96,13 @@ extern volatile unsigned int global_bg_color;
 extern volatile unsigned int installed_adapter;
 
 // Called by asm functions
-char * exception_code_to_string(unsigned int expevt);
+char *exception_code_to_string(unsigned int expevt);
 void uint_to_string(unsigned int foo, unsigned char *bar);
 void setup_video(unsigned int mode, unsigned int color);
 
 // Called by other parts of dcload
 void disp_info(void);
-void disp_status(const char * status);
+void disp_status(const char *status);
 void disp_dhcp_attempts_count(void);
 void disp_dhcp_next_attempt(unsigned int);
 void clear_lines(unsigned int y, unsigned int n, unsigned int c);

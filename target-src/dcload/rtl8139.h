@@ -93,16 +93,16 @@
 
 /* RTL8139C Config/Status info */
 typedef struct {
-	unsigned short cur_rx;                /* Current Rx read ptr */
-	unsigned short cur_tx;                /* Current available Tx slot */
-	unsigned char  mac[6];                /* Mac address */
+    unsigned short cur_rx;                /* Current Rx read ptr */
+    unsigned short cur_tx;                /* Current available Tx slot */
+    unsigned char  mac[6];                /* Mac address */
 } rtl_status_t;
 
 int rtl_bb_detect(void);
 int rtl_bb_init(void);
 void rtl_bb_start(void);
 void rtl_bb_stop(void);
-int rtl_bb_tx(unsigned char * pkt, int len);
+int rtl_bb_tx(unsigned char *pkt, int len);
 void rtl_bb_loop(int is_main_loop);
 
 #endif

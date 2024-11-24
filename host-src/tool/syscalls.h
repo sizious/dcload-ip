@@ -22,94 +22,94 @@
 #ifndef __SYSCALLS_H__
 #define __SYSCALLS_H__
 
-int dc_fstat(unsigned char * buffer);
-int dc_write(unsigned char * buffer);
-int dc_read(unsigned char * buffer);
-int dc_open(unsigned char * buffer);
-int dc_close(unsigned char * buffer);
-int dc_creat(unsigned char * buffer);
-int dc_link(unsigned char * buffer);
-int dc_unlink(unsigned char * buffer);
-int dc_chdir(unsigned char * buffer);
-int dc_chmod(unsigned char * buffer);
-int dc_lseek(unsigned char * buffer);
-int dc_time(unsigned char * buffer);
-int dc_stat(unsigned char * buffer);
-int dc_utime(unsigned char * buffer);
+int dc_fstat(unsigned char *buffer);
+int dc_write(unsigned char *buffer);
+int dc_read(unsigned char *buffer);
+int dc_open(unsigned char *buffer);
+int dc_close(unsigned char *buffer);
+int dc_creat(unsigned char *buffer);
+int dc_link(unsigned char *buffer);
+int dc_unlink(unsigned char *buffer);
+int dc_chdir(unsigned char *buffer);
+int dc_chmod(unsigned char *buffer);
+int dc_lseek(unsigned char *buffer);
+int dc_time(unsigned char *buffer);
+int dc_stat(unsigned char *buffer);
+int dc_utime(unsigned char *buffer);
 
-int dc_opendir(unsigned char * buffer);
-int dc_readdir(unsigned char * buffer);
-int dc_closedir(unsigned char * buffer);
-int dc_rewinddir(unsigned char * buffer);
+int dc_opendir(unsigned char *buffer);
+int dc_readdir(unsigned char *buffer);
+int dc_closedir(unsigned char *buffer);
+int dc_rewinddir(unsigned char *buffer);
 
-int dc_cdfs_redir_read_sectors(int isofd, unsigned char * buffer);
+int dc_cdfs_redir_read_sectors(int isofd, unsigned char *buffer);
 
-int dc_gdbpacket(unsigned char * buffer);
+int dc_gdbpacket(unsigned char *buffer);
 
-#define CMD_EXIT     "DC00"
-#define CMD_FSTAT    "DC01"
-#define CMD_WRITE_OLD    "DD02"
-#define CMD_WRITE    "DC02"
-#define CMD_READ     "DC03"
-#define CMD_OPEN     "DC04"
-#define CMD_CLOSE    "DC05"
-#define CMD_CREAT    "DC06"
-#define CMD_LINK     "DC07"
-#define CMD_UNLINK   "DC08"
-#define CMD_CHDIR    "DC09"
-#define CMD_CHMOD    "DC10"
-#define CMD_LSEEK    "DC11"
-#define CMD_TIME     "DC12"
-#define CMD_STAT     "DC13"
-#define CMD_UTIME    "DC14"
-#define CMD_BAD      "DC15"
-#define CMD_OPENDIR  "DC16"
-#define CMD_CLOSEDIR "DC17"
-#define CMD_READDIR  "DC18"
-#define CMD_CDFSREAD "DC19"
-#define CMD_GDBPACKET "DC20"
-#define CMD_REWINDDIR "DC21"
+#define CMD_EXIT       "DC00"
+#define CMD_FSTAT      "DC01"
+#define CMD_WRITE_OLD  "DD02"
+#define CMD_WRITE      "DC02"
+#define CMD_READ       "DC03"
+#define CMD_OPEN       "DC04"
+#define CMD_CLOSE      "DC05"
+#define CMD_CREAT      "DC06"
+#define CMD_LINK       "DC07"
+#define CMD_UNLINK     "DC08"
+#define CMD_CHDIR      "DC09"
+#define CMD_CHMOD      "DC10"
+#define CMD_LSEEK      "DC11"
+#define CMD_TIME       "DC12"
+#define CMD_STAT       "DC13"
+#define CMD_UTIME      "DC14"
+#define CMD_BAD        "DC15"
+#define CMD_OPENDIR    "DC16"
+#define CMD_CLOSEDIR   "DC17"
+#define CMD_READDIR    "DC18"
+#define CMD_CDFSREAD   "DC19"
+#define CMD_GDBPACKET  "DC20"
+#define CMD_REWINDDIR  "DC21"
 
 // Special definition for exception handler data
-#define CMD_EXCEPTION "EXPT"
+#define CMD_EXCEPTION  "EXPT"
 
 struct _command_3int_t {
-	unsigned char id[4];
-	unsigned int value0;
-	unsigned int value1;
-	unsigned int value2;
-} __attribute__ ((__packed__));
+    unsigned char id[4];
+    unsigned int value0;
+    unsigned int value1;
+    unsigned int value2;
+} __attribute__((__packed__));
 
 struct _command_2int_string_t {
-	unsigned char id[4];
-	unsigned int value0;
-	unsigned int value1;
-	char string[1];
-} __attribute__ ((__packed__));
+    unsigned char id[4];
+    unsigned int value0;
+    unsigned int value1;
+    char string[1];
+} __attribute__((__packed__));
 
 struct _command_int_t {
-	unsigned char id[4];
-	unsigned int value0;
-} __attribute__ ((__packed__));
+    unsigned char id[4];
+    unsigned int value0;
+} __attribute__((__packed__));
 
 struct _command_int_string_t {
-	unsigned char id[4];
-	unsigned int value0;
-	char string[1];
-} __attribute__ ((__packed__));
+    unsigned char id[4];
+    unsigned int value0;
+    char string[1];
+} __attribute__((__packed__));
 
 struct _command_string_t {
-	unsigned char id[4];
-	char string[1];
-} __attribute__ ((__packed__));
+    unsigned char id[4];
+    char string[1];
+} __attribute__((__packed__));
 
 struct _command_3int_string_t {
-	unsigned char id[4];
-	unsigned int value0;
-	unsigned int value1;
-	unsigned int value2;
-	char string[1];
-} __attribute__ ((__packed__));
+    unsigned char id[4];
+    unsigned int value0;
+    unsigned int value1;
+    unsigned int value2;
+    char string[1];
+} __attribute__((__packed__));
 
 typedef struct _command_3int_t command_3int_t;
 typedef struct _command_2int_string_t command_2int_string_t;

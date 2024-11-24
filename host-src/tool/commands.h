@@ -2,10 +2,10 @@
 #define __COMMANDS_H__
 
 struct _command_t {
-	unsigned char id[4];
-	unsigned int address;
-	unsigned int size;
-	unsigned char data[]; // Make flexible array member
+    unsigned char id[4];
+    unsigned int address;
+    unsigned int size;
+    unsigned char data[]; // Make flexible array member
 } __attribute__ ((packed));
 
 typedef struct _command_t command_t;
@@ -20,10 +20,10 @@ typedef struct _command_t command_t;
 
 #define CMD_RETVAL   "RETV" /* return value */
 
-#define CMD_REBOOT   "RBOT"  /* reboot */
+#define CMD_REBOOT   "RBOT" /* reboot */
 
-#define CMD_MAPLE		 "MAPL" /* Maple packet */
-#define CMD_PMCR		 "PMCR" /* Performance counter packet */
+#define CMD_MAPLE    "MAPL" /* Maple packet */
+#define CMD_PMCR     "PMCR" /* Performance counter packet */
 
 #define COMMAND_LEN  12
 

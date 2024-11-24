@@ -22,29 +22,29 @@
 #ifndef __SYSCALLS_H__
 #define __SYSCALLS_H__
 
-#define CMD_EXIT     "DC00"
-#define CMD_FSTAT    "DC01"
-#define CMD_WRITE_OLD    "DD02"
-#define CMD_WRITE    "DC02"
-#define CMD_READ     "DC03"
-#define CMD_OPEN     "DC04"
-#define CMD_CLOSE    "DC05"
-#define CMD_CREAT    "DC06"
-#define CMD_LINK     "DC07"
-#define CMD_UNLINK   "DC08"
-#define CMD_CHDIR    "DC09"
-#define CMD_CHMOD    "DC10"
-#define CMD_LSEEK    "DC11"
-#define CMD_TIME     "DC12"
-#define CMD_STAT     "DC13"
-#define CMD_UTIME    "DC14"
-#define CMD_BAD      "DC15"
-#define CMD_OPENDIR  "DC16"
-#define CMD_CLOSEDIR "DC17"
-#define CMD_READDIR  "DC18"
-#define CMD_CDFSREAD "DC19"
-#define CMD_GDBPACKET "DC20"
-#define CMD_REWINDDIR "DC21"
+#define CMD_EXIT        "DC00"
+#define CMD_FSTAT       "DC01"
+#define CMD_WRITE_OLD   "DD02"
+#define CMD_WRITE       "DC02"
+#define CMD_READ        "DC03"
+#define CMD_OPEN        "DC04"
+#define CMD_CLOSE       "DC05"
+#define CMD_CREAT       "DC06"
+#define CMD_LINK        "DC07"
+#define CMD_UNLINK      "DC08"
+#define CMD_CHDIR       "DC09"
+#define CMD_CHMOD       "DC10"
+#define CMD_LSEEK       "DC11"
+#define CMD_TIME        "DC12"
+#define CMD_STAT        "DC13"
+#define CMD_UTIME       "DC14"
+#define CMD_BAD         "DC15"
+#define CMD_OPENDIR     "DC16"
+#define CMD_CLOSEDIR    "DC17"
+#define CMD_READDIR     "DC18"
+#define CMD_CDFSREAD    "DC19"
+#define CMD_GDBPACKET   "DC20"
+#define CMD_REWINDDIR   "DC21"
 
 extern unsigned short dcload_syscall_port;
 
@@ -52,41 +52,41 @@ extern unsigned int syscall_retval;
 extern unsigned char* syscall_data;
 
 typedef struct __attribute__ ((packed, aligned(4))) {
-	unsigned char id[4];
-	unsigned int value0;
-	unsigned int value1;
-	unsigned int value2;
+    unsigned char id[4];
+    unsigned int value0;
+    unsigned int value1;
+    unsigned int value2;
 } command_3int_t;
 
 typedef struct __attribute__ ((packed, aligned(4))) {
-	unsigned char id[4];
-	unsigned int value0;
-	unsigned int value1;
-	unsigned char string[1];
+    unsigned char id[4];
+    unsigned int value0;
+    unsigned int value1;
+    unsigned char string[1];
 } command_2int_string_t;
 
 typedef struct __attribute__ ((packed, aligned(4))) {
-	unsigned char id[4];
-	unsigned int value0;
+    unsigned char id[4];
+    unsigned int value0;
 } command_int_t;
 
 typedef struct __attribute__ ((packed, aligned(4))) {
-	unsigned char id[4];
-	unsigned int value0;
-	unsigned char string[1];
+    unsigned char id[4];
+    unsigned int value0;
+    unsigned char string[1];
 } command_int_string_t;
 
 typedef struct __attribute__ ((packed, aligned(4))) {
-	unsigned char id[4];
-	unsigned char string[1];
+    unsigned char id[4];
+    unsigned char string[1];
 } command_string_t;
 
 typedef struct __attribute__ ((packed, aligned(4))) {
-	unsigned char id[4];
-	unsigned int value0;
-	unsigned int value1;
-	unsigned int value2;
-	unsigned char string[1];
+    unsigned char id[4];
+    unsigned int value0;
+    unsigned int value1;
+    unsigned int value2;
+    unsigned char string[1];
 } command_3int_string_t;
 
 // Functions that are not in unistd.h, but are used by other parts of dcload

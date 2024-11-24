@@ -20,27 +20,27 @@
  *
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <time.h>
-#include <utime.h>
-#include <dirent.h>
 #include <string.h>
-#include <errno.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+#include <utime.h>
 #ifdef __MINGW32__
 #include <windows.h>
 #else
 #include <netinet/in.h>
 #endif
-#include "syscalls.h"
+#include "commands.h"
 #include "dc-io.h"
 #include "dcload-types.h"
-#include "commands.h"
+#include "syscalls.h"
 
 #include "utils.h"
 
@@ -49,12 +49,12 @@
 #endif
 
 #ifndef MAX_OPEN_DIRS
-#define MAX_OPEN_DIRS   16
+#define MAX_OPEN_DIRS 16
 #endif
 
 /* Sigh... KOS treats anything under 100 as invalid for a dirent from dcload, so
    we need to offset by a bit. This aught to do. */
-#define DIRENT_OFFSET   1337
+#define DIRENT_OFFSET 1337
 
 static DIR *opendirs[MAX_OPEN_DIRS];
 
@@ -66,16 +66,14 @@ static DIR *opendirs[MAX_OPEN_DIRS];
  * 4. send return value to dc
  */
 
-unsigned int dc_order(unsigned int x)
-{
-    if (x == htonl(x))
-	return (x << 24) | ((x << 8) & 0xff0000) | ((x >> 8) & 0xff00) | ((x >> 24) & 0xff);
+unsigned int dc_order(unsigned int x) {
+    if(x == htonl(x))
+        return (x << 24) | ((x << 8) & 0xff0000) | ((x >> 8) & 0xff00) | ((x >> 24) & 0xff);
     else
-	return x;
+        return x;
 }
 
-int dc_fstat(unsigned char * buffer)
-{
+int dc_fstat(unsigned char *buffer) {
     struct stat filestat;
     int retval;
     dcload_stat_t dcstat;
@@ -107,8 +105,7 @@ int dc_fstat(unsigned char * buffer)
     return 0;
 }
 
-int dc_write(unsigned char * buffer)
-{
+int dc_write(unsigned char *buffer) {
     unsigned char *data;
     int retval;
     command_3int_t *command = (command_3int_t *)buffer;
@@ -122,29 +119,27 @@ int dc_write(unsigned char * buffer)
     // shouldn't slow anything down unless someone is really pelting the console
     // hard.. Although, in that case printf() will probably become a big
     // bottleneck before this memcmp() ever does...
-    if(!(memcmp(data, CMD_EXCEPTION, 4)))
-    {
-      // Exception data starts with "EXPT"
-      exception_struct_t *exception_frame = (exception_struct_t*)data;
-      unsigned int *exception_frame_uints = (unsigned int*)data;
+    if(!(memcmp(data, CMD_EXCEPTION, 4))) {
+        // Exception data starts with "EXPT"
+        exception_struct_t *exception_frame = (exception_struct_t *)data;
+        unsigned int *exception_frame_uints = (unsigned int *)data;
 
-      printf("\n\n");
-      printf(exception_code_to_string(exception_frame->expt_code));
-      for(unsigned int regdump = 0; regdump < 66; regdump++)
-      {
-        printf(exception_label_array[regdump]);
-        printf(": 0x%x\n", exception_frame_uints[regdump + 2]);
-      }
+        printf("\n\n");
+        printf(exception_code_to_string(exception_frame->expt_code));
+        for(unsigned int regdump = 0; regdump < 66; regdump++) {
+            printf(exception_label_array[regdump]);
+            printf(": 0x%x\n", exception_frame_uints[regdump + 2]);
+        }
 
-      // Write out to a file as well
-      // It will end up in the working directory of the terminal
-      int out_file = open("dcload_exception_dump.bin", O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
-      retval = write(out_file, data, ntohl(command->value2));
-      close(out_file);
+        // Write out to a file as well
+        // It will end up in the working directory of the terminal
+        int out_file =
+            open("dcload_exception_dump.bin", O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
+        retval = write(out_file, data, ntohl(command->value2));
+        close(out_file);
     }
-    else
-    {
-      retval = write(ntohl(command->value0), data, ntohl(command->value2));
+    else {
+        retval = write(ntohl(command->value0), data, ntohl(command->value2));
     }
 
     if(send_command(CMD_RETVAL, retval, retval, NULL, 0) == -1) {
@@ -156,8 +151,7 @@ int dc_write(unsigned char * buffer)
     return 0;
 }
 
-int dc_read(unsigned char * buffer)
-{
+int dc_read(unsigned char *buffer) {
     unsigned char *data;
     int retval;
     command_3int_t *command = (command_3int_t *)buffer;
@@ -177,37 +171,35 @@ int dc_read(unsigned char * buffer)
     return 0;
 }
 
-int dc_open(unsigned char * buffer)
-{
-  int retval;
-  int ourflags = 0;
-  command_2int_string_t *command = (command_2int_string_t *)buffer;
-  /* value0 = flags value1 = mode string = name */
+int dc_open(unsigned char *buffer) {
+    int retval;
+    int ourflags = 0;
+    command_2int_string_t *command = (command_2int_string_t *)buffer;
+    /* value0 = flags value1 = mode string = name */
 
-  /* translate flags */
+    /* translate flags */
 
-  if (ntohl(command->value0) & 0x0001)
-    ourflags |= O_WRONLY;
-  if (ntohl(command->value0) & 0x0002)
-    ourflags |= O_RDWR;
-  if (ntohl(command->value0) & 0x0008)
-    ourflags |= O_APPEND;
-  if (ntohl(command->value0) & 0x0200)
-    ourflags |= O_CREAT;
-  if (ntohl(command->value0) & 0x0400)
-    ourflags |= O_TRUNC;
-  if (ntohl(command->value0) & 0x0800)
-    ourflags |= O_EXCL;
+    if(ntohl(command->value0) & 0x0001)
+        ourflags |= O_WRONLY;
+    if(ntohl(command->value0) & 0x0002)
+        ourflags |= O_RDWR;
+    if(ntohl(command->value0) & 0x0008)
+        ourflags |= O_APPEND;
+    if(ntohl(command->value0) & 0x0200)
+        ourflags |= O_CREAT;
+    if(ntohl(command->value0) & 0x0400)
+        ourflags |= O_TRUNC;
+    if(ntohl(command->value0) & 0x0800)
+        ourflags |= O_EXCL;
 
-  retval = open(command->string, ourflags | O_BINARY, ntohl(command->value1));
+    retval = open(command->string, ourflags | O_BINARY, ntohl(command->value1));
 
-  send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
+    send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
-  return 0;
+    return 0;
 }
 
-int dc_close(unsigned char * buffer)
-{
+int dc_close(unsigned char *buffer) {
     int retval;
     command_int_t *command = (command_int_t *)buffer;
 
@@ -218,8 +210,7 @@ int dc_close(unsigned char * buffer)
     return 0;
 }
 
-int dc_creat(unsigned char * buffer)
-{
+int dc_creat(unsigned char *buffer) {
     int retval;
     command_int_string_t *command = (command_int_string_t *)buffer;
 
@@ -230,14 +221,13 @@ int dc_creat(unsigned char * buffer)
     return 0;
 }
 
-int dc_link(unsigned char * buffer)
-{
+int dc_link(unsigned char *buffer) {
     char *pathname1, *pathname2;
     int retval;
     command_string_t *command = (command_string_t *)buffer;
 
     pathname1 = command->string;
-    pathname2 = &command->string[strlen(command->string)+1];
+    pathname2 = &command->string[strlen(command->string) + 1];
 
 #ifdef __MINGW32__
     /* Copy the file on Windows */
@@ -251,8 +241,7 @@ int dc_link(unsigned char * buffer)
     return 0;
 }
 
-int dc_unlink(unsigned char * buffer)
-{
+int dc_unlink(unsigned char *buffer) {
     int retval;
     command_string_t *command = (command_string_t *)buffer;
 
@@ -263,8 +252,7 @@ int dc_unlink(unsigned char * buffer)
     return 0;
 }
 
-int dc_chdir(unsigned char * buffer)
-{
+int dc_chdir(unsigned char *buffer) {
     int retval;
     command_string_t *command = (command_string_t *)buffer;
 
@@ -275,8 +263,7 @@ int dc_chdir(unsigned char * buffer)
     return 0;
 }
 
-int dc_chmod(unsigned char * buffer)
-{
+int dc_chmod(unsigned char *buffer) {
     int retval;
     command_int_string_t *command = (command_int_string_t *)buffer;
 
@@ -287,8 +274,7 @@ int dc_chmod(unsigned char * buffer)
     return 0;
 }
 
-int dc_lseek(unsigned char * buffer)
-{
+int dc_lseek(unsigned char *buffer) {
     int retval;
     command_3int_t *command = (command_3int_t *)buffer;
 
@@ -299,8 +285,7 @@ int dc_lseek(unsigned char * buffer)
     return 0;
 }
 
-int dc_time(unsigned char * buffer)
-{
+int dc_time(unsigned char *buffer) {
     time_t t = time(NULL);
 
     send_cmd(CMD_RETVAL, t, t, NULL, 0);
@@ -308,8 +293,7 @@ int dc_time(unsigned char * buffer)
     return 0;
 }
 
-int dc_stat(unsigned char * buffer)
-{
+int dc_stat(unsigned char *buffer) {
     struct stat filestat;
     int retval;
     dcload_stat_t dcstat;
@@ -340,27 +324,26 @@ int dc_stat(unsigned char * buffer)
     return 0;
 }
 
-int dc_utime(unsigned char * buffer)
-{
+int dc_utime(unsigned char *buffer) {
     struct utimbuf tbuf;
     int retval;
     command_3int_string_t *command = (command_3int_string_t *)buffer;
 
-    if (ntohl(command->value0)) {
-	tbuf.actime = ntohl(command->value1);
-	tbuf.modtime = ntohl(command->value2);
+    if(ntohl(command->value0)) {
+        tbuf.actime = ntohl(command->value1);
+        tbuf.modtime = ntohl(command->value2);
 
-	retval = utime(command->string, &tbuf);
-    } else {
-	retval = utime(command->string, 0);
+        retval = utime(command->string, &tbuf);
+    }
+    else {
+        retval = utime(command->string, 0);
     }
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
     return 0;
 }
 
-int dc_opendir(unsigned char * buffer)
-{
+int dc_opendir(unsigned char *buffer) {
     DIR *somedir;
     command_string_t *command = (command_string_t *)buffer;
     int i;
@@ -386,12 +369,10 @@ int dc_opendir(unsigned char * buffer)
     return 0;
 }
 
-int dc_closedir(unsigned char * buffer)
-{
+int dc_closedir(unsigned char *buffer) {
     int retval;
     command_int_t *command = (command_int_t *)buffer;
     uint32_t i = ntohl(command->value0);
-
 
     if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
         retval = closedir(opendirs[i - DIRENT_OFFSET]);
@@ -406,8 +387,7 @@ int dc_closedir(unsigned char * buffer)
     return 0;
 }
 
-int dc_readdir(unsigned char * buffer)
-{
+int dc_readdir(unsigned char *buffer) {
     struct dirent *somedirent;
     dcload_dirent_t dcdirent;
     command_3int_t *command = (command_3int_t *)buffer;
@@ -418,29 +398,29 @@ int dc_readdir(unsigned char * buffer)
     else
         somedirent = NULL;
 
-    if (somedirent) {
-#if defined (__APPLE__) || defined (__NetBSD__) || defined (__FreeBSD__) || defined (__OpenBSD__)
-	dcdirent.d_ino = dc_order(somedirent->d_fileno);
-	dcdirent.d_off = dc_order(0);
-	dcdirent.d_reclen = dc_order(somedirent->d_reclen);
-	dcdirent.d_type = dc_order(somedirent->d_type);
+    if(somedirent) {
+#if defined(__APPLE__) || defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+        dcdirent.d_ino = dc_order(somedirent->d_fileno);
+        dcdirent.d_off = dc_order(0);
+        dcdirent.d_reclen = dc_order(somedirent->d_reclen);
+        dcdirent.d_type = dc_order(somedirent->d_type);
 #else
-	dcdirent.d_ino = dc_order(somedirent->d_ino);
-# if defined(_WIN32) || defined(__CYGWIN__)
-	dcdirent.d_off = dc_order(0);
-	dcdirent.d_reclen = dc_order(0);
-	dcdirent.d_type = dc_order(0);
-# else
-	dcdirent.d_off = dc_order(somedirent->d_off);
-	dcdirent.d_reclen = dc_order(somedirent->d_reclen);
-	dcdirent.d_type = dc_order(somedirent->d_type);
-# endif
+        dcdirent.d_ino = dc_order(somedirent->d_ino);
+#if defined(_WIN32) || defined(__CYGWIN__)
+        dcdirent.d_off = dc_order(0);
+        dcdirent.d_reclen = dc_order(0);
+        dcdirent.d_type = dc_order(0);
+#else
+        dcdirent.d_off = dc_order(somedirent->d_off);
+        dcdirent.d_reclen = dc_order(somedirent->d_reclen);
+        dcdirent.d_type = dc_order(somedirent->d_type);
 #endif
-	strcpy(dcdirent.d_name, somedirent->d_name);
+#endif
+        strcpy(dcdirent.d_name, somedirent->d_name);
 
-	send_data((unsigned char *)&dcdirent, ntohl(command->value1), ntohl(command->value2));
-	send_cmd(CMD_RETVAL, 1, 1, NULL, 0);
-	return 0;
+        send_data((unsigned char *)&dcdirent, ntohl(command->value1), ntohl(command->value2));
+        send_cmd(CMD_RETVAL, 1, 1, NULL, 0);
+        return 0;
     }
 
     send_cmd(CMD_RETVAL, 0, 0, NULL, 0);
@@ -448,12 +428,10 @@ int dc_readdir(unsigned char * buffer)
     return 0;
 }
 
-int dc_rewinddir(unsigned char * buffer)
-{
+int dc_rewinddir(unsigned char *buffer) {
     int retval;
     command_int_t *command = (command_int_t *)buffer;
     uint32_t i = ntohl(command->value0);
-
 
     if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
         rewinddir(opendirs[i - DIRENT_OFFSET]);
@@ -469,10 +447,9 @@ int dc_rewinddir(unsigned char * buffer)
     return 0;
 }
 
-int dc_cdfs_redir_read_sectors(int isofd, unsigned char * buffer)
-{
+int dc_cdfs_redir_read_sectors(int isofd, unsigned char *buffer) {
     int start;
-    unsigned char * buf;
+    unsigned char *buf;
     command_3int_t *command = (command_3int_t *)buffer;
 
     start = ntohl(command->value0) - 150;
@@ -500,30 +477,29 @@ extern int gdb_server_socket;
 extern int socket_fd;
 #endif
 
-int dc_gdbpacket(unsigned char * buffer)
-{
+int dc_gdbpacket(unsigned char *buffer) {
     size_t in_size, out_size;
     static char gdb_buf[GDBBUFSIZE];
     int retval = 0;
 
 #ifdef __MINGW32__
-	if (gdb_server_socket == INVALID_SOCKET) {
+    if(gdb_server_socket == INVALID_SOCKET) {
 #else
-	if (gdb_server_socket < 0) {
+    if(gdb_server_socket < 0) {
 #endif
         send_cmd(CMD_RETVAL, -1, -1, NULL, 0);
     }
 
-    if (socket_fd == 0) {
-	printf( "waiting for gdb client connection...\n" );
-	socket_fd = accept( gdb_server_socket, NULL, NULL );
+    if(socket_fd == 0) {
+        printf("waiting for gdb client connection...\n");
+        socket_fd = accept(gdb_server_socket, NULL, NULL);
 #ifdef __MINGW32__
-	if ( socket_fd != INVALID_SOCKET)
+        if(socket_fd != INVALID_SOCKET)
 #endif
-	if ( socket_fd == 0) {
-	    log_error("error accepting gdb server connection");
-	    return -1;
-	}
+            if(socket_fd == 0) {
+                log_error("error accepting gdb server connection");
+                return -1;
+            }
     }
 
     command_2int_string_t *command = (command_2int_string_t *)buffer;
@@ -532,20 +508,20 @@ int dc_gdbpacket(unsigned char * buffer)
     in_size = ntohl(command->value0);
     out_size = ntohl(command->value1);
 
-    if (in_size)
-	send(socket_fd, command->string, in_size, 0);
+    if(in_size)
+        send(socket_fd, command->string, in_size, 0);
 
-    if (out_size) {
-	retval = recv(socket_fd, gdb_buf, out_size > GDBBUFSIZE ? GDBBUFSIZE : out_size, 0);
+    if(out_size) {
+        retval = recv(socket_fd, gdb_buf, out_size > GDBBUFSIZE ? GDBBUFSIZE : out_size, 0);
 
-	if (retval == 0)
-	socket_fd = -1;
+        if(retval == 0)
+            socket_fd = -1;
     }
 #ifdef __MINGW32__
-	if(retval == SOCKET_ERROR) {
-	fprintf(stderr, "Got socket error: %d\n", WSAGetLastError());
-	return -1;
-	}
+    if(retval == SOCKET_ERROR) {
+        fprintf(stderr, "Got socket error: %d\n", WSAGetLastError());
+        return -1;
+    }
 #else
     if(retval == -1) {
         fprintf(stderr, "Got socket error: %s\n", strerror(errno));

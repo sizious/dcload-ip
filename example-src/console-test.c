@@ -1,7 +1,6 @@
 #include "dcload-syscalls.h"
 
-void main(void)
-{
+void main(void) {
     int fd;
     unsigned char buffer[2048];
     int count;
@@ -13,18 +12,18 @@ void main(void)
 
     fd = open("console-test.c", O_RDONLY);
 
-    if (fd == -1) {
-	write(1, "open failed!\n", 14);
-	exit(1);
+    if(fd == -1) {
+        write(1, "open failed!\n", 14);
+        exit(1);
     }
 
     write(1, "Contents of console-test.c:\n\n", 30);
 
     count = read(fd, buffer, 2048);
 
-    if (count == -1) {
-	write(1, "read failed!\n", 14);
-	exit(1);
+    if(count == -1) {
+        write(1, "read failed!\n", 14);
+        exit(1);
     }
 
     write(1, buffer, count);

@@ -79,12 +79,12 @@ int __cdecl __MINGW_NOTHROW libintl_asprintf(char **strp, const char *fmt, ...) 
 int __cdecl __MINGW_NOTHROW libintl_vasprintf(char **restrict strp,
                                               const char *restrict fmt,
                                               va_list arg ) {
-	return vasprintf(strp, fmt, arg);
+    return vasprintf(strp, fmt, arg);
 }
 
 // See: https://stackoverflow.com/a/60380005
 int __cdecl __MINGW_NOTHROW __ms_vsnprintf(char *buffer, size_t count, const char *format, va_list argptr) {
-	return __mingw_vsnprintf(buffer, count, format, argptr);
+    return __mingw_vsnprintf(buffer, count, format, argptr);
 }
 
 // Thanks to Kenji Uno and god

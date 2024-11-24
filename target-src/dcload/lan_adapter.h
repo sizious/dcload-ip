@@ -6,9 +6,9 @@
    manual -- it appears to contain only the MAC address and not a base
    address like the manual says. EEPROM is read one bit (!) at a time
    through the EEPROM interface port. */
-#define FE_B16_SELECT	0x20		/* EEPROM chip select */
-#define FE_B16_CLOCK	0x40		/* EEPROM shift clock */
-#define FE_B17_DATA	0x80		/* EEPROM data bit */
+#define FE_B16_SELECT  0x20        /* EEPROM chip select */
+#define FE_B16_CLOCK   0x40        /* EEPROM shift clock */
+#define FE_B17_DATA    0x80        /* EEPROM data bit */
 
 // clear ENA DLC, 100ns SRAM, 8-bit packet transfer bus mode, 4kB TX buffer (2kB per bank x 2 banks), 32kB external buffer memory
 #define DLCR6_FLAGS 0x76
