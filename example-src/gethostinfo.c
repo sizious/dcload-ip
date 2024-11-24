@@ -1,19 +1,17 @@
 #include "dcload-syscalls.h"
 
-void uint_to_string(unsigned int foo, unsigned char *bar)
-{
+void uint_to_string(unsigned int foo, unsigned char *bar) {
     char hexdigit[17] = "0123456789abcdef";
     int i;
 
-    for(i=7; i>=0; i--) {
+    for(i = 7; i >= 0; i--) {
         bar[i] = hexdigit[(foo & 0x0f)];
         foo = foo >> 4;
     }
     bar[8] = 0;
 }
 
-void main(void)
-{
+void main(void) {
     unsigned int tool_ip;
     unsigned int tool_port;
     unsigned int our_ip;
