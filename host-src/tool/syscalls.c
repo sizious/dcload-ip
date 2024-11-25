@@ -344,27 +344,26 @@ int dc_utime(unsigned char *buffer) {
 }
 
 int dc_opendir(unsigned char *buffer) {
-    DIR *somedir;
     command_string_t *command = (command_string_t *)buffer;
-    int i;
+    int hnd;
 
     /* Find an open entry */
-    for(i = 0; i < MAX_OPEN_DIRS; ++i) {
-        if(!opendirs[i])
+    for(hnd = 0; hnd < MAX_OPEN_DIRS; ++hnd) {
+        if(!opendirs[hnd])
             break;
     }
 
-    if(i < MAX_OPEN_DIRS) {
-        if(!(opendirs[i] = opendir(command->string)))
-            i = 0;
+    if(hnd < MAX_OPEN_DIRS) {
+        if(!(opendirs[hnd] = opendir(command->string)))
+            hnd = 0;
         else
-            i += DIRENT_OFFSET;
+            hnd += DIRENT_OFFSET;
     }
     else {
-        i = 0;
+        hnd = 0;
     }
 
-    send_cmd(CMD_RETVAL, (unsigned int)i, (unsigned int)i, NULL, 0);
+    send_cmd(CMD_RETVAL, (unsigned int)hnd, (unsigned int)hnd, NULL, 0);
 
     return 0;
 }
@@ -391,10 +390,10 @@ int dc_readdir(unsigned char *buffer) {
     struct dirent *somedirent;
     dcload_dirent_t dcdirent;
     command_3int_t *command = (command_3int_t *)buffer;
-    uint32_t i = ntohl(command->value0);
+    uint32_t hnd = ntohl(command->value0);
 
-    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET)
-        somedirent = readdir(opendirs[i - DIRENT_OFFSET]);
+    if(hnd >= DIRENT_OFFSET && hnd < MAX_OPEN_DIRS + DIRENT_OFFSET)
+        somedirent = readdir(opendirs[hnd - DIRENT_OFFSET]);
     else
         somedirent = NULL;
 
@@ -431,11 +430,10 @@ int dc_readdir(unsigned char *buffer) {
 int dc_rewinddir(unsigned char *buffer) {
     int retval;
     command_int_t *command = (command_int_t *)buffer;
-    uint32_t i = ntohl(command->value0);
+    uint32_t hnd = ntohl(command->value0);
 
-    if(i >= DIRENT_OFFSET && i < MAX_OPEN_DIRS + DIRENT_OFFSET) {
-        rewinddir(opendirs[i - DIRENT_OFFSET]);
-        opendirs[i - DIRENT_OFFSET] = NULL;
+    if(hnd >= DIRENT_OFFSET && hnd < MAX_OPEN_DIRS + DIRENT_OFFSET) {
+        rewinddir(opendirs[hnd - DIRENT_OFFSET]);
         retval = 0;
     }
     else {

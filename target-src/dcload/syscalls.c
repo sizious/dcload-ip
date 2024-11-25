@@ -324,7 +324,7 @@ int utime(const char *filename, struct utimbuf *buf) {
 }
 
 DIR *opendir(const char *name) {
-    command_string_t *command = (command_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+    command_string_t * command = (command_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
     int namelen = strlen(name);
 
     memcpy(command->id, CMD_OPENDIR, 4);

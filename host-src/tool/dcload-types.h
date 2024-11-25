@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 /* dcload dirent */
-
 typedef struct {
     uint32_t d_ino;    /* inode number */
     int32_t d_off;     /* offset to the next dirent */
@@ -14,7 +13,6 @@ typedef struct {
 } dcload_dirent_t;
 
 /* dcload stat */
-
 typedef struct {
     uint16_t st_dev;
     uint16_t st_ino;
