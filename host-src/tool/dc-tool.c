@@ -1196,12 +1196,12 @@ int do_console(char *path, char *isofile) {
             CatchError(dc_cdfs_redir_read_sectors(isofd, buffer));
         if(!(memcmp(buffer, CMD_GDBPACKET, 4)))
             CatchError(dc_gdbpacket(buffer));
+        if(!(memcmp(buffer, CMD_REWINDDIR, 4)))
+            CatchError(dc_rewinddir(buffer));
 
         // reset the timer
         time.tv_nsec = 500000000;
     }
-    if(!(memcmp(buffer, CMD_REWINDDIR, 4)))
-        CatchError(dc_rewinddir(buffer));
 
     return 0;
 }
