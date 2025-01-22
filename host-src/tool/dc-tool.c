@@ -215,7 +215,6 @@ int dcsocket = 0;
 int gdb_server_socket = -1;
 int socket_fd = 0; // For GDB
 int global_socket = 0; // Stores whichever global socket gets used
-unsigned int nochroot = 0;
 char *path = 0;
 #endif
 
