@@ -254,7 +254,7 @@ int dc_link(unsigned char * buffer)
 
     pathname1 = map_path(command->string);
     if (mappath){
-        strcpy(path_buffer2, mappath);
+        strcpy(path_buffer2, pathname1);
         pathname1 = path_buffer2;
     }
     pathname2 = map_path(&command->string[strlen(command->string)+1]);
