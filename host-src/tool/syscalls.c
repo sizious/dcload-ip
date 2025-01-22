@@ -66,7 +66,7 @@ void set_mappath(char *path)
 
 static char path_buffer1[4096];
 static char path_buffer2[4096];
-static inline char* sanitize_path_string(char *path){
+static inline char* map_path(char *path){
     if(!mappath)
         return path;
     strcpy(path_buffer1, mappath);
@@ -215,7 +215,7 @@ int dc_open(unsigned char * buffer)
   if (ntohl(command->value0) & 0x0800)
     ourflags |= O_EXCL;
 
-  retval = open(sanitize_path_string(command->string), ourflags | O_BINARY, ntohl(command->value1));
+  retval = open(map_path(command->string), ourflags | O_BINARY, ntohl(command->value1));
 
   send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -239,7 +239,7 @@ int dc_creat(unsigned char * buffer)
     int retval;
     command_int_string_t *command = (command_int_string_t *)buffer;
 
-    retval = creat(sanitize_path_string(command->string), ntohl(command->value0));
+    retval = creat(map_path(command->string), ntohl(command->value0));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -252,8 +252,12 @@ int dc_link(unsigned char * buffer)
     int retval;
     command_string_t *command = (command_string_t *)buffer;
 
-    pathname1 = sanitize_path_string(command->string);
-    pathname2 = sanitize_path_string(&command->string[strlen(command->string)+1]);
+    pathname1 = map_path(command->string);
+    if (mappath){
+        strcpy(path_buffer2, mappath);
+        pathname1 = path_buffer2;
+    }
+    pathname2 = map_path(&command->string[strlen(command->string)+1]);
 
 #ifdef __MINGW32__
     /* Copy the file on Windows */
@@ -272,7 +276,7 @@ int dc_unlink(unsigned char * buffer)
     int retval;
     command_string_t *command = (command_string_t *)buffer;
 
-    retval = unlink(sanitize_path_string(command->string));
+    retval = unlink(map_path(command->string));
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
     return 0;
@@ -283,7 +287,7 @@ int dc_chdir(unsigned char * buffer)
     int retval;
     command_string_t *command = (command_string_t *)buffer;
 
-    retval = chdir(sanitize_path_string(command->string));
+    retval = chdir(map_path(command->string));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -330,7 +334,7 @@ int dc_stat(unsigned char * buffer)
     dcload_stat_t dcstat;
     command_2int_string_t *command = (command_2int_string_t *)buffer;
 
-    retval = stat(sanitize_path_string(command->string), &filestat);
+    retval = stat(map_path(command->string), &filestat);
 
     dcstat.st_dev = dc_order(filestat.st_dev);
     dcstat.st_ino = dc_order(filestat.st_ino);
@@ -365,9 +369,9 @@ int dc_utime(unsigned char * buffer)
 	tbuf.actime = ntohl(command->value1);
 	tbuf.modtime = ntohl(command->value2);
 
-	retval = utime(sanitize_path_string(command->string), &tbuf);
+	retval = utime(map_path(command->string), &tbuf);
     } else {
-	retval = utime(sanitize_path_string(command->string), 0);
+	retval = utime(map_path(command->string), 0);
     }
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -387,7 +391,7 @@ int dc_opendir(unsigned char * buffer)
     }
 
     if(i < MAX_OPEN_DIRS) {
-        if(!(opendirs[i] = opendir(sanitize_path_string(command->string))))
+        if(!(opendirs[i] = opendir(map_path(command->string))))
             i = 0;
         else
             i += DIRENT_OFFSET;
