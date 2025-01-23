@@ -56,22 +56,31 @@
    we need to offset by a bit. This aught to do. */
 #define DIRENT_OFFSET   1337
 
+#define MAX_PATH_LEN 4096
+
+
 static DIR *opendirs[MAX_OPEN_DIRS];
 static char *mappath = NULL;
+static int mappatlen = -1;
 
-void set_mappath(char *path)
-{
+static char path_work_buffer[MAX_PATH_LEN];
+static char path_result_buffer[MAX_PATH_LEN];
+void set_mappath(char *path){
     mappath = path;
+    mappatlen = strlen(mappath);
+    strcpy(path_work_buffer, mappath);
 }
 
-static char path_buffer1[4096];
-static char path_buffer2[4096];
 static inline char* map_path(char *path){
     if(!mappath)
         return path;
-    strcpy(path_buffer1, mappath);
-    strcat(path_buffer1, path);
-    return path_buffer1;
+
+    strcpy(path_work_buffer + mappatlen, path);
+    realpath(path_work_buffer, path_result_buffer);
+    if (strncmp(mappath, path_result_buffer, mappatlen) != 0){
+        return NULL;
+    }
+    return path_result_buffer;
 }
 
 /* syscalls for dcload-ip
@@ -248,22 +257,20 @@ int dc_creat(unsigned char * buffer)
 
 int dc_link(unsigned char * buffer)
 {
-    char *pathname1, *pathname2;
     int retval;
     command_string_t *command = (command_string_t *)buffer;
+    char local_buffer[MAX_PATH_LEN];
 
-    pathname1 = map_path(command->string);
+    char *local_ref = map_path(command->string);
     if (mappath){
-        strcpy(path_buffer2, pathname1);
-        pathname1 = path_buffer2;
+        strcpy(local_buffer, local_ref);
     }
-    pathname2 = map_path(&command->string[strlen(command->string)+1]);
 
 #ifdef __MINGW32__
     /* Copy the file on Windows */
-    retval = CopyFileA(pathname1, pathname2, 0);
+    retval = CopyFileA(local_buffer, map_path(&command->string[strlen(command->string)+1]), 0);
 #else
-    retval = link(pathname1, pathname2);
+    retval = link(local_buffer, map_path(&command->string[strlen(command->string)+1]));
 #endif
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);

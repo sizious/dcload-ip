@@ -215,6 +215,7 @@ int dcsocket = 0;
 int gdb_server_socket = -1;
 int socket_fd = 0; // For GDB
 int global_socket = 0; // Stores whichever global socket gets used
+unsigned int nochroot = 0;
 char *path = 0;
 #endif
 
@@ -1380,18 +1381,21 @@ int main(int argc, char *argv[])
 	    cleanlist[0] = filename;
 	    strcpy(filename, optarg);
 	    break;
-#ifndef __MINGW32__
   case 'm':
       if (path) {
     fprintf(stderr, "-m and -c options are mutually exclusive, choose one\n");
     goto doclean;
       }
       nochroot = 1;
-      path = malloc(strlen(optarg) + 1);
+      path = realpath(optarg, NULL);
+      if (path == NULL) {
+        fprintf(stderr, "-m option with invalid path '%s'  \n", optarg);
+        goto doclean;
+      }
       set_mappath(path);
       cleanlist[1] = path;
-      strcpy(path, optarg);
       break;
+#ifndef __MINGW32__
 	case 'c':
 	    if (path) {
 		fprintf(stderr, "-m and -c options are mutually exclusive, choose one\n");
@@ -1485,15 +1489,13 @@ int main(int argc, char *argv[])
     if (console & (command=='x'))
 	printf("Console enabled\n");
 
-#ifndef __MINGW32__
-    if (path) {
-      if (nochroot) {
-        printf("Mapping /pc/ to <%s>\n", path);
-      } else {
-        printf("Chrooting to <%s>\n", path);
-      }
+  if (path) {
+    if (nochroot) {
+      printf("Mapping /pc/ to <%s>\n", path);
+    } else {
+      printf("Chrooting to <%s>\n", path);
     }
-#endif
+  }
 
     if (cdfs_redir & (command=='x'))
 	printf("Cdfs redirection enabled\n");
