@@ -1317,7 +1317,7 @@ int open_gdb_socket(int port)
 }
 
 #ifdef __MINGW32__
-#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:i:nlqhrg"
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:m:i:nlqhrg"
 #else
 #define AVAILABLE_OPTIONS		"x:u:d:a:s:t:m:c:i:nlqhrg"
 #endif
