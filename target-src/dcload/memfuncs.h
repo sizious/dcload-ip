@@ -97,4 +97,9 @@ static inline void CacheBlockInvalidate(unsigned char * __32_byte_base, unsigned
 	}
 }
 
+static inline void * to_p1(void *addr)
+{
+	return (void *)(((unsigned int)addr & 0x1fffffff) | 0x80000000);
+}
+
 #endif
