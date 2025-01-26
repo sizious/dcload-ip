@@ -409,7 +409,7 @@ int la_bb_tx(unsigned char *pkt, int len)
 	uint_to_string(len, buffer);
 	draw_string(0, 192, buffer, 0xffff); */
 
-	unsigned char *copyback_pkt = (unsigned char*)((unsigned int)pkt & 0x1fffffff);
+	unsigned char *copyback_pkt = to_p1(pkt);
 
 // Tx time
 #ifdef LAN_TX_LOOP_TIMING
@@ -543,7 +543,7 @@ static int la_bb_rx(void)
 			return -2;
 		}
 
-		unsigned char *copyback_current_pkt = (unsigned char*)((unsigned int)current_pkt & 0x1fffffff); // copyback pkt in cached memory area
+		unsigned char *copyback_current_pkt = to_p1(current_pkt); // copyback pkt in cached memory area
 
 // Rx time
 #ifdef LAN_RX_LOOP_TIMING
@@ -557,7 +557,7 @@ static int la_bb_rx(void)
 			copyback_current_pkt[i] = REG(8);
 		}
 		// Ensure cached data is written to memory
-		CacheBlockWriteBack((unsigned char*) ((unsigned int)raw_current_pkt & 0x1fffffe0), (2 + len + 31)/32);
+		CacheBlockWriteBack(to_p1(raw_current_pkt), (2 + len + 31)/32);
 
 // Rx time end
 #ifdef LAN_RX_LOOP_TIMING
