@@ -1205,9 +1205,9 @@ int do_console(char *path, char *isofile)
 
 	while(recv_response(buffer, PACKET_TIMEOUT) == -1)
 #if (SAVE_MY_FANS != 0)
-  nanosleep(&time, &remain); /* Sleep for 0ns, which is just going to yield the thread. */
+		nanosleep(&time, &remain); /* Sleep for 0ns, which is just going to yield the thread. */
 #else
-  ; /* Spin thread until a packet arrives. */
+		; /* Spin thread until a packet arrives. */
 #endif
 
 	if (!(memcmp(buffer, CMD_EXIT, 4)))
