@@ -1204,7 +1204,11 @@ int do_console(char *path, char *isofile)
 	fflush(stdout);
 
 	while(recv_response(buffer, PACKET_TIMEOUT) == -1)
-		nanosleep(&time, &remain);
+#if (SAVE_MY_FANS != 0)
+		nanosleep(&time, &remain); /* Sleep for 0ns, which is just going to yield the thread. */
+#else
+		; /* Spin thread until a packet arrives. */
+#endif
 
 	if (!(memcmp(buffer, CMD_EXIT, 4)))
 	    return -1;
@@ -1250,9 +1254,6 @@ int do_console(char *path, char *isofile)
 	    CatchError(dc_cdfs_redir_read_sectors(isofd, buffer));
 	if (!(memcmp(buffer, CMD_GDBPACKET, 4)))
 	    CatchError(dc_gdbpacket(buffer));
-
-		// reset the timer
-		time.tv_nsec = 500000000;
     }
     if(!(memcmp(buffer, CMD_REWINDDIR, 4)))
         CatchError(dc_rewinddir(buffer));
