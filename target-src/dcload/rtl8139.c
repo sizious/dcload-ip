@@ -65,8 +65,8 @@ static vul * const nic32 = REGL(0xa1001700);
 //static vus * const mem16 = REGS(0xa1840000);
 static vul * const mem32 = REGL(0xa1840000);
 
-#define GAPS_RX_IO_AREA 0x01840000U
-#define GAPS_TX_IO_AREA 0x01840000U
+#define GAPS_RX_IO_AREA 0x81840000U
+#define GAPS_TX_IO_AREA 0x81840000U
 
 static vuc * const txdesc[4] = {
 	REGC(GAPS_TX_IO_AREA + 0x6000),
@@ -496,7 +496,7 @@ int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: htt
 		unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
 #endif
 
-	unsigned char *copyback_pkt_base = (unsigned char*)((unsigned int)(&(pkt[-2])) & 0x1fffffff); // copyback base in cached memory area
+	unsigned char *copyback_pkt_base = to_p1(&pkt[-2]); // copyback base in cached memory area
 
 	__builtin_prefetch(copyback_pkt_base);
 
@@ -600,7 +600,7 @@ int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: htt
 	}
 
 	// Copy packet over to RTL via GAPS while also accounting for dcload-ip's packet alignment offset
-	SH4_mem_to_pkt_X_movca_32((unsigned char*)0x01848000, copyback_pkt_base, len);
+	SH4_mem_to_pkt_X_movca_32((unsigned char*)0x81848000, copyback_pkt_base, len);
 	// Technically this will prefetch beyond 1536 for packets between 1504 and 1514 in size, but that's not an issue.
 
 // Tx time end
@@ -643,8 +643,8 @@ static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n) // d
 	// Note: the +3 may mean we read some of the CRC for not-byte-multiple packets. That's fine: it doesn't cause us any problems.
 	//--	SH4_pkt_to_mem_X_movca_32(dest, (unsigned char*)0x01848000, n); // This takes full n now
 	//SH4_pkt_to_mem_X_movca_32_linear(dest, (unsigned char*)0x01848000, n + 2); // This takes full n now
-	memcpy_32bit(dest, (unsigned char*)0x01848000, (n + 2 + 3)/4); // Lol this is as fast as the asm functions
-	CacheBlockInvalidate((unsigned char*)0x01848000, (n + 2 + 31)/32); // Need to invalidate the src packet
+	memcpy_32bit(dest, (unsigned char*)0x81848000, (n + 2 + 3)/4); // Lol this is as fast as the asm functions
+	CacheBlockInvalidate((unsigned char*)0x81848000, (n + 2 + 31)/32); // Need to invalidate the src packet
 	CacheBlockWriteBack(dest, (2 + n + 31)/32);
 }
 
@@ -694,8 +694,7 @@ static int rtl_bb_rx()
 			unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
 #endif
 
-			//pktcpy(raw_current_pkt, pkt, pkt_size); // SH4_pkt_to_mem() will shift it by 2 for current_pkt
-			pktcpy((unsigned char*) ((unsigned int)raw_current_pkt & 0x1fffffe0), pkt, pkt_size); // SH4_pkt_to_mem() will shift it by 2 for current_pkt
+			pktcpy(raw_current_pkt, pkt, pkt_size); // SH4_pkt_to_mem() will shift it by 2 for current_pkt
 
 // Rx time end
 #ifdef RX_LOOP_TIMING
@@ -714,7 +713,7 @@ static int rtl_bb_rx()
 #endif
 
 			//process_pkt(current_pkt);
-			process_pkt((unsigned char*) ((unsigned int)current_pkt & 0x1fffffff));
+			process_pkt(to_p1(current_pkt));
 
 // Process time end
 #ifdef PKT_PROCESS_TIMING
