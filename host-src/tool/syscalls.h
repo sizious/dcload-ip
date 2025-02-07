@@ -22,7 +22,9 @@
 #ifndef __SYSCALLS_H__
 #define __SYSCALLS_H__
 
-int dc_fstat(unsigned char * buffer);
+void set_mappath(char *path);
+
+int dc_fstat(unsigned char *buffer);
 int dc_write(unsigned char * buffer);
 int dc_read(unsigned char * buffer);
 int dc_open(unsigned char * buffer);
