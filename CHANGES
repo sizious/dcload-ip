@@ -70,7 +70,7 @@ WHAT'S NEW IN 1.1.0
   state that way). [Moopthehedgehog]
 * Added an option in Makefile.cfg to slow down dc-tool a tiny bit to help with
   CPU usage on laptops that run the network polling loop far faster in 2020 than
-  laptops did in 2004. It's called "SAVE_MY_ONLYFANS" [Moopthehedgehog]
+  laptops did in 2004. It's called "SAVE_MY_FANS" [Moopthehedgehog]
 * Added support for GCC 9.2 (if using GCC 4.x from KallistiOS, make sure
   USING_KOS_GCC is uncommented in Makefile.cfg) [Moopthehedgehog]
 * Presumably many tens of issues were fixed. Feels like a hundred, honestly, but
