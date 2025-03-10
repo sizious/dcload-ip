@@ -75,7 +75,10 @@ static inline char *map_path(char *path) {
     return path;
 
   strcpy(path_work_buffer + mappatlen, path);
-  realpath(path_work_buffer, path_result_buffer);
+  if (realpath(path_work_buffer, path_result_buffer) == NULL) {
+    printf("Failed to map path '%s' with error: %s\n", path_work_buffer, strerror(errno));
+    return NULL;
+  }
   if (strncmp(mappath, path_result_buffer, mappatlen) != 0) {
     printf("Requested path:\n\t%s\n"
     "is outside of basepath:\n\t%s\n", mappath, path_result_buffer);
@@ -281,6 +284,7 @@ int dc_unlink(unsigned char *buffer) {
 
   return 0;
 }
+
 
 int dc_chdir(unsigned char *buffer) {
   int retval;
