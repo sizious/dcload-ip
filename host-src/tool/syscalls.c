@@ -75,7 +75,10 @@ static inline char *map_path(char *path) {
     return path;
 
   strcpy(path_work_buffer + mappatlen, path);
-  realpath(path_work_buffer, path_result_buffer);
+  if (realpath(path_work_buffer, path_result_buffer) == NULL) {
+    printf("Failed to map path '%s' with error: %s\n", path_work_buffer, strerror(errno));
+    return NULL;
+  }
   if (strncmp(mappath, path_result_buffer, mappatlen) != 0) {
     printf("Requested path:\n\t%s\n"
     "is outside of basepath:\n\t%s\n", mappath, path_result_buffer);
@@ -256,11 +259,10 @@ int dc_creat(unsigned char * buffer)
     return 0;
 }
 
-int dc_link(unsigned char * buffer)
-{
-    char *pathname1, *pathname2;
-    int retval;
-    command_string_t *command = (command_string_t *)buffer;
+int dc_link(unsigned char *buffer) {
+  int retval;
+  command_string_t *command = (command_string_t *)buffer;
+  char local_buffer[MAX_PATH_LEN];
 
   char *local_ref = map_path(command->string);
   if (mappath) {
@@ -268,17 +270,18 @@ int dc_link(unsigned char * buffer)
   }
 
 #ifdef __MINGW32__
-    /* Copy the file on Windows */
-    retval = CopyFileA(pathname1, pathname2, 0);
+  /* Copy the file on Windows */
+  retval = CopyFileA(
+      local_buffer, map_path(&command->string[strlen(command->string) + 1]), 0);
 #else
-    retval = link(pathname1, pathname2);
+  retval = link(local_buffer,
+                map_path(&command->string[strlen(command->string) + 1]));
 #endif
 
-    send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
+  send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
-    return 0;
+  return 0;
 }
-
 int dc_unlink(unsigned char * buffer)
 {
     int retval;
