@@ -913,7 +913,7 @@ int recv_response(unsigned char *buffer, int timeout)
 {
     int start = time_in_usec();
     int rv = -1;
-#if (SAVE_MY_ONLYFANS != 0)
+#if (SAVE_MY_FANS != 0)
     struct timespec pausetime = {0}, pauseremain = {0};
 #endif
 
@@ -923,8 +923,8 @@ int recv_response(unsigned char *buffer, int timeout)
        // 100Mbit/s is 10 nanoseconds, but that's reportedly a little slow.
        // 5 is better, but still a bit slow. So let's do 1 nanosecond.
        // There's no picosecond sleep, so this is about as good as it gets.
-#if (SAVE_MY_ONLYFANS != 0)
-       pausetime.tv_nsec = SAVE_MY_ONLYFANS; // Now it's configurable from Makefile.cfg
+#if (SAVE_MY_FANS != 0)
+       pausetime.tv_nsec = SAVE_MY_FANS; // Now it's configurable from Makefile.cfg
        nanosleep(&pausetime, &pauseremain);
 #endif
     }
@@ -1208,7 +1208,7 @@ int do_console(char *path, char *isofile)
 	fflush(stdout);
 
 	while(recv_response(buffer, PACKET_TIMEOUT) == -1)
-#if (SAVE_MY_ONLYFANS != 0)
+#if (SAVE_MY_FANS != 0)
 		nanosleep(&time, &remain); /* Sleep for 0ns, which is just going to yield the thread. */
 #else
 		; /* Spin thread until a packet arrives. */
