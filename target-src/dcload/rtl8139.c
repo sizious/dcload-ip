@@ -66,8 +66,12 @@ static vul *const mem32 = REGL(0xa1840000);
 #define GAPS_RX_IO_AREA 0x81840000U
 #define GAPS_TX_IO_AREA 0x81840000U
 
-static vuc *const txdesc[4] = {REGC(GAPS_TX_IO_AREA + 0x6000), REGC(GAPS_TX_IO_AREA + 0x6800),
-                               REGC(GAPS_TX_IO_AREA + 0x7000), REGC(GAPS_TX_IO_AREA + 0x7800)};
+static vuc *const txdesc[4] = {
+    REGC(GAPS_TX_IO_AREA + 0x6000), 
+    REGC(GAPS_TX_IO_AREA + 0x6800),
+    REGC(GAPS_TX_IO_AREA + 0x7000), 
+    REGC(GAPS_TX_IO_AREA + 0x7800)
+};
 
 int rtl_bb_detect(void) {
     // This pointer's data is always aligned to 4 bytes--just look at the register address!

@@ -1146,7 +1146,7 @@ int do_console(char *path, char *isofile) {
     }
 
 #ifndef __MINGW32__
-    if (!nochroot && path){
+    if (!nochroot && path) {
         if (chroot(path))
             log_error(path);
     }

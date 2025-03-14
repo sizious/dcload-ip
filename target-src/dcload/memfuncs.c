@@ -14,6 +14,10 @@
 // up at all).
 //
 
+static unsigned int memdiff(const void *dst, const void *src) {
+    return ((unsigned int)dst & 0x1fffffff) - ((unsigned int)src & 0x1fffffff);
+}
+
 //
 // From DreamHAL
 //
@@ -21,11 +25,6 @@
 // 8-bit (1 bytes at a time)
 // Len is (# of total bytes/1), so it's "# of 8-bits"
 // Source and destination buffers must both be 1-byte aligned (aka no alignment)
-
-static unsigned int memdiff(const void *dst, const void *src) {
-	return ((unsigned int)dst & 0x1fffffff) - ((unsigned int)src & 0x1fffffff);
-}
-
 void *memcpy_8bit(void *dest, const void *src, unsigned int len) {
     if(!len) {
         return dest;
