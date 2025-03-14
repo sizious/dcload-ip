@@ -67,6 +67,7 @@ $(TOOLINSTALLDIR):
 
 .PHONY : clean
 clean:
+	rm -f $(DCTOOL)
 	rm -f $(OBJECTS)
 
 .PHONY : distclean

@@ -6,6 +6,8 @@
 *.elf
 *.asm
 *.map
+*.DS_Store
+.vscode/
 example-src/console-test
 example-src/exception-test
 example-src/gethostinfo
