@@ -126,17 +126,16 @@ static void process_udp(ether_header_t *ether, ip_header_t *ip, udp_header_t *ud
     // Note that UDP's length field actually includes the UDP header, which is UDP_H_LEN
     unsigned short udp_data_length = ntohs(udp->length) - UDP_H_LEN;
 
-    pseudo = (ip_udp_pseudo_header_t *)((unsigned int)pseudo_array &
-                                        0x1fffffff); // global small pseudo header array
-    pseudo->src_ip = ip->src;
-    pseudo->dest_ip = ip->dest;
-    pseudo->zero = 0;
-    pseudo->protocol = ip->protocol;
-    pseudo->udp_length = udp->length;
-    pseudo->src_port = udp->src;
-    pseudo->dest_port = udp->dest;
-    pseudo->length = udp->length;
-    pseudo->checksum = 0;
+	pseudo = (ip_udp_pseudo_header_t *)to_p1(pseudo_array); // global small pseudo header array
+	pseudo->src_ip = ip->src;
+	pseudo->dest_ip = ip->dest;
+	pseudo->zero = 0;
+	pseudo->protocol = ip->protocol;
+	pseudo->udp_length = udp->length;
+	pseudo->src_port = udp->src;
+	pseudo->dest_port = udp->dest;
+	pseudo->length = udp->length;
+	pseudo->checksum = 0;
 
     /* checksum == 0 means no checksum */
     if(udp->checksum != 0)

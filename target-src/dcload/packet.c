@@ -93,8 +93,7 @@ __attribute__((aligned(4))) unsigned char
 // specified by the 'data' variable.
 void make_udp(unsigned short dest, unsigned short src, int length, ip_header_t *ip,
               udp_header_t *udp) {
-    ip_udp_pseudo_header_t *pseudo =
-        (ip_udp_pseudo_header_t *)((unsigned int)pseudo_array & 0x1fffffff);
+    ip_udp_pseudo_header_t *pseudo = (ip_udp_pseudo_header_t*)pseudo_array;
 
     udp->src = htons(src);
     udp->dest = htons(dest);

@@ -79,6 +79,7 @@ int gdGdcReqCmd(int cmd, int *param) {
 void gdGdcExecServer(void) {}
 
 int gdGdcGetCmdStat(int f, int *status) {
+    (void)f;
     if(gdStatus == 0)
         status[0] = 0;
     return gdStatus;
@@ -86,6 +87,6 @@ int gdGdcGetCmdStat(int f, int *status) {
 
 void gdGdcGetDrvStat(int *param) { param[1] = 32; }
 
-int gdGdcChangeDataType(int *param) { return 0; }
+int gdGdcChangeDataType(int *param) { (void)param; return 0; }
 
 void gdGdcInitSystem(void) {}

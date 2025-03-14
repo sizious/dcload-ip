@@ -183,17 +183,15 @@ void cmd_partbin(command_t *command) {
     // If the destination address is 8-byte aligned, this will be a rocket.
     //    memcpy((unsigned char *)cmd_addr, command->data, ntohl(command->size));
 
-    // cmd_addr needs to honor whatever dc-tool sends. Use P0 addresses for cache boost when writing
-    // to RAM. Something great for alignment reasons is that, in addition to being the max payload
-    // size, 1440 bytes is an even multiple of 32 bytes.
-    SH4_aligned_memcpy((void *)cmd_addr, (void *)((unsigned int)command->data & 0x1fffffff),
-                       cmd_size);
-    if(cached_dest) {
-        CacheBlockPurge((void *)cmd_addr,
-                        (cmd_size + 31) / 32 + 2); // +1 for misalignment, +1 again for prefetch
-    }
-    // Ensure physical memory is actually written to from the cache, since we don't know how it
-    // might be used. Purge instead of writeback to avoid cache conflicts/trashing.
+	// cmd_addr needs to honor whatever dc-tool sends. Use P0 addresses for cache boost when writing to RAM.
+	// Something great for alignment reasons is that, in addition to being the max payload size, 1440 bytes is an even multiple of 32 bytes.
+	SH4_aligned_memcpy((void*)cmd_addr, to_p1(command->data), cmd_size);
+	if(cached_dest)
+	{
+		CacheBlockPurge((void*)cmd_addr, (cmd_size + 31)/32 + 2); // +1 for misalignment, +1 again for prefetch
+	}
+	// Ensure physical memory is actually written to from the cache, since we don't know how it might be used.
+	// Purge instead of writeback to avoid cache conflicts/trashing.
 
     // Legacy check for versions < 2.0.0
     if(__builtin_expect(payload1024, 0)) {
@@ -295,11 +293,9 @@ void cmd_sendbinq(ip_header_t *ip, udp_header_t *udp, command_t *command) {
         // 'cmd_addr' may or may not be, but if it is, this will be a rocket.
         //        memcpy(response->data, (void*)cmd_addr, bytes_thistime);
 
-        // cmd_addr needs to honor whatever dc-tool sends. Use P0 addresses for cache boost when
-        // reading from RAM. Something great for alignment reasons is that, in addition to being the
-        // max payload size, 1440 bytes is an even multiple of 32 bytes.
-        SH4_aligned_memcpy((void *)((unsigned int)response->data & 0x1fffffff), (void *)cmd_addr,
-                           bytes_thistime);
+		// cmd_addr needs to honor whatever dc-tool sends. Use P1 addresses for cache boost when reading from RAM.
+		// Something great for alignment reasons is that, in addition to being the max payload size, 1440 bytes is an even multiple of 32 bytes.
+		SH4_aligned_memcpy(to_p1(response->data), (void*)cmd_addr, bytes_thistime);
 
         response->address = htonl(cmd_addr);
         response->size = htonl(bytes_thistime);
@@ -422,14 +418,13 @@ void cmd_maple(ip_header_t *ip, udp_header_t *udp, command_t *command) {
                           command->data + 4);
     } while(*res == MAPLE_RESPONSE_AGAIN);
 
-    /* Send response back over socket */
-    i = ((res[0] < 0) ? 4 : ((res[3] + 1) << 2));
-    response->size = htonl(i);
-    // By aligning the transmit buffer, response->data is always aligned to 8 bytes.
-    // 'res' may or may not be, but if it is, this will be a rocket.
-    //    memcpy(response->data, res, i);
-    SH4_aligned_memcpy((void *)((unsigned int)response->data & 0x1fffffff),
-                       (void *)((unsigned int)res & 0x1fffffff), i);
+	/* Send response back over socket */
+	i = ((res[0] < 0) ? 4 : ((res[3] + 1) << 2));
+	response->size = htonl(i);
+	// By aligning the transmit buffer, response->data is always aligned to 8 bytes.
+	// 'res' may or may not be, but if it is, this will be a rocket.
+    //	memcpy(response->data, res, i);
+	SH4_aligned_memcpy(to_p1(response->data), to_p1(res), i);
 
     make_ip(ntohl(ip->src), ntohl(ip->dest), UDP_H_LEN + COMMAND_LEN + i, IP_UDP_PROTOCOL,
             (ip_header_t *)(pkt_buf + ETHER_H_LEN), ip->packet_id);

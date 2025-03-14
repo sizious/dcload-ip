@@ -69,7 +69,7 @@ int _nl_msg_cat_cntr;
         return -1;
 
 #define VERSION PACKAGE_VERSION
-#define DCTOOL_LEGACY_SYSCALL_PORT 31313
+#define DCTOOL_LEGACY_SYSCALL_PORT  31313
 // Really should be using ports in the range 49152-65535, so dcload v2 does.
 #define DCTOOL_DEFAULT_SYSCALL_PORT 53535
 
@@ -215,6 +215,8 @@ int dcsocket = 0;
 int gdb_server_socket = -1;
 int socket_fd = 0;     // For GDB
 int global_socket = 0; // Stores whichever global socket gets used
+unsigned int nochroot = 0;
+char *path = 0;
 #endif
 
 void cleanup(char **fnames) {
@@ -424,6 +426,8 @@ int prepare_comms(unsigned char *buffer) {
             // Default rx_fifo_delay and rx_fifo_delay_count are already set for legacy
         }
     }
+
+    return 0;
 }
 
 /* receive total bytes from dc and store in data */
@@ -757,6 +761,7 @@ void usage(void) {
     printf("-n             Do not attach console and fileserver\n");
     printf("-q             Do not clear screen before download\n");
 #ifndef __MINGW32__
+    printf("-m <path>      Map /pc/ on KOS side to <path> (no chroot or super-user requirement)\n");
     printf("-c <path>      Chroot to <path> (must be super-user)\n");
 #endif
     printf("-i <isofile>   Enable cdfs redirection using iso image <isofile>\n");
@@ -1141,16 +1146,21 @@ int do_console(char *path, char *isofile) {
     }
 
 #ifndef __MINGW32__
-    if(path)
-        if(chroot(path))
+    if (!nochroot && path){
+        if (chroot(path))
             log_error(path);
+    }
 #endif
 
     while(1) {
         fflush(stdout);
 
         while(recv_response(buffer, PACKET_TIMEOUT) == -1)
-            nanosleep(&time, &remain);
+#if (SAVE_MY_FANS != 0)
+        nanosleep(&time, &remain); /* Sleep for 0ns, which is just going to yield the thread. */
+#else
+        ; /* Spin thread until a packet arrives. */
+#endif
 
         if(!(memcmp(buffer, CMD_EXIT, 4)))
             return -1;
@@ -1198,9 +1208,6 @@ int do_console(char *path, char *isofile) {
             CatchError(dc_gdbpacket(buffer));
         if(!(memcmp(buffer, CMD_REWINDDIR, 4)))
             CatchError(dc_rewinddir(buffer));
-
-        // reset the timer
-        time.tv_nsec = 500000000;
     }
 
     return 0;
@@ -1258,9 +1265,9 @@ int open_gdb_socket(int port) {
 }
 
 #ifdef __MINGW32__
-#define AVAILABLE_OPTIONS "x:u:d:a:s:t:i:nlqhrg"
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:m:i:nlqhrg"
 #else
-#define AVAILABLE_OPTIONS "x:u:d:a:s:t:c:i:nlqhrg"
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:m:c:i:nlqhrg"
 #endif
 
 int main(int argc, char *argv[]) {
@@ -1275,7 +1282,6 @@ int main(int argc, char *argv[]) {
     /* Dynamically allocated, so it should be freed */
     char *filename = 0;
     char *isofile = 0;
-    char *path = 0;
     char *hostname = strdup(DREAMCAST_IP);
     char *cleanlist[4] = {0, 0, 0, 0};
 
@@ -1322,8 +1328,27 @@ int main(int argc, char *argv[]) {
             cleanlist[0] = filename;
             strcpy(filename, optarg);
             break;
+        case 'm':
+            if(path) {
+                fprintf(stderr, "-m and -c options are mutually exclusive, choose one\n");
+                goto doclean;
+            }
+            nochroot = 1;
+            path = realpath(optarg, NULL);
+            if(path == NULL) {
+                fprintf(stderr, "-m option with invalid path '%s'  \n", optarg);
+                goto doclean;
+            }
+            set_mappath(path);
+            cleanlist[1] = path;
+            break;
 #ifndef __MINGW32__
         case 'c':
+            if(path) {
+                fprintf(stderr, "-m and -c options are mutually exclusive, choose one\n");
+                goto doclean;
+            }
+            nochroot = 0;
             path = malloc(strlen(optarg) + 1);
             cleanlist[1] = path;
             strcpy(path, optarg);
@@ -1409,10 +1434,13 @@ int main(int argc, char *argv[]) {
     if(console & (command == 'x'))
         printf("Console enabled\n");
 
-#ifndef __MINGW32__
-    if(path)
-        printf("Chroot enabled\n");
-#endif
+    if(path) {
+        if(nochroot) {
+            printf("Mapping /pc/ to <%s>\n", path);
+        } else {
+            printf("Chrooting to <%s>\n", path);
+        }
+    }
 
     if(cdfs_redir & (command == 'x'))
         printf("Cdfs redirection enabled\n");
