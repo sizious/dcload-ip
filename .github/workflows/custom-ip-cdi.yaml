@@ -1,0 +1,102 @@
+name: dcload-ip CDI Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      dreamcast_ip:
+        description: "Enter the Dreamcast IP (format: X.X.X.X)"
+        required: false
+        default: "0.0.0.0"
+
+jobs:
+  check_artifact:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check_age.outputs.should_build }}
+    steps:
+    - name: Check if CDI Artifact Exists and is Older than One Week
+      id: check_age
+      run: |
+        CUSTOM_IP=${{ inputs.dreamcast_ip }}
+        if [ "$CUSTOM_IP" == "0.0.0.0" ]; then
+          SAFE_IP="dcloadip.cdi"
+        else
+          SAFE_IP="dctoolip_$(echo $CUSTOM_IP | tr '.' '_').cdi"
+        fi
+
+        echo "Checking if $SAFE_IP exists..."
+
+        # Fetch the list of artifacts
+        ARTIFACTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts")
+
+        # Check if artifact exists
+        ARTIFACT_ID=$(echo "$ARTIFACTS" | jq -r ".artifacts[] | select(.name == \"$SAFE_IP\") | .id")
+        ARTIFACT_DATE=$(echo "$ARTIFACTS" | jq -r ".artifacts[] | select(.name == \"$SAFE_IP\") | .updated_at")
+
+        if [ -z "$ARTIFACT_ID" ]; then
+          echo "No existing artifact found. Proceeding with build."
+          echo "should_build=true" >> $GITHUB_ENV
+          exit 0
+        fi
+
+        # Convert artifact date to Unix timestamp
+        ARTIFACT_TIMESTAMP=$(date -d "$ARTIFACT_DATE" +%s)
+        CURRENT_TIMESTAMP=$(date +%s)
+        ONE_WEEK_AGO=$((CURRENT_TIMESTAMP - 604800)) # 7 days in seconds
+
+        if [ "$ARTIFACT_TIMESTAMP" -lt "$ONE_WEEK_AGO" ]; then
+          echo "Artifact is older than a week. Rebuilding."
+          echo "should_build=true" >> $GITHUB_ENV
+        else
+          echo "Artifact is less than a week old. Skipping build."
+          echo "should_build=false" >> $GITHUB_ENV
+        fi
+
+  build:
+    runs-on: ubuntu-latest
+    needs: check_artifact
+    if: needs.check_artifact.outputs.should_build == 'true'
+
+    steps:
+    - name: Checkout dcload-ip
+      uses: actions/checkout@v4
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Pull the Toolchain Image
+      run: docker pull ghcr.io/kallistiosunchained/dc-kos-toolchain:latest
+
+    - name: Modify Makefile.cfg with Custom IP
+      run: |
+        sed -i "s/^DREAMCAST_IP.*/DREAMCAST_IP = ${{ inputs.dreamcast_ip }}/" Makefile.cfg
+        echo "Updated Makefile.cfg:"
+        cat Makefile.cfg | grep "DREAMCAST_IP"
+
+    - name: Build CDI Image
+      run: |
+        docker run --rm -v $(pwd):/workspace ghcr.io/kallistiosunchained/dc-kos-toolchain:latest \
+        /bin/bash -c "cd /workspace/make-cdi && make"
+
+    - name: Rename CDI Image to Reflect IP
+      run: |
+        CUSTOM_IP=${{ inputs.dreamcast_ip }}
+        if [ "$CUSTOM_IP" == "0.0.0.0" ]; then
+          SAFE_IP="dcloadip.cdi"
+        else
+          SAFE_IP="dctoolip_$(echo $CUSTOM_IP | tr '.' '_').cdi"
+        fi
+        mv make-cdi/image.cdi make-cdi/$SAFE_IP
+        echo "Generated CDI: $SAFE_IP"
+        ls -l make-cdi/
+
+    - name: Upload CDI Image as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.dreamcast_ip == '0.0.0.0' && 'dcloadip.cdi' || format('dctoolip_{0}.cdi', inputs.dreamcast_ip) }}
+        path: make-cdi/dcloadip*.cdi
