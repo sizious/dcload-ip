@@ -22,6 +22,10 @@
 // Len is (# of total bytes/1), so it's "# of 8-bits"
 // Source and destination buffers must both be 1-byte aligned (aka no alignment)
 
+static unsigned int memdiff(const void *dst, const void *src) {
+	return ((unsigned int)dst & 0x1fffffff) - ((unsigned int)src & 0x1fffffff);
+}
+
 void *memcpy_8bit(void *dest, const void *src, unsigned int len) {
     if(!len) {
         return dest;
@@ -30,9 +34,8 @@ void *memcpy_8bit(void *dest, const void *src, unsigned int len) {
     const char *s = (char *)src;
     char *d = (char *)dest;
 
-    unsigned int diff =
-        (unsigned int)d - (unsigned int)(s + 1); // extra offset because input gets incremented
-                                                 // before output is calculated
+    unsigned int diff = memdiff(d, s + 1); // extra offset because input gets incremented
+                                           // before output is calculated
     // Underflow would be like adding a negative offset
 
     // Can use 'd' as a scratch reg now
@@ -66,9 +69,8 @@ void *memcpy_16bit(void *dest, const void *src, unsigned int len) {
     const unsigned short *s = (unsigned short *)src;
     unsigned short *d = (unsigned short *)dest;
 
-    unsigned int diff =
-        (unsigned int)d - (unsigned int)(s + 1); // extra offset because input gets incremented
-                                                 // before output is calculated
+    unsigned int diff = memdiff(d, s + 1); // extra offset because input gets incremented
+                                           // before output is calculated
     // Underflow would be like adding a negative offset
 
     // Can use 'd' as a scratch reg now
@@ -102,9 +104,8 @@ void *memcpy_32bit(void *dest, const void *src, unsigned int len) {
     const unsigned int *s = (unsigned int *)src;
     unsigned int *d = (unsigned int *)dest;
 
-    unsigned int diff =
-        (unsigned int)d - (unsigned int)(s + 1); // extra offset because input gets incremented
-                                                 // before output is calculated
+    unsigned int diff = memdiff(d, s + 1); // extra offset because input gets incremented
+                                           // before output is calculated
     // Underflow would be like adding a negative offset
 
     // Can use 'd' as a scratch reg now
@@ -140,9 +141,8 @@ void *memcpy_64bit(void *dest, const void *src, unsigned int len) {
 
     _Complex float double_scratch;
 
-    unsigned int diff =
-        (unsigned int)d - (unsigned int)(s + 1); // extra offset because input gets incremented
-                                                 // before output is calculated
+    unsigned int diff = memdiff(d, s + 1); // extra offset because input gets incremented
+                                           // before output is calculated
     // Underflow would be like adding a negative offset
 
     asm volatile(
@@ -218,7 +218,7 @@ void *memset_zeroes_64bit(void *dest, unsigned int len) {
         return dest;
     }
 
-    _Complex float *d = (_Complex float *)((unsigned int)dest & 0x1fffffff);
+    _Complex float * d = to_p1(dest);
     _Complex float *nextd = d + len;
 
     asm volatile(
@@ -441,7 +441,7 @@ void *SH4_mem_to_pkt_X_movca_32(void *dest, void *src, unsigned int numbytes) {
         "add #8, %[out]\n\t"               // out is now 32 from prev out (EX 1)
 
         "mov %[out2], %[scratch_R0]\n\t" // Reuse R0 - Need to purge the cache block just written to
-                                         // because 0x01848000 is volatile and used for both reads
+                                         // because 0x81848000 is volatile and used for both reads
                                          // and writes (MT 0)
         "add #-28, %[scratch_R0]\n\t"    // Reuse R0 (EX 1) -- flow dependency special case
 

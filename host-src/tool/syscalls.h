@@ -22,6 +22,8 @@
 #ifndef __SYSCALLS_H__
 #define __SYSCALLS_H__
 
+void set_mappath(char *path);
+
 int dc_fstat(unsigned char *buffer);
 int dc_write(unsigned char *buffer);
 int dc_read(unsigned char *buffer);
@@ -36,7 +38,6 @@ int dc_lseek(unsigned char *buffer);
 int dc_time(unsigned char *buffer);
 int dc_stat(unsigned char *buffer);
 int dc_utime(unsigned char *buffer);
-
 int dc_opendir(unsigned char *buffer);
 int dc_readdir(unsigned char *buffer);
 int dc_closedir(unsigned char *buffer);

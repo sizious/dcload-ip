@@ -117,14 +117,11 @@ void *maple_docmd(int port, int unit, int cmd, int datalen, void *data) {
         // So memcpy_32bit the first 4 bytes to make it all 8-byte aligned (remaining sendbuf will
         // be 16-byte aligned and remaining data will be 8-byte aligned)
         memcpy_32bit(sendbuf, data, 4 / 4);
-        SH4_aligned_memcpy((void *)(((unsigned int)sendbuf + 4) & 0x1fffffff),
-                           (void *)(((unsigned int)data + 4) & 0x1fffffff),
-                           datalen - 1); // use copy-back memory area for speed boost
-        CacheBlockWriteBack((unsigned char *)((unsigned int)sendbuf & 0x1fffffe0),
-                            ((datalen * 4) + 31) /
-                                32); // Synchronize memory with opcache in 32-byte blocks, sendbuf
-                                     // is already 32-byte aligned
-                                     // Need to do that so DMA sees the data in memory
+        // use copy-back memory area for speed boost
+        SH4_aligned_memcpy(to_p1((void *)sendbuf + 4), to_p1((void *)data + 4), datalen - 1);
+        // Synchronize memory with opcache in 32-byte blocks, sendbuf is already 32-byte aligned
+        CacheBlockWriteBack(to_p1((void *)((unsigned int)sendbuf & ~0x1f)), ((datalen * 4) + 31)/32);
+        // Need to do that so DMA sees the data in memory
     }
 
     /* Frame is finished, and DMA list is terminated with the flag bit.

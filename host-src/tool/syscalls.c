@@ -54,9 +54,36 @@
 
 /* Sigh... KOS treats anything under 100 as invalid for a dirent from dcload, so
    we need to offset by a bit. This aught to do. */
-#define DIRENT_OFFSET 1337
+#define DIRENT_OFFSET   1337
+#define MAX_PATH_LEN    4096
 
 static DIR *opendirs[MAX_OPEN_DIRS];
+static char *mappath = NULL;
+static int mappatlen = -1;
+
+static char path_work_buffer[MAX_PATH_LEN];
+static char path_result_buffer[MAX_PATH_LEN];
+
+void set_mappath(char *path) {
+    mappath = path;
+    mappatlen = strlen(mappath);
+    strcpy(path_work_buffer, mappath);
+}
+
+static inline char *map_path(char *path) {
+    if (!mappath)
+        return path;
+
+    strcpy(path_work_buffer + mappatlen, path);
+    realpath(path_work_buffer, path_result_buffer);
+    if (strncmp(mappath, path_result_buffer, mappatlen) != 0) {
+        printf("Requested path:\n\t%s\n"
+        "is outside of basepath:\n\t%s\n", mappath, path_result_buffer);
+        return NULL;
+    }
+
+    return path_result_buffer;
+}
 
 /* syscalls for dcload-ip
  *
@@ -178,7 +205,6 @@ int dc_open(unsigned char *buffer) {
     /* value0 = flags value1 = mode string = name */
 
     /* translate flags */
-
     if(ntohl(command->value0) & 0x0001)
         ourflags |= O_WRONLY;
     if(ntohl(command->value0) & 0x0002)
@@ -214,7 +240,7 @@ int dc_creat(unsigned char *buffer) {
     int retval;
     command_int_string_t *command = (command_int_string_t *)buffer;
 
-    retval = creat(command->string, ntohl(command->value0));
+  retval = creat(map_path(command->string), ntohl(command->value0));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -226,8 +252,10 @@ int dc_link(unsigned char *buffer) {
     int retval;
     command_string_t *command = (command_string_t *)buffer;
 
-    pathname1 = command->string;
-    pathname2 = &command->string[strlen(command->string) + 1];
+    char *local_ref = map_path(command->string);
+    if (mappath) {
+        //strcpy(local_buffer, local_ref);
+    }
 
 #ifdef __MINGW32__
     /* Copy the file on Windows */
@@ -256,7 +284,7 @@ int dc_chdir(unsigned char *buffer) {
     int retval;
     command_string_t *command = (command_string_t *)buffer;
 
-    retval = chdir(command->string);
+    retval = chdir(map_path(command->string));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -267,7 +295,7 @@ int dc_chmod(unsigned char *buffer) {
     int retval;
     command_int_string_t *command = (command_int_string_t *)buffer;
 
-    retval = chmod(command->string, ntohl(command->value0));
+  retval = chmod(map_path(command->string), ntohl(command->value0));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -299,7 +327,7 @@ int dc_stat(unsigned char *buffer) {
     dcload_stat_t dcstat;
     command_2int_string_t *command = (command_2int_string_t *)buffer;
 
-    retval = stat(command->string, &filestat);
+  retval = stat(map_path(command->string), &filestat);
 
     dcstat.st_dev = dc_order(filestat.st_dev);
     dcstat.st_ino = dc_order(filestat.st_ino);
