@@ -84,6 +84,8 @@ void gdGdcExecServer(void)
 
 int gdGdcGetCmdStat(int f, int *status)
 {
+	(void) f; // unused
+
 	if (gdStatus == 0)
 		status[0] = 0;
 	return gdStatus;
@@ -96,6 +98,8 @@ void gdGdcGetDrvStat(int *param)
 
 int gdGdcChangeDataType(int *param)
 {
+	(void) param; // unused
+
 	return 0;
 }
 

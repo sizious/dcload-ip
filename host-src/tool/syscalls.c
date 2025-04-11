@@ -58,6 +58,10 @@
 #define DIRENT_OFFSET   1337
 #define MAX_PATH_LEN 4096
 
+#ifdef _WIN32
+#define realpath(N,R) _fullpath((R),(N),PATH_MAX)
+#endif
+
 static DIR *opendirs[MAX_OPEN_DIRS];
 static char *mappath = NULL;
 static int mappatlen = -1;

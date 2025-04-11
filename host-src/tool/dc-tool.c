@@ -201,6 +201,7 @@ extern char *optarg;
 #endif
 
 int gdb_socket_started = 0;
+char *path = 0;
 #ifdef __MINGW32__
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
 /* Winsock SOCKET is defined as an unsigned int, so -1 won't work here */
@@ -216,7 +217,6 @@ int gdb_server_socket = -1;
 int socket_fd = 0; // For GDB
 int global_socket = 0; // Stores whichever global socket gets used
 unsigned int nochroot = 0;
-char *path = 0;
 #endif
 
 void cleanup(char **fnames)
@@ -1284,8 +1284,17 @@ int open_gdb_socket(int port)
   }
 
   const int enable_reuse_addr = 1;
+  
+#ifdef _WIN32
+  /* For Windows this cast is necessary on modern GCC... */  
+  int checkopt = setsockopt(gdb_server_socket, SOL_SOCKET, SO_REUSEADDR, 
+                            (char *) &enable_reuse_addr, sizeof(enable_reuse_addr));
+#else
+  /* ... but maybe it's necessary for other OS as well? */	
   int checkopt = setsockopt(gdb_server_socket, SOL_SOCKET, SO_REUSEADDR, 
                             &enable_reuse_addr, sizeof(enable_reuse_addr));
+#endif
+	
 #ifdef __MINGW32__
   if( checkopt == SOCKET_ERROR ) {
 #else 
@@ -1318,7 +1327,7 @@ int open_gdb_socket(int port)
 }
 
 #ifdef __MINGW32__
-#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:m:i:nlqhrg"
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:i:nlqhrg"
 #else
 #define AVAILABLE_OPTIONS		"x:u:d:a:s:t:m:c:i:nlqhrg"
 #endif
@@ -1382,6 +1391,7 @@ int main(int argc, char *argv[])
 	    cleanlist[0] = filename;
 	    strcpy(filename, optarg);
 	    break;
+#ifndef __MINGW32__
   case 'm':
       if (path) {
     fprintf(stderr, "-m and -c options are mutually exclusive, choose one\n");
@@ -1396,7 +1406,6 @@ int main(int argc, char *argv[])
       set_mappath(path);
       cleanlist[1] = path;
       break;
-#ifndef __MINGW32__
 	case 'c':
 	    if (path) {
 		fprintf(stderr, "-m and -c options are mutually exclusive, choose one\n");
@@ -1490,13 +1499,15 @@ int main(int argc, char *argv[])
     if (console & (command=='x'))
 	printf("Console enabled\n");
 
-  if (path) {
+#ifndef __MINGW32__
+  if (path) {  	
     if (nochroot) {
       printf("Mapping /pc/ to <%s>\n", path);
     } else {
       printf("Chrooting to <%s>\n", path);
     }
   }
+#endif
 
     if (cdfs_redir & (command=='x'))
 	printf("Cdfs redirection enabled\n");
