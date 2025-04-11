@@ -1,0 +1,8 @@
+Device Info   : CD-ROM1/1
+Area Symbols  : JUE
+Peripherals   : E000F10
+Product No    : T0000
+Version       : V2.020
+Boot Filename : 1ST_READ.BIN
+SW Maker Name : andrewk
+Game Title    : dcload-ip
