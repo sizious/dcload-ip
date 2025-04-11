@@ -1,8 +1,9 @@
 
-# dcload-ip 2.0.1
+# dcload-ip 2.0.2
 
-A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/).
-Updated and overhauled by Moopthehedgehog
+A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/). This program is part of [KallistiOS](http://gamedev.allusion.net/softprj/kos/).
+
+This **special version** has been updated/overhauled by **Moopthehedgehog** and is maintained by [Mickaël Cardoso](https://sizious.com/) and other contributors. This fork is a most avanced/experimental version over the regular [dcload-ip](https://github.com/kallistios/dcload-ip).
 
 ## Features
 
@@ -10,28 +11,24 @@ Updated and overhauled by Moopthehedgehog
 * PC I/O (read, write, etc to PC - compatible with original dcload)
 * Exception handler
 * Extremely fast
-* Now works on 100mbit
-* Supports both the **Broadband Adapter** (HIT-0400) and **LAN Adapter** (HIT-0300)
-  in a single binary
-- DHCP support (use an IP address of 0.0.0.0 in `Makefile.cfg` to enable it)
-- NTSC 480i, PAL 576i, and VGA display output modes supported
-- Dumping exceptions over the network if the dcload console is enabled
+* Works on 100mbit
+* Supports both the **Broadband Adapter** (HIT-0400) and **LAN Adapter** (HIT-0300) in a single binary
+* DHCP support (use an IP address of 0.0.0.0 in `Makefile.cfg` to enable it)
+* NTSC 480i, PAL 576i, and VGA display output modes supported
+* Dumping exceptions over the network if the dcload console is enabled
 
 ## Building
 
-1. Edit `Makefile.cfg` for your system and network, and then run `make`.
+You will need a modern toolchain, if you don't have one, you can build/obtain it using the `dc-chain` utility included in KallistiOS.
 
-NOTE: GCC 4.7.x users using the KOS 2.1.0 build environment must ensure
-``USING_KOS_GCC`` is enabled in `Makefile.cfg`. Disabling that flag uses compile
-options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
-``sh4-elf-`` prefix, which won't work with the KOS 2.1.0 compiler.
+Edit `Makefile.cfg` for your system and network and then run `make`.
 
 ## Installation
 
-1. PC - run `make install` (installs dc-tool)
+1. PC - run `make install` (installs `dc-tool-ip`, by default in `/opt/toolchains/dc/bin`)
 2. DC
 
- a. `cd make-cd`, edit `Makefile`, insert blank cd-r, run `make`. If
+ a. `cd make-cd`, edit `Makefile`, insert blank CD-R, run `make`. If
    `1st_read.bin` hasn't been built yet, this `Makefile` will build it  
  or  
  b. take `target-src/1st_read/1st_read.bin` and stuff it on a cd yourself
@@ -45,11 +42,13 @@ options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
 
 * The correct display is something like:
 
-  `dcload-ip 2.0.1`  <- name/version
-  `Broadband Adapter (HIT-0400)`  <- adapter driver in use  
-  `00:d0:f1:02:ab:dd`  <- dc hardware address  
-  `192.168.1.92`  <- dc ip address  
-  `idle...`  <- status  
+```
+  dcload-ip 2.0.2  <- name/version
+  Broadband Adapter (HIT-0400)  <- adapter driver in use  
+  00:d0:de:ad:be:ef  <- dc hardware address  
+  192.168.1.92  <- dc ip address  
+  idle...  <- status  
+```
 
   The background of the screen will be blue (Broadband Adapter) or green (LAN Adapter).
 
@@ -76,15 +75,14 @@ options meant for a portable copy of GCC 9.2/Binutils 2.33.1 compiled with an
 
 ## KOS GDB-over-dcload
 
-To run a GNU debugger session over the dcload connection:
+To run a GNU Debugger (GDB) session over the dcload connection:
 
-1. Build/obtain an sh-elf targetted GNU debugger
-2. Put a `gdb_init()` call somewhere in the startup area of your
-   KOS-based program
-3. Build your program with the `-g` GCC switch to include debugging info
+1. Build/obtain a sh-elf targetted GNU debugger; you can make one using the `dc-chain` utility included in KallistiOS
+2. Put a `gdb_init()` call somewhere in the startup area of your KOS-based program (usually, the `main()` function is a good candidate as it's the entry point for your program)
+3. Build your program with the `-g` GCC switch to include debugging info (e.g., `kos-cc -g myprog.c`)
 4. Launch your program using `dc-tool -g -x <prog.elf>`
-5. Launch sh-elf-gdb and connect to the dc-tool using `target remote :2159`
-6. Squash bugs
+5. Launch `sh-elf-gdb` and connect to the dc-tool using `target remote :2159` (always this port)
+6. Squash bugs!
 
 ## Maple Passthrough
 
@@ -117,7 +115,7 @@ Newly added is the ability to control Dreamcast/SH7091 performance counters over
 the network. These were a previously hidden aspect of the Dreamcast's CPU, and
 this program uses one of them to keep track of DHCP lease time across loaded
 programs. There are two of them, and they are both 48-bit. See perfctr.h/.c for
-details (they are from https://github.com/Moopthehedgehog/DreamHAL).
+details (they are from [DreamHAL](https://github.com/sega-dreamcast/dreamhal)).
 
 Similarly to the Maple packets, the format of a performance counter control packet
 is as follows:
@@ -130,6 +128,7 @@ typedef struct __attribute__ ((packed)) {
 	unsigned char data[];
 } command_t;
 ```
+
 For anyone making a program to take advantage of this functionality, the packet
 payload data essentially just needs to conform to this struct, and "id" should
 be "PMCR" (without null-termination).
@@ -176,14 +175,14 @@ etc.
 Notes:
 - Remember to disable before leaving dcload-ip to execute a program if dcload's
 counter is needed by that program.
-- See perfctr.h for how to calculate time using the CPU/bus ratio method, in
+- See `perfctr.h` for how to calculate time using the CPU/bus ratio method, in
 addition to the available counter modes (and for loads of other information)
-- PMCR_Init() and PMCR_Enable() will do nothing if the perf counter is already running!
+- `PMCR_Init()` and `PMCR_Enable()` will do nothing if the perf counter is already running!
 
 ## Exception Dumping
 
 Another new feature is the ability to send a full register dump to a host PC
-running dc-tool-ip with the console enabled (i.e. not invoked with the `-n`
+running `dc-tool-ip` with the console enabled (i.e. not invoked with the `-n`
 command line option).
 
 In the event of an exception, dcload will print a full register dump on the
@@ -271,9 +270,9 @@ struct _exception_struct_t {
   On Windows, you may use the `netsh` command which is more reliable (e.g. `netsh
   interface ip add neighbors "Ethernet" 192.168.10.1 AA-BB-CC-DD-EE-FF)`. In that
   case, don't forget to specify an IP address in the Ethernet card of your computer.
-  Please set the Dreamcast's IP in `Makefile.cfg` to be in the range 169.254.xxx.xxx
-  when using this method, as 0.0.0.0 is used by the DHCP protocol for network
-  discovery purposes (actually the entire 0.x.x.x range is).
+  Please set the Dreamcast's IP in `Makefile.cfg` to be in the range `169.254.xxx.xxx`
+  when using this method, as `0.0.0.0` is used by the DHCP protocol for network
+  discovery purposes (actually the entire `0.x.x.x` range is).
 * Tested systems: Debian GNU/Linux 2.2-3.0, Cygwin, MinGW,
 [DreamSDK](https://www.dreamsdk.org), Windows Subsystem for Linux v2 (Debian)
 * Many, many bugs have been squashed and much of the code overhauled
@@ -282,17 +281,21 @@ section for that
 
 ## Credits
 
-* [SiZiOUS](https://www.github.com/SiZiOUS) for maintaining this program
-* rtl8139 code based on code by Dan Potter
+* RTL8139 code based on code by Megan Potter
 * LAN Adapter driver code, originally derived from early KOS, majorly overhauled by Moopthehedgehog
 * DHCP support, exception dumping, perf counters, performance improvements by Moopthehedgehog
-* DHCP retry functionality by darcagn
+* DHCP retry functionality by Eric Fradella (darcagn)
 * There are some various files from `newlib-1.8.2` here
-* `video.s`, `maple.c`, and `maple.h` were written by Marcus Comstedt
-* initial win32 porting and implementation of -t by Florian 'Proff' Schulze
-* win32 bugfix by The Gypsy
-* fixes for cygwin by Florian 'Proff' Schulze
-* rx config bug pointed out by Slant
-* horridly buggy nature of 1.0.1 + 1.0.2 pointed out by Dan Potter
+* Some critical files (`video.s`, `maple.c` and `maple.h`) were written by Marcus Comstedt
+* Initial win32 porting and implementation of `-t` by Florian 'Proff' Schulze
+* Win32 bugfix by The Gypsy
+* Fixes for Cygwin by Florian 'Proff' Schulze
+* Lot of various fixes by Mickaël Cardoso (SiZiOUS)
+* RX config bug pointed out by Slant
+* Horridly buggy nature of 1.0.1 + 1.0.2 pointed out by Megan Potter
 * Fixes for `libbfd` segfaults by Atani
 * Inspiration for `MAPL` packet by Tim Hentenaar
+* Contributions by Harley Laue, Sam Steele, Christian Groessler, Protofall, Thomas Sowell,
+  Luke Benstead, [Matt Phillips](https://github.com/BigEvilCorporation), Andy Barajas,
+  snickerbockers, maddiebaka, Paul Cercueil, Daniel Fairchild
+* Major contributions by KallistiOS team: Lawrence Sebald, Donald Haase, Falco Girgis
