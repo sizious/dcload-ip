@@ -33,6 +33,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <errno.h>
+#include <libgen.h>
 #ifdef __MINGW32__
 #include <windows.h>
 #else
@@ -74,19 +75,46 @@ void set_mappath(char *path) {
   strcpy(path_work_buffer, mappath);
 }
 
-static inline char *map_path(char *path) {
+/**
+ * map_path - Wrapper method for use in chroot and mapping modes.
+ *          If the static mappath hasn't been set chroot mode is assumed,
+ *          otherwise paths are checked with realpath and mapped to the
+ *          mappath directory.
+ *
+ * @param path The path to map as seen from the Dreamcast (ie. /pc/<path> )
+ * @param check_only_dirname If true, realpath is called on the dirname of the path
+ * @return The mapped path or NULL if the resolved path is outside of the
+ *         mappath directory.
+ */
+static inline char *map_path(char *path, int check_only_dirname) {
   if (!mappath)
     return path;
 
-  strcpy(path_work_buffer + mappatlen, path);
+  if (check_only_dirname) {
+    // dirname alters the input string, so use a copy
+    char dnamebuf[MAX_PATH_LEN]; 
+    strcpy(dnamebuf, path);
+    strcpy(path_work_buffer + mappatlen, dirname(dnamebuf));
+  } else {
+    strcpy(path_work_buffer + mappatlen, path);
+  }
   if (realpath(path_work_buffer, path_result_buffer) == NULL) {
-    printf("Failed to map path '%s' with error: %s\n", path_work_buffer, strerror(errno));
+    printf("Failed to map path '%s' with error: %s\n", path_work_buffer,
+           strerror(errno));
     return NULL;
   }
+  
   if (strncmp(mappath, path_result_buffer, mappatlen) != 0) {
-    printf("Requested path:\n\t%s\n"
-    "is outside of basepath:\n\t%s\n", mappath, path_result_buffer);
-    return NULL;
+      printf("Requested path:\n\t%s\n"
+        "is outside of basepath:\n\t%s\n",
+        mappath, path_result_buffer);
+        return NULL;
+  }
+  if (check_only_dirname) {
+    // append the basename of the path to the result buffer
+    int reslen = strlen(path_result_buffer);
+    path_result_buffer[reslen] = '/';
+    strcpy(path_result_buffer + reslen +1, basename(path));
   }
   return path_result_buffer;
 }
@@ -162,10 +190,10 @@ int dc_write(unsigned char * buffer)
       unsigned int *exception_frame_uints = (unsigned int*)data;
 
       printf("\n\n");
-      printf(exception_code_to_string(exception_frame->expt_code));
+      printf("%s", exception_code_to_string(exception_frame->expt_code));
       for(unsigned int regdump = 0; regdump < 66; regdump++)
       {
-        printf(exception_label_array[regdump]);
+        printf("%s", exception_label_array[regdump]);
         printf(": 0x%x\n", exception_frame_uints[regdump + 2]);
       }
 
@@ -231,7 +259,7 @@ int dc_open(unsigned char * buffer)
     ourflags |= O_TRUNC;
   if (ntohl(command->value0) & 0x0800)
     ourflags |= O_EXCL;
-  retval = open(map_path(command->string), ourflags | O_BINARY,
+  retval = open(map_path(command->string, 1), ourflags | O_BINARY,
                 ntohl(command->value1));
 
   send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
@@ -256,11 +284,9 @@ int dc_creat(unsigned char * buffer)
     int retval;
     command_int_string_t *command = (command_int_string_t *)buffer;
 
-  retval = creat(map_path(command->string), ntohl(command->value0));
-
-    send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
-
-    return 0;
+  retval = creat(map_path(command->string, 1), ntohl(command->value0));
+  send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
+  return 0;
 }
 
 int dc_link(unsigned char *buffer) {
@@ -268,18 +294,19 @@ int dc_link(unsigned char *buffer) {
   command_string_t *command = (command_string_t *)buffer;
   char local_buffer[MAX_PATH_LEN];
 
-  char *local_ref = map_path(command->string);
+  const char *local_ref = map_path(command->string, 0);
   if (mappath) {
     strcpy(local_buffer, local_ref);
   }
 
 #ifdef __MINGW32__
   /* Copy the file on Windows */
-  retval = CopyFileA(
-      local_buffer, map_path(&command->string[strlen(command->string) + 1]), 0);
+  retval =
+      CopyFileA(local_buffer,
+                map_path(&command->string[strlen(command->string) + 1], 1), 0);
 #else
   retval = link(local_buffer,
-                map_path(&command->string[strlen(command->string) + 1]));
+                map_path(&command->string[strlen(command->string) + 1], 1));
 #endif
 
   send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
@@ -303,7 +330,7 @@ int dc_chdir(unsigned char * buffer)
     int retval;
     command_string_t *command = (command_string_t *)buffer;
 
-    retval = chdir(map_path(command->string));
+  retval = chdir(map_path(command->string, 0));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -315,7 +342,7 @@ int dc_chmod(unsigned char * buffer)
     int retval;
     command_int_string_t *command = (command_int_string_t *)buffer;
 
-  retval = chmod(map_path(command->string), ntohl(command->value0));
+  retval = chmod(map_path(command->string, 0), ntohl(command->value0));
 
     send_cmd(CMD_RETVAL, retval, retval, NULL, 0);
 
@@ -350,7 +377,7 @@ int dc_stat(unsigned char * buffer)
     dcload_stat_t dcstat;
     command_2int_string_t *command = (command_2int_string_t *)buffer;
 
-  retval = stat(map_path(command->string), &filestat);
+  retval = stat(map_path(command->string, 0), &filestat);
 
     dcstat.st_dev = dc_order(filestat.st_dev);
     dcstat.st_ino = dc_order(filestat.st_ino);
@@ -407,7 +434,7 @@ int dc_opendir(unsigned char * buffer)
     }
 
     if(i < MAX_OPEN_DIRS) {
-    if (!(opendirs[i] = opendir(map_path(command->string))))
+    if (!(opendirs[i] = opendir(map_path(command->string, 0))))
             i = 0;
         else
             i += DIRENT_OFFSET;
