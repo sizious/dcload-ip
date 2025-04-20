@@ -303,16 +303,16 @@ unsigned int legacy = 0; // To know if this should use old 1024-byte sizes for p
 unsigned int force_legacy = 0; // To force dcload and dc-tool into legacy mode with -l flag
 
 // How long to wait for DC to empty its RX FIFO, in microseconds
-#define BBA_RX_FIFO_DELAY_TIME DREAMCAST_BBA_RX_FIFO_DELAY_TIME
-#define LAN_RX_FIFO_DELAY_TIME DREAMCAST_LAN_RX_FIFO_DELAY_TIME
+#define BBA_RX_FIFO_DELAY_TIME 0
+#define LAN_RX_FIFO_DELAY_TIME 0
 
-unsigned int rx_fifo_delay = PACKET_TIMEOUT/51; // Default for compatibility with old dcload-ip versions
+unsigned int rx_fifo_delay = 0; // Default for compatibility with old dcload-ip versions
 
-#define BBA_RX_FIFO_DELAY_COUNT DREAMCAST_BBA_RX_FIFO_DELAY_COUNT
-#define LAN_RX_FIFO_DELAY_COUNT DREAMCAST_LAN_RX_FIFO_DELAY_COUNT
+#define BBA_RX_FIFO_DELAY_COUNT 0
+#define LAN_RX_FIFO_DELAY_COUNT 0
 // Number of packets to send before waiting for DC to empty its RX FIFO
 
-unsigned int rx_fifo_delay_count = 15; // Default for compatibility with old dcload-ip versions
+unsigned int rx_fifo_delay_count = 0; // Default for compatibility with old dcload-ip versions
 
 // Get the version of dc-tool encoded in a uint as (major << 16) | (minor << 8) | patch,
 // since this program is more likely to get patch version bumps than either of the other two.
@@ -713,12 +713,14 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
       	 * this prevents buffer overflows and dropped packets
       	 */
       	count++;
+#if 0
       	if (count == rx_fifo_delay_count)
         {
     	    start = time_in_usec();
     	    while ((time_in_usec() - start) < rx_fifo_delay);
     		  count = 0;
         }
+#endif
       }
     }
     else // 1440 sizes
@@ -735,7 +737,7 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
         }
 
         dcaddr += 1440;
-
+#if 0
         /* give the DC a chance to empty its rx fifo
          * this prevents buffer overflows and dropped packets
          */
@@ -746,6 +748,7 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
           while ((time_in_usec() - start) < rx_fifo_delay);
           count = 0;
         }
+#endif
       }
     }
 
@@ -753,7 +756,7 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
 
     start = time_in_usec();
     /* delay a bit to try to make sure all data goes out before CMD_DONEBIN */
-    while ((time_in_usec() - start) < PACKET_TIMEOUT/10); // 25ms
+   // while ((time_in_usec() - start) < PACKET_TIMEOUT/10); // 25ms
 
     do
 	send_cmd(CMD_DONEBIN, 0, 0, NULL, 0);
@@ -916,7 +919,6 @@ int recv_response(unsigned char *buffer, int timeout)
 #if (SAVE_MY_FANS != 0)
     struct timespec pausetime = {0}, pauseremain = {0};
 #endif
-
     while( ((time_in_usec() - start) < timeout) && (rv == -1))
 	  {
        rv = recv(global_socket, (void *)buffer, 2048, 0);
@@ -925,7 +927,7 @@ int recv_response(unsigned char *buffer, int timeout)
        // There's no picosecond sleep, so this is about as good as it gets.
 #if (SAVE_MY_FANS != 0)
        pausetime.tv_nsec = SAVE_MY_FANS; // Now it's configurable from Makefile.cfg
-       nanosleep(&pausetime, &pauseremain);
+       //nanosleep(&pausetime, &pauseremain);
 #endif
     }
 
@@ -1209,7 +1211,7 @@ int do_console(char *path, char *isofile)
 
 	while(recv_response(buffer, PACKET_TIMEOUT) == -1)
 #if (SAVE_MY_FANS != 0)
-		nanosleep(&time, &remain); /* Sleep for 0ns, which is just going to yield the thread. */
+		//nanosleep(&time, &remain); /* Sleep for 0ns, which is just going to yield the thread. */
 #else
 		; /* Spin thread until a packet arrives. */
 #endif
