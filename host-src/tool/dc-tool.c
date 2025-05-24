@@ -301,6 +301,7 @@ struct timeval starttime = {0}, endtime = {0};
 unsigned int installed_adapter = 0;
 unsigned int legacy = 0; // To know if this should use old 1024-byte sizes for packets or new 1440-sizes
 unsigned int force_legacy = 0; // To force dcload and dc-tool into legacy mode with -l flag
+unsigned int fast_mode = 0; // to force dc-tool to not use any delays for higher speed
 
 // How long to wait for DC to empty its RX FIFO, in microseconds
 #define BBA_RX_FIFO_DELAY_TIME DREAMCAST_BBA_RX_FIFO_DELAY_TIME
@@ -429,8 +430,15 @@ int prepare_comms(unsigned char *buffer)
         legacy = 1;
       }
 
-      rx_fifo_delay = BBA_RX_FIFO_DELAY_TIME; // microseconds
-      rx_fifo_delay_count = BBA_RX_FIFO_DELAY_COUNT; // packets per burst
+      if(!fast_mode)
+      {
+        rx_fifo_delay = BBA_RX_FIFO_DELAY_TIME; // microseconds
+        rx_fifo_delay_count = BBA_RX_FIFO_DELAY_COUNT; // packets per burst
+      } 
+      else
+      {
+        rx_fifo_delay = 0;
+      }
     }
     else if(installed_adapter == LAN_MODEL)
     {
@@ -441,8 +449,15 @@ int prepare_comms(unsigned char *buffer)
         legacy = 1;
       }
 
-      rx_fifo_delay = LAN_RX_FIFO_DELAY_TIME; // microseconds
-      rx_fifo_delay_count = LAN_RX_FIFO_DELAY_COUNT; // packets per burst
+      if(!fast_mode)
+      {
+        rx_fifo_delay = LAN_RX_FIFO_DELAY_TIME; // microseconds
+        rx_fifo_delay_count = LAN_RX_FIFO_DELAY_COUNT; // packets per burst
+      }
+      else
+      {
+        rx_fifo_delay = 0;
+      }
     }
     else // legacy dcload has 0 there
     {
@@ -749,11 +764,13 @@ int send_data(unsigned char * addr, unsigned int dcaddr, unsigned int size)
       }
     }
 
-    // Finish up sending and check for dropped packets
-
-    start = time_in_usec();
-    /* delay a bit to try to make sure all data goes out before CMD_DONEBIN */
-    while ((time_in_usec() - start) < PACKET_TIMEOUT/10); // 25ms
+    // Finish up sending and check for dropped packets (if not in fast mode)
+    if(!fast_mode)
+    {
+      start = time_in_usec();
+      /* delay a bit to try to make sure all data goes out before CMD_DONEBIN */
+      while ((time_in_usec() - start) < PACKET_TIMEOUT/10); // 25ms
+    }
 
     do
 	send_cmd(CMD_DONEBIN, 0, 0, NULL, 0);
@@ -808,6 +825,7 @@ void usage(void)
     printf("-r             Reset (only works when dcload is in control)\n");
     printf("-g             Start a GDB server\n");
     printf("-l             Force legacy 1024-byte payload size (dcload-ip v2+ only)\n");
+    printf("-f             Disable FIFO delays for MUCH faster speeds (may increase packet loss)\n");
     printf("-h             Usage information (you\'re looking at it)\n\n");
 }
 
@@ -924,8 +942,11 @@ int recv_response(unsigned char *buffer, int timeout)
        // 5 is better, but still a bit slow. So let's do 1 nanosecond.
        // There's no picosecond sleep, so this is about as good as it gets.
 #if (SAVE_MY_FANS != 0)
-       pausetime.tv_nsec = SAVE_MY_FANS; // Now it's configurable from Makefile.cfg
-       nanosleep(&pausetime, &pauseremain);
+       if(!fast_mode)
+       {
+         pausetime.tv_nsec = SAVE_MY_FANS; // Now it's configurable from Makefile.cfg
+         nanosleep(&pausetime, &pauseremain);
+       }
 #endif
     }
 
@@ -1209,7 +1230,8 @@ int do_console(char *path, char *isofile)
 
 	while(recv_response(buffer, PACKET_TIMEOUT) == -1)
 #if (SAVE_MY_FANS != 0)
-		nanosleep(&time, &remain); /* Sleep for 0ns, which is just going to yield the thread. */
+        if(!fast_mode)
+		  nanosleep(&time, &remain); /* Sleep for 0ns, which is just going to yield the thread. */
 #else
 		; /* Spin thread until a packet arrives. */
 #endif
@@ -1327,9 +1349,9 @@ int open_gdb_socket(int port)
 }
 
 #ifdef __MINGW32__
-#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:i:nlqhrg"
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:i:nlqhrgf"
 #else
-#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:m:c:i:nlqhrg"
+#define AVAILABLE_OPTIONS		"x:u:d:a:s:t:m:c:i:nlqhrgf"
 #endif
 
 int main(int argc, char *argv[])
@@ -1481,6 +1503,10 @@ int main(int argc, char *argv[])
 	    open_gdb_socket(2159);
 		gdb_socket_started = 1;
 	    break;
+    case 'f':
+        printf("Enabling fast transfer mode\n");
+        fast_mode = 1;
+        break;
 	default:
 	/* The user obviously mistyped something */
 	    usage();
