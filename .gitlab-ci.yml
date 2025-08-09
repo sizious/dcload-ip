@@ -5,14 +5,14 @@ image: segadreamcast/toolchains:latest
 stages:
   - "Building Scramble"
   - "Building Dreamcast Tool"
-  
+
 variables:
   GIT_CLONE_PATH: $CI_BUILDS_DIR
-  KOS_URL: https://gitlab.com/simulant/community/kallistios-nitro.git  
+  KOS_URL: https://github.com/kallistios/kallistios.git  
   KOS_PATH: $CI_BUILDS_DIR/kos
   ENVIRON_SH: $CI_BUILDS_DIR/kos/environ.sh  
   KOS_PACKAGE: $CI_BUILDS_DIR/kos.tar.xz 
-   
+
 build:kos-scramble:
   stage: "Building Scramble"
   script:
@@ -26,7 +26,7 @@ build:kos-scramble:
     paths:    
     - ${KOS_PACKAGE}
     expire_in: 1 week
-   
+
 build:dcload-gcc4:
   stage: "Building Dreamcast Tool"
   image: segadreamcast/toolchains:binutils-2.34-gcc-4.7.4-newlib-2.0.0-gdb-9.1
@@ -35,7 +35,7 @@ build:dcload-gcc4:
     - cd ${KOS_PATH} && tar -xvf ${KOS_PACKAGE}
     - source ${ENVIRON_SH}    
     - cd ${GIT_CLONE_PATH} && make && make install
-   
+
 build:dcload-gcc9:
   stage: "Building Dreamcast Tool"
   image: segadreamcast/toolchains:binutils-2.34-gcc-9.3.0-newlib-3.3.0-gdb-9.1
