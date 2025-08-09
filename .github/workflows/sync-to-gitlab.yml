@@ -1,0 +1,20 @@
+# .github/workflows/sync-to-gitlab.yml
+name: Mirror to GitLab
+on:
+  push:
+    branches: [ master ]
+  
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Mirror to GitLab
+      env:
+        GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+      run: |
+        git remote add gitlab https://oauth2:${GITLAB_TOKEN}@gitlab.com/kallistios/dcload-ip.git
+        git push gitlab --all
+        git push gitlab --tags
