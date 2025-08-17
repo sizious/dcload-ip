@@ -36,6 +36,7 @@
 #include <libgen.h>
 #ifdef __MINGW32__
 #include <windows.h>
+#include <limits.h>
 #else
 #include <netinet/in.h>
 #endif
