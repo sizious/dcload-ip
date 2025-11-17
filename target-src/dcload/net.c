@@ -25,6 +25,9 @@ static void process_broadcast(unsigned char *pkt) // arp request
 	ether_header_t *ether_header = (ether_header_t *)pkt;
 	arp_header_t *arp_header = (arp_header_t *)(pkt + ETHER_H_LEN);
 
+	if (ether_header->type[1] == 0x00)
+		process_mine(pkt);
+
 	if (ether_header->type[1] != 0x06) /* ARP */
 		return;
 
