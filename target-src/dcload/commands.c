@@ -410,6 +410,7 @@ void cmd_maple(ip_header_t * ip, udp_header_t * udp, command_t * command)
 {
 	char *res;
 	int i;
+	int retry_count = 100;
 	unsigned char *buffer = pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN;
 	command_t * response = (command_t *)buffer;
 
@@ -417,6 +418,10 @@ void cmd_maple(ip_header_t * ip, udp_header_t * udp, command_t * command)
 
 	do {
 		res = maple_docmd(command->data[0], command->data[1], command->data[2], command->data[3], command->data + 4);
+		if (--retry_count == 0) {
+			*res = MAPLE_RESPONSE_NONE;
+			break;
+		}
 	} while (*res == MAPLE_RESPONSE_AGAIN);
 
 	/* Send response back over socket */
