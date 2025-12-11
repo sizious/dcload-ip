@@ -43,51 +43,28 @@ void log_error( const char * prefix ) {
 #endif
 }
 
-void cleanup_ip_address( char *hostname ) {
-	int bufsize = strlen(hostname) + 1;
+void cleanup_ip_address(char *hostname) {
+	char *r = hostname, *w = hostname;
+	int leading = 1, has_val = 0;
 
-	char *buf = malloc(bufsize);
-	memset(buf, '\0', bufsize);
-
-	int i = 0,
-		j = 0,
-		leading_zero = 1,
-		has_value = 0;
-
-	while(i < strlen(hostname)) {
-		char c = hostname[i];
-
-		switch(c) {
-			case '0':
-				if (!leading_zero) {
-					buf[j++] = c;
-					has_value = 1;
-				}
-				break;
-			case '.':
-				leading_zero = 1;
-				if (!has_value) {
-					buf[j++] = '0';
-				}
-				buf[j++] = '.';
-				has_value = 0;
-				break;
-			default:
-				leading_zero = 0;
-				buf[j++] = c;
-				has_value = 1;
-				break;
+	while (*r) {
+		char c = *r++;
+		if (c == '.') {
+			if (!has_val) *w++ = '0';
+			*w++ = '.';
+			leading = 1;
+			has_val = 0;
+		} else if (c == '0' && leading) {
+			continue;
+		} else {
+			leading = 0;
+			*w++ = c;
+			has_val = 1;
 		}
-
-		i++;
 	}
 
-	if (!has_value) {
-		buf[j++] = '0';
-	}
-
-	strcpy(hostname, buf);
-	free(buf);
+	if (!has_val) *w++ = '0';
+	*w = '\0';
 }
 
 /* converts expevt value to description, used by dc-tool exception processing */
