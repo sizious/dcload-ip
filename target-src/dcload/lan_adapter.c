@@ -41,8 +41,8 @@ static char uint_string_array[11] = {0};
 
 adapter_t adapter_la = {
 	"LAN Adapter (HIT-0300)",
-	{ 0 },		// Mac address
-	{ 0 },		// 2-byte alignment pad
+	{ 0 },
+	{ 0 },
 	la_bb_detect,
 	la_bb_init,
 	la_bb_start,
@@ -52,9 +52,12 @@ adapter_t adapter_la = {
 };
 
 static volatile unsigned char lan_link_up = 0;
-// This needs to persist across program loads and resets, so it needs to go in .data section
 static volatile unsigned char first_transmit = 2;
 static int bb_started = 0;
+
+#define LAN_LINK_TIMEOUT_MS 3000
+#define LAN_AUTONEG_WAIT_MS 2000
+#define LAN_INIT_SETTLE_MS 100
 
 static void net_strobe_eeprom(void);
 static void net_read_eeprom(uint8 *data);
@@ -630,6 +633,8 @@ void la_bb_loop(int is_main_loop)
 
 	while (!escape_loop)
 	{
+		adapter_watchdog_counter++;
+
 		/* Check for received packets */
 		if(REG(1) & 0x80) // Do we have a packet in the receive buffer?
 		{
@@ -661,44 +666,40 @@ void la_bb_loop(int is_main_loop)
 		}
 		else if(__builtin_expect(!lan_link_up, 0))
 		{
-			// There is an excellent thread on U-Boot's mailing list about how long to
-			// wait for autonegotiation to complete:
-			// https://lists.denx.de/pipermail/u-boot/2009-February/047056.html
-			// They ultimately use 4.5 seconds (see later in the thread) to match
-			// the Linux kernel, as the Linux kernel's e1000 driver defines
-			// PHY_AUTO_NEG_LIMIT as 45. The e1000 driver uses 100msec sleeps in a
-			// loop that iterates PHY_AUTO_NEG_LIMIT times as a timeout while checking
-			// for autonegotiation to complete (or not).
-			// Well, ok, and then they go and increase it to 8 seconds:
-			// https://lists.denx.de/pipermail/u-boot/2015-August/223424.html
-			// But they also have a variable for 2 seconds, PHY_FORCE_TIME. Since we
-			// are actually forcing a link speed, we should probably thus use the 2.0
-			// seconds described in the mailing list (interestingly, it does not appear
-			// that U-Boot actually uses PHY_FORCE_TIME).
+			unsigned int wait_elapsed = 0;
+			unsigned int wait_interval = 100;
+			unsigned int link_stable = 0;
 
-			unsigned int autoneg_wait_time = 20; // every 10 is one second
-			for(unsigned int tenthsecs = 0; tenthsecs < autoneg_wait_time; tenthsecs++)
-			{
-				net_sleep_ms(115); // 0.1 sec
+			while (wait_elapsed < LAN_AUTONEG_WAIT_MS) {
+				net_sleep_ms(wait_interval);
+				wait_elapsed += wait_interval;
+
+				if (!(REG(15) & 0x40)) {
+					link_stable++;
+					if (link_stable >= 3)
+						break;
+				} else {
+					link_stable = 0;
+					REGW(15) = 0x40;
+				}
 			}
 
-			if (booted && (!running))
-			{
-				disp_status("idle...");
-				link_change_message = 0;
-			}
+			if (link_stable >= 3) {
+				if (booted && (!running))
+				{
+					disp_status("idle...");
+					link_change_message = 0;
+				}
 
-			/* if we were waiting in a loop with a timeout when link changed, timeout
-			 * immediately upon bringing link back up, so we can retry immediately */
-			if (timeout_loop > 0 )
-			{
-				dhcp_attempts = 0;
-				timeout_loop = -1;
-				escape_loop = 1;
-			}
+				if (timeout_loop > 0)
+				{
+					dhcp_attempts = 0;
+					timeout_loop = -1;
+					escape_loop = 1;
+				}
 
-			// Good to go!
-			lan_link_up = 1;
+				lan_link_up = 1;
+			}
 		}
 
 #ifdef LAN_ADAPTER_DEBUG
