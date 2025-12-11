@@ -49,8 +49,13 @@
 // stack space to get remotely close to that.
 #define DHCP_NAK_NEST_MAX 5
 
-// Minimum size in bytes for the DHCP options area
 #define DHCP_MIN_OPTIONS_SIZE 64
+
+#define DHCP_MAX_TOTAL_ATTEMPTS 15
+#define DHCP_MAX_RETRY_TIMEOUT 30
+#define DHCP_INITIAL_TIMEOUT 2
+#define DHCP_BACKOFF_MULT 2
+#define DHCP_RENEW_TIMEOUT 5
 
 static unsigned int get_some_time(int which);
 static void build_send_dhcp_packet(unsigned char kind);
@@ -156,7 +161,16 @@ static void build_send_dhcp_packet(unsigned char kind)
 // Steps 2 & 4 are handled here, and this is called from net.c
 int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t* pkt_data, unsigned short len)
 {
-	int msg_type = kos_net_dhcp_get_message_type(pkt_data, len);
+	int msg_type;
+
+	if (__builtin_expect(pkt_data == (dhcp_pkt_t *)0, 0))
+		return -1;
+	if (__builtin_expect(routersrcmac == (unsigned char *)0, 0))
+		return -1;
+	if (__builtin_expect(len < DHCP_H_LEN, 0))
+		return -1;
+
+	msg_type = kos_net_dhcp_get_message_type(pkt_data, len);
 
 	if(msg_type == DHCP_MSG_DHCPOFFER) // DHCP OFFER is 342 bytes
 	{
@@ -256,40 +270,52 @@ int handle_dhcp_reply(unsigned char *routersrcmac, dhcp_pkt_t* pkt_data, unsigne
 // STEP 4: Wait for DHCP ACK from router
 // STEP 5+: DHCP renewal
 
-int dhcp_go(unsigned int *dhcp_ip_address_buffer) // Address buffer comes in as little endian
+int dhcp_go(unsigned int *dhcp_ip_address_buffer)
 {
+	int current_timeout;
+
 	dhcp_acked = 0;
 	dhcp_nest_counter++;
 	dhcp_attempts = 0;
-	timeout_loop = 1;   // Initial timeout in secs for waiting for DHCP response
+	current_timeout = DHCP_INITIAL_TIMEOUT;
 
-	while(!dhcp_acked)  // Loop DHCP attempts until acked
+	while(!dhcp_acked && (dhcp_attempts < DHCP_MAX_TOTAL_ATTEMPTS))
 	{
-		dhcp_attempts++; // Increase the attempt count
-		if (timeout_loop < 0) // If timeout_loop is -1, we arrived here from a timeout waiting for a DHCP response
-		{
-			timeout_loop = (dhcp_attempts > 10 ? 30 : 3*(dhcp_attempts)); // Increase the timeout for the next attempt, max 30 secs
-		}
+		dhcp_attempts++;
+
+		timeout_loop = current_timeout;
 		build_send_dhcp_packet(DHCP_MSG_DHCPDISCOVER);
-		bb->loop(0); // Wait for DHCP OFFER packet
-		if (timeout_loop < 0) continue; // If timed out waiting for DHCP OFFER, this will be -1, start over
- 		build_send_dhcp_packet(DHCP_MSG_DHCPREQUEST);
-		bb->loop(0); // Wait for DHCP ACK (or NAK...)
-		if (timeout_loop < 0) continue; // If timed out waiting for DHCP ACK, this will be -1, start over
+		bb->loop(0);
+
+		if (timeout_loop < 0) {
+			current_timeout *= DHCP_BACKOFF_MULT;
+			if (current_timeout > DHCP_MAX_RETRY_TIMEOUT)
+				current_timeout = DHCP_MAX_RETRY_TIMEOUT;
+			continue;
+		}
+
+		timeout_loop = current_timeout;
+		build_send_dhcp_packet(DHCP_MSG_DHCPREQUEST);
+		bb->loop(0);
+
+		if (timeout_loop < 0) {
+			current_timeout *= DHCP_BACKOFF_MULT;
+			if (current_timeout > DHCP_MAX_RETRY_TIMEOUT)
+				current_timeout = DHCP_MAX_RETRY_TIMEOUT;
+			continue;
+		}
 	}
 
-	dhcp_attempts = 0; // Done with these variables now
-	timeout_loop = 0;  // Reset them for potential future use
+	dhcp_attempts = 0;
+	timeout_loop = 0;
 
 	if(dhcp_acked && dhcp_nest_counter)
 	{
-		dhcp_nest_counter = 0; // To ensure we only write the IP address once (part 1/2)
-
+		dhcp_nest_counter = 0;
 		*dhcp_ip_address_buffer = dhcpoffer_ip_from_pkt;
-		// And now we have an IP from DHCP. YES!!
 		return 0;
 	}
-	else if(dhcp_acked && (!dhcp_nest_counter)) // To ensure we only write the IP address once (part 2/2)
+	else if(dhcp_acked && (!dhcp_nest_counter))
 	{
 		return 0;
 	}
@@ -305,14 +331,30 @@ int dhcp_go(unsigned int *dhcp_ip_address_buffer) // Address buffer comes in as 
 
 int dhcp_renew(unsigned int *dhcp_ip_address_buffer)
 {
+	int renew_retries = 3;
+	int current_timeout = DHCP_RENEW_TIMEOUT;
+
 	dhcp_acked = 0;
 	dhcp_renewal = 1;
 	dhcp_renewal_nak = 0;
 
-	build_send_dhcp_packet(DHCP_RENEW_TYPE);
-	bb->loop(0); // Wait for DHCP ACK
+	while (!dhcp_acked && !dhcp_renewal_nak && renew_retries > 0) {
+		timeout_loop = current_timeout;
+		build_send_dhcp_packet(DHCP_RENEW_TYPE);
+		bb->loop(0);
 
-	dhcp_renewal = 0; // Done with the renewal function, whatever the outcome
+		if (timeout_loop < 0 && !dhcp_acked && !dhcp_renewal_nak) {
+			renew_retries--;
+			current_timeout += DHCP_RENEW_TIMEOUT;
+			if (current_timeout > DHCP_MAX_RETRY_TIMEOUT)
+				current_timeout = DHCP_MAX_RETRY_TIMEOUT;
+		} else {
+			break;
+		}
+	}
+
+	timeout_loop = 0;
+	dhcp_renewal = 0;
 
 	if(dhcp_renewal_nak)
 	{
@@ -321,7 +363,6 @@ int dhcp_renew(unsigned int *dhcp_ip_address_buffer)
 	else if(dhcp_acked)
 	{
 		*dhcp_ip_address_buffer = dhcpoffer_ip_from_pkt;
-		// And now we have an IP from DHCP. YES!!
 		return 0;
 	}
 	else
