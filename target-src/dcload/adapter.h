@@ -63,6 +63,19 @@ extern volatile unsigned char escape_loop;
 extern int timeout_loop;
 extern int loop_secs_elapsed;
 
+extern volatile unsigned int adapter_watchdog_counter;
+
+#define ADAPTER_STATE_INIT       0x00
+#define ADAPTER_STATE_DETECTING  0x01
+#define ADAPTER_STATE_DETECTED   0x02
+#define ADAPTER_STATE_INITING    0x03
+#define ADAPTER_STATE_READY      0x04
+#define ADAPTER_STATE_LINK_DOWN  0x05
+#define ADAPTER_STATE_LINK_UP    0x06
+#define ADAPTER_STATE_ERROR      0xFF
+
+extern volatile unsigned char adapter_state;
+
 // All adapter drivers should use this shared buffer to receive.
 extern __attribute__((aligned(32))) unsigned char raw_current_pkt[RAW_RX_PKT_BUF_SIZE];
 extern __attribute__((aligned(2))) unsigned char * current_pkt;
