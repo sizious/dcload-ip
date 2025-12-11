@@ -168,20 +168,31 @@ drawmod:
 	! r4 = pixel colour
 _clrscr:
 	mov.l	vrambase,r0
-	mov.l	clrcount,r1
-clrloop:
-	mov.w	r4,@r0	! clear one pixel
+	mov.l	clrcount8,r1
+	mov	r4,r5
+	shll16	r5
+	extu.w	r4,r4
+	or	r4,r5
+clrloop8:
+	mov.l	r5,@r0
+	mov.l	r5,@(4,r0)
+	mov.l	r5,@(8,r0)
+	mov.l	r5,@(12,r0)
+	mov.l	r5,@(16,r0)
+	mov.l	r5,@(20,r0)
+	mov.l	r5,@(24,r0)
+	mov.l	r5,@(28,r0)
 	dt	r1
-	bf/s	clrloop
-	add	#2,r0
+	bf/s	clrloop8
+	add	#32,r0
 	rts
 	nop
 
 	.align	2
 vrambase:
 	.long	0xa5000000
-clrcount:
-	.long	640*480
+clrcount8:
+	.long	(640*480*2)/32
 
 
 	! Return base address of ROM font
