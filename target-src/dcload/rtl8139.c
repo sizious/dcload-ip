@@ -45,8 +45,15 @@ static rtl_status_t rtl = {0};
 static volatile unsigned char rtl_link_up = 0;
 static volatile unsigned char rtl_is_copying = 0;
 
-static void rtl_reset(void);
-static void rtl_init(void);
+#define RTL_RESET_TIMEOUT_US      10000
+#define RTL_TX_TIMEOUT_US         100000
+#define RTL_G2_FIFO_TIMEOUT_US    50000
+#define GAPS_INIT_TIMEOUT_LOOPS   100000
+#define RTL_LINK_TIMEOUT_US       5000000
+#define RTL_LINK_CHANGE_TIMEOUT   3000000
+
+static int rtl_reset(void);
+static int rtl_init(void);
 static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n);
 static int rtl_bb_rx(void);
 
@@ -95,21 +102,26 @@ int rtl_bb_detect(void)
 	}
 }
 
-static void rtl_reset(void)
+static int rtl_reset(void)
 {
-	/* Soft-reset the chip */
+	unsigned int timeout = RTL_RESET_TIMEOUT_US;
+	volatile unsigned int *g2 = (volatile unsigned int*)0xa05f688c;
+
 	nic8[RT_CHIPCMD] = RT_CMD_RESET;
 
-	/* Wait for it to come back */
-	while (nic8[RT_CHIPCMD] & RT_CMD_RESET);
+	while ((nic8[RT_CHIPCMD] & RT_CMD_RESET)) {
+		if (timeout-- == 0)
+			return -1;
+		{ unsigned int d = 25; while (d-- > 0) (void)*g2; }
+	}
+	return 0;
 }
 
-static void rtl_init(void)
+static int rtl_init(void)
 {
 	unsigned int tmp;
+	int retry_count = 3;
 
-	/* Read MAC address */
-	// Don't need to do anything with the eeprom if we're just reading it.
 	tmp = nic32[RT_IDR0];
 	rtl.mac[0] = tmp & 0xff;
 	rtl.mac[1] = (tmp >> 8) & 0xff;
@@ -120,8 +132,12 @@ static void rtl_init(void)
 	rtl.mac[5] = (tmp >> 8) & 0xff;
 	memcpy(adapter_bba.mac, rtl.mac, 6);
 
-	/* Soft-reset the chip to clear any garbage from power on */
-	rtl_reset();
+	while (retry_count-- > 0) {
+		if (rtl_reset() >= 0)
+			break;
+	}
+	if (retry_count < 0)
+		return -1;
 
 	/* Setup Rx and Tx buffers */
 	nic32[RT_RXBUF/4] = 0x01840000;
@@ -368,6 +384,7 @@ static void rtl_init(void)
 
 	/* Enable receiving broadcast and physical match packets */
 	nic32[RT_RXCONFIG/4] |= 0x0000000a;
+	return 0;
 }
 
 int rtl_bb_init(void)
@@ -444,7 +461,8 @@ int rtl_bb_init(void)
 				// I think GAPS automatically pulls RSTB low for 120ns, which causes the
 				// EEPROM to autoload all the registers initially. So we don't need to
 				// worry about it.
-				rtl_init();
+				if (rtl_init() < 0)
+					return -4;
 			}
 			else
 			{
@@ -476,19 +494,26 @@ void rtl_bb_stop(void)
 
 int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: http://realtek.info/pdf/rtl8139cp.pdf
 {
-	// According to KOS source we gotta wait for G2 FIFO to be empty by checking
-	// this bit before reading from/writing to G2. So do that here.
-	while((*(volatile unsigned int*)0xa05f688c) & 0x20U);
+	unsigned int timeout;
+	volatile unsigned int *g2_fifo = (volatile unsigned int*)0xa05f688c;
 
+	timeout = RTL_G2_FIFO_TIMEOUT_US / 4;
+	while((*g2_fifo) & 0x20U) {
+		if (timeout-- == 0) break;
+	}
+
+	timeout = RTL_TX_TIMEOUT_US / 4;
 	while (!(nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x2000U))
-	{ // While tx is not complete (checking OWN)
+	{
 		if (nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x40000000U)
-		{ // Check for abort
-			// Found another bug: (nic32[RT_TXSTATUS0/4 + rtl.cur_tx] |= 1; // <-- If abort, set descriptor size to 1)
-			// |= the length to 1 doesn't do anything if the length is an odd number >= 1...
-			// Should probably be RT_TXCONFIG register |= 1, which clears abort state and retransmits, see pg 21 of RTL8139C or pg 17 of RTL8139D datasheet
+		{
 			nic32[RT_TXCONFIG/4] |= 0x1;
 		}
+		if (timeout-- == 0) {
+			nic32[RT_TXCONFIG/4] |= 0x1;
+			break;
+		}
+		(void)*g2_fifo;
 	}
 
 // Tx time
@@ -626,14 +651,17 @@ int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: htt
 	return 1;
 }
 
-static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n) // dest and src should already be in a copyback memory region
+static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n)
 {
+	unsigned int timeout = RTL_G2_FIFO_TIMEOUT_US / 4;
+	volatile unsigned int *g2_fifo = (volatile unsigned int*)0xa05f688c;
+
 	if (n > RX_PKT_BUF_SIZE)
 		return;
 
-	// According to KOS source we gotta wait for G2 FIFO to be empty by checking
-	// this bit before reading from/writing to G2. So do that here.
-	while((*(volatile unsigned int*)0xa05f688c) & 0x20U);
+	while((*g2_fifo) & 0x20U) {
+		if (timeout-- == 0) break;
+	}
 
 	// Set GAPS DMA image offset pointer to relevant RX region
 	//--	g232[0x142c/4] = (unsigned int)src;
@@ -784,6 +812,7 @@ void rtl_bb_loop(int is_main_loop)
 	unsigned int loop_start[2] = {0};
 	unsigned int loop_measure[2] = {0};
 	unsigned int prev_loop_elapsed = 0;
+	volatile unsigned int *g2_fifo = (volatile unsigned int*)0xa05f688c;
 
 	if(is_main_loop)
 	{
@@ -792,7 +821,6 @@ void rtl_bb_loop(int is_main_loop)
 			disp_info();
 		}
 
-		// Need to wait for a link change before it's OK to do anything
 		rtl_link_up = 0;
 	}
 
@@ -804,6 +832,7 @@ void rtl_bb_loop(int is_main_loop)
 	// OMG this is polling the network adapter. Well, ok then.
 	while(!escape_loop)
 	{
+		adapter_watchdog_counter++;
 
 		/* Check interrupt status */
 		if (nic16[RT_INTRSTATUS/2] != intr)
@@ -819,9 +848,10 @@ void rtl_bb_loop(int is_main_loop)
 			rtl_bb_rx();
 		}
 
-		/* link change */
 		if (__builtin_expect(intr & RT_INT_RXFIFO_UNDERRUN, 0))
 		{
+			unsigned int link_wait_count = 0;
+			unsigned int link_timeout = RTL_LINK_TIMEOUT_US / 100;
 
 			if (booted && (!running))
 			{
@@ -830,28 +860,39 @@ void rtl_bb_loop(int is_main_loop)
 
 			nic16[RT_MII_BMCR/2] = 0x9200;
 
-			/* wait for valid link */
-			while (!(nic16[RT_MII_BMSR/2] & 0x20));
-
-			/* wait for the additional link change interrupt that is coming */
-			while (!(nic16[RT_INTRSTATUS/2] & RT_INT_RXFIFO_UNDERRUN));
-			nic16[RT_INTRSTATUS/2] = RT_INT_RXFIFO_UNDERRUN;
-
-			if (booted && (!running))
-			{
-				disp_status("idle...");
+			while (!(nic16[RT_MII_BMSR/2] & 0x20)) {
+				if (++link_wait_count > link_timeout) {
+					rtl_link_up = 0;
+					break;
+				}
+				{ unsigned int d = 25; while (d-- > 0) (void)*g2_fifo; }
 			}
 
-			/* if we were waiting in a loop with a timeout when link changed, timeout
-			 * immediately upon bringing link back up, so we can retry immediately */
-			if (timeout_loop > 0 )
-			{
-				dhcp_attempts = 0;
-				timeout_loop = -1;
-				escape_loop = 1;
-			}
+			if (link_wait_count <= link_timeout) {
+				unsigned int int_wait_count = 0;
+				unsigned int int_timeout = RTL_LINK_CHANGE_TIMEOUT / 100;
 
-			rtl_link_up = 1; // Good to go!
+				while (!(nic16[RT_INTRSTATUS/2] & RT_INT_RXFIFO_UNDERRUN)) {
+					if (++int_wait_count > int_timeout)
+						break;
+					{ unsigned int d = 25; while (d-- > 0) (void)*g2_fifo; }
+				}
+				nic16[RT_INTRSTATUS/2] = RT_INT_RXFIFO_UNDERRUN;
+
+				if (booted && (!running))
+				{
+					disp_status("idle...");
+				}
+
+				if (timeout_loop > 0)
+				{
+					dhcp_attempts = 0;
+					timeout_loop = -1;
+					escape_loop = 1;
+				}
+
+				rtl_link_up = 1;
+			}
 		}
 
 		/* Rx FIFO overflow */
@@ -917,3 +958,4 @@ void rtl_bb_loop(int is_main_loop)
 	}
 	escape_loop = 0;
 }
+
