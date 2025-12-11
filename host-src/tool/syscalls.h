@@ -48,6 +48,11 @@ int dc_cdfs_redir_read_sectors(int isofd, unsigned char * buffer);
 
 int dc_gdbpacket(unsigned char * buffer);
 
+int dc_console_write(unsigned char * buffer);
+
+void console_tick(void);
+void console_flush_output(void);
+
 #define CMD_EXIT     "DC00"
 #define CMD_FSTAT    "DC01"
 #define CMD_WRITE_OLD    "DD02"
@@ -71,6 +76,8 @@ int dc_gdbpacket(unsigned char * buffer);
 #define CMD_CDFSREAD "DC19"
 #define CMD_GDBPACKET "DC20"
 #define CMD_REWINDDIR "DC21"
+#define CMD_CWRITE   "CWRT"
+#define CMD_CACK     "CACK"
 
 // Special definition for exception handler data
 #define CMD_EXCEPTION "EXPT"

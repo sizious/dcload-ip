@@ -55,8 +55,6 @@
 #define MAX_OPEN_DIRS   16
 #endif
 
-/* Sigh... KOS treats anything under 100 as invalid for a dirent from dcload, so
-   we need to offset by a bit. This aught to do. */
 #define DIRENT_OFFSET   1337
 #define MAX_PATH_LEN 4096
 
@@ -76,23 +74,11 @@ void set_mappath(char *path) {
   strcpy(path_work_buffer, mappath);
 }
 
-/**
- * map_path - Wrapper method for use in chroot and mapping modes.
- *          If the static mappath hasn't been set chroot mode is assumed,
- *          otherwise paths are checked with realpath and mapped to the
- *          mappath directory.
- *
- * @param path The path to map as seen from the Dreamcast (ie. /pc/<path> )
- * @param check_only_dirname If true, realpath is called on the dirname of the path
- * @return The mapped path or NULL if the resolved path is outside of the
- *         mappath directory.
- */
 static inline char *map_path(char *path, int check_only_dirname) {
   if (!mappath)
     return path;
 
   if (check_only_dirname) {
-    // dirname alters the input string, so use a copy
     char dnamebuf[MAX_PATH_LEN]; 
     strcpy(dnamebuf, path);
     strcpy(path_work_buffer + mappatlen, dirname(dnamebuf));
@@ -100,33 +86,19 @@ static inline char *map_path(char *path, int check_only_dirname) {
     strcpy(path_work_buffer + mappatlen, path);
   }
   if (realpath(path_work_buffer, path_result_buffer) == NULL) {
-    printf("Failed to map path '%s' with error: %s\n", path_work_buffer,
-           strerror(errno));
     return NULL;
   }
   
   if (strncmp(mappath, path_result_buffer, mappatlen) != 0) {
-      printf("Requested path:\n\t%s\n"
-        "is outside of basepath:\n\t%s\n",
-        mappath, path_result_buffer);
         return NULL;
   }
   if (check_only_dirname) {
-    // append the basename of the path to the result buffer
     int reslen = strlen(path_result_buffer);
     path_result_buffer[reslen] = '/';
     strcpy(path_result_buffer + reslen +1, basename(path));
   }
   return path_result_buffer;
 }
-
-/* syscalls for dcload-ip
- *
- * 1. receive all parameters from dc
- * 2. get any data from dc using recv_data (dc passes address/size of buffer)
- * 3. send any data to dc using send_data (dc passess address/size of buffer)
- * 4. send return value to dc
- */
 
 unsigned int dc_order(unsigned int x)
 {
@@ -136,13 +108,240 @@ unsigned int dc_order(unsigned int x)
 	return x;
 }
 
+#define CONSOLE_RING_SIZE 33554432
+#define CONSOLE_FLUSH_THRESHOLD 2048
+#define CONSOLE_FORCE_FLUSH_MS 0
+#define CONSOLE_NEWLINE_FLUSH 1
+#define CONSOLE_CREDIT_MAX 1024
+#define CONSOLE_CREDIT_AGGRESSIVE 512
+#define CONSOLE_ACK_EVERY_PKT 1
+#define CONSOLE_BURST_THRESHOLD 2
+#define CONSOLE_ACK_IMMEDIATE 1
+#define CONSOLE_FAST_ACK_THRESH 4
+
+static unsigned char console_ring[CONSOLE_RING_SIZE];
+static unsigned int console_wr = 0;
+static unsigned int console_rd = 0;
+static unsigned int console_last_flush_ms = 0;
+static unsigned int console_rx_seq = 0;
+static unsigned int console_rx_ack_sent = 0;
+static unsigned int console_credits_given = CONSOLE_CREDIT_MAX;
+static unsigned int console_pkts_since_ack = 0;
+static unsigned int console_burst_count = 0;
+static unsigned int console_last_ack_ms = 0;
+static unsigned int console_total_rx = 0;
+static unsigned int console_ack_batch = 0;
+static unsigned int console_gap_count = 0;
+static unsigned int console_rapid_mode = 0;
+
+static inline unsigned int get_ms(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (unsigned int)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
+}
+
+static inline unsigned int console_used(void) {
+    return (console_wr >= console_rd) ? 
+           (console_wr - console_rd) : 
+           (CONSOLE_RING_SIZE - console_rd + console_wr);
+}
+
+static inline unsigned int console_free(void) {
+    return CONSOLE_RING_SIZE - 1 - console_used();
+}
+
+void console_flush_output(void) {
+    unsigned int used = console_used();
+    if (used > 0) {
+        if (console_wr >= console_rd) {
+            fwrite(console_ring + console_rd, 1, used, stdout);
+        } else {
+            fwrite(console_ring + console_rd, 1, CONSOLE_RING_SIZE - console_rd, stdout);
+            fwrite(console_ring, 1, console_wr, stdout);
+        }
+        fflush(stdout);
+        console_rd = console_wr;
+        console_last_flush_ms = get_ms();
+    }
+}
+
+static void console_add(const unsigned char *data, unsigned int sz) {
+    int has_newline = 0;
+    unsigned int free_space = console_free();
+    
+    if (sz > free_space) {
+        console_flush_output();
+        free_space = console_free();
+        if (sz > free_space) {
+            console_rd = (console_rd + sz - free_space + 1) & (CONSOLE_RING_SIZE - 1);
+        }
+    }
+    
+    unsigned int wr = console_wr;
+    unsigned int end1 = CONSOLE_RING_SIZE - wr;
+    
+    if (end1 >= sz) {
+        memcpy(console_ring + wr, data, sz);
+        for (unsigned int i = 0; i < sz; i++) {
+            if (data[i] == '\n') { has_newline = 1; break; }
+        }
+        wr = (wr + sz) & (CONSOLE_RING_SIZE - 1);
+    } else {
+        memcpy(console_ring + wr, data, end1);
+        for (unsigned int i = 0; i < end1; i++) {
+            if (data[i] == '\n') { has_newline = 1; break; }
+        }
+        memcpy(console_ring, data + end1, sz - end1);
+        if (!has_newline) {
+            for (unsigned int i = end1; i < sz; i++) {
+                if (data[i] == '\n') { has_newline = 1; break; }
+            }
+        }
+        wr = sz - end1;
+    }
+    console_wr = wr;
+    
+    unsigned int now = get_ms();
+    int should_flush = 0;
+    
+    if (has_newline && CONSOLE_NEWLINE_FLUSH)
+        should_flush = 1;
+    else if (console_used() >= CONSOLE_FLUSH_THRESHOLD)
+        should_flush = 1;
+    else if (now - console_last_flush_ms >= CONSOLE_FORCE_FLUSH_MS && console_used() > 0)
+        should_flush = 1;
+    
+    if (should_flush)
+        console_flush_output();
+}
+
+typedef struct __attribute__ ((packed)) {
+    unsigned char id[4];
+    unsigned int seq;
+    unsigned int ack_seq;
+    unsigned short credits;
+    unsigned short len;
+    unsigned char data[];
+} command_console_t;
+
+#define CMD_CWRITE   "CWRT"
+#define CMD_CACK     "CACK"
+#define CONSOLE_CMD_LEN 16
+
+static void send_console_ack(void) {
+    unsigned int new_credits = CONSOLE_CREDIT_MAX * 2;
+    unsigned int free_space = console_free();
+    
+    if (console_burst_count >= CONSOLE_BURST_THRESHOLD || console_rapid_mode)
+        new_credits = CONSOLE_CREDIT_MAX * 4;
+    
+    if (free_space < 4194304)
+        new_credits = free_space / 1440;
+    else if (free_space >= CONSOLE_RING_SIZE / 2)
+        new_credits = CONSOLE_CREDIT_MAX * 8;
+    
+    if (new_credits < CONSOLE_CREDIT_AGGRESSIVE)
+        new_credits = CONSOLE_CREDIT_AGGRESSIVE;
+    
+    if (new_credits > CONSOLE_CREDIT_MAX * 16)
+        new_credits = CONSOLE_CREDIT_MAX * 16;
+    
+    send_command(CMD_CACK, console_rx_seq, new_credits, NULL, 0);
+    console_rx_ack_sent = console_rx_seq;
+    console_credits_given = new_credits;
+    console_pkts_since_ack = 0;
+    console_last_ack_ms = get_ms();
+    console_ack_batch++;
+}
+
+int dc_console_write(unsigned char *buffer)
+{
+    command_console_t *cmd = (command_console_t *)buffer;
+    unsigned int seq = ntohl(cmd->seq);
+    unsigned int len = ntohs(cmd->len);
+    unsigned int dc_inflight = ntohs(cmd->credits);
+    
+    console_total_rx++;
+    
+    if (seq == console_rx_seq + 1 || 
+        (console_rx_seq > 0xFFFF0000 && seq < 0x10000) ||
+        (console_rx_seq == 0 && seq == 1))
+    {
+        console_rx_seq = seq;
+        console_burst_count++;
+        console_gap_count = 0;
+        
+        if (len > 0 && len <= 1440)
+            console_add(cmd->data, len);
+        
+        console_pkts_since_ack++;
+        
+        if (console_burst_count >= CONSOLE_FAST_ACK_THRESH)
+            console_rapid_mode = 1;
+        
+        int need_ack = CONSOLE_ACK_IMMEDIATE;
+        
+        if (!need_ack && console_pkts_since_ack >= 1)
+            need_ack = 1;
+        if (!need_ack && dc_inflight > 2048)
+            need_ack = 1;
+        
+        if (need_ack)
+            send_console_ack();
+        
+        return 0;
+    }
+    else if (seq <= console_rx_seq)
+    {
+        send_console_ack();
+        return 0;
+    }
+    else if (seq > console_rx_seq + 1)
+    {
+        console_gap_count++;
+        
+        if (seq < console_rx_seq + 256)
+        {
+            console_rx_seq = seq;
+            if (len > 0 && len <= 1440)
+                console_add(cmd->data, len);
+        }
+        
+        send_console_ack();
+        return 0;
+    }
+    
+    return 0;
+}
+
+void console_tick(void) {
+    unsigned int now = get_ms();
+    
+    if (console_used() > 0) {
+        console_flush_output();
+    }
+    
+    if (console_pkts_since_ack > 0) {
+        send_console_ack();
+        if (now - console_last_ack_ms >= 5)
+            console_burst_count = 0;
+    }
+    
+    if (console_credits_given < CONSOLE_CREDIT_MAX) {
+        send_console_ack();
+    }
+    
+    if (console_rapid_mode && now - console_last_ack_ms >= 10) {
+        console_rapid_mode = 0;
+    }
+}
+
 int dc_fstat(unsigned char * buffer)
 {
     struct stat filestat;
     int retval;
     dcload_stat_t dcstat;
     command_3int_t *command = (command_3int_t *)buffer;
-    /* value0 = fd, value1 = addr, value2 = size */
 
     retval = fstat(ntohl(command->value0), &filestat);
 
@@ -174,22 +373,35 @@ int dc_write(unsigned char * buffer)
     unsigned char *data;
     int retval;
     command_3int_t *command = (command_3int_t *)buffer;
-    /* value0 = fd, value1 = addr, value2 = size */
+    unsigned int size = ntohl(command->value2);
+    int fd = ntohl(command->value0);
 
-    data = malloc(ntohl(command->value2));
+    if (fd == 1 || fd == 2) {
+        unsigned char *payload = buffer + sizeof(command_3int_t);
+        
+        if (size > 0 && size <= 1500) {
+            console_add(payload, size);
+            
+            send_command(CMD_RETVAL, size, size, NULL, 0);
+            return 0;
+        }
+    }
 
-    recv_data(data, ntohl(command->value1), ntohl(command->value2), 1);
+    data = malloc(size);
+    if (!data) {
+        send_command(CMD_RETVAL, -1, -1, NULL, 0);
+        return -1;
+    }
 
-    // Check for exception messages. This compare is pretty quick, so it
-    // shouldn't slow anything down unless someone is really pelting the console
-    // hard.. Although, in that case printf() will probably become a big
-    // bottleneck before this memcmp() ever does...
-    if(!(memcmp(data, CMD_EXCEPTION, 4)))
+    recv_data(data, ntohl(command->value1), size, 1);
+
+    if(size >= 4 && !(memcmp(data, CMD_EXCEPTION, 4)))
     {
-      // Exception data starts with "EXPT"
       exception_struct_t *exception_frame = (exception_struct_t*)data;
       unsigned int *exception_frame_uints = (unsigned int*)data;
 
+      console_flush_output();
+      
       printf("\n\n");
       printf("%s", exception_code_to_string(exception_frame->expt_code));
       for(unsigned int regdump = 0; regdump < 66; regdump++)
@@ -198,23 +410,24 @@ int dc_write(unsigned char * buffer)
         printf(": 0x%x\n", exception_frame_uints[regdump + 2]);
       }
 
-      // Write out to a file as well
-      // It will end up in the working directory of the terminal
       int out_file = open("dcload_exception_dump.bin", O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
-      retval = write(out_file, data, ntohl(command->value2));
+      retval = write(out_file, data, size);
       close(out_file);
     }
     else
     {
-      retval = write(ntohl(command->value0), data, ntohl(command->value2));
-    }
-
-    if(send_command(CMD_RETVAL, retval, retval, NULL, 0) == -1) {
-        free(data);
-        return -1;
+      if (fd == 1 || fd == 2) {
+        console_add(data, size);
+        retval = size;
+      } else {
+        retval = write(fd, data, size);
+      }
     }
 
     free(data);
+
+    send_command(CMD_RETVAL, retval, retval, NULL, 0);
+
     return 0;
 }
 
@@ -223,12 +436,17 @@ int dc_read(unsigned char * buffer)
     unsigned char *data;
     int retval;
     command_3int_t *command = (command_3int_t *)buffer;
-    /* value0 = fd, value1 = addr, value2 = size */
 
     data = malloc(ntohl(command->value2));
+    if (!data) {
+        send_command(CMD_RETVAL, -1, -1, NULL, 0);
+        return -1;
+    }
+    
     retval = read(ntohl(command->value0), data, ntohl(command->value2));
 
-    send_data(data, ntohl(command->value1), ntohl(command->value2));
+    if (retval > 0)
+        send_data(data, ntohl(command->value1), retval);
 
     if(send_command(CMD_RETVAL, retval, retval, NULL, 0)) {
         free(data);
@@ -244,9 +462,6 @@ int dc_open(unsigned char * buffer)
   int retval;
   int ourflags = 0;
   command_2int_string_t *command = (command_2int_string_t *)buffer;
-  /* value0 = flags value1 = mode string = name */
-
-  /* translate flags */
 
   if (ntohl(command->value0) & 0x0001)
     ourflags |= O_WRONLY;
@@ -301,7 +516,6 @@ int dc_link(unsigned char *buffer) {
   }
 
 #ifdef __MINGW32__
-  /* Copy the file on Windows */
   retval =
       CopyFileA(local_buffer,
                 map_path(&command->string[strlen(command->string) + 1], 1), 0);
@@ -428,7 +642,6 @@ int dc_opendir(unsigned char * buffer)
     command_string_t *command = (command_string_t *)buffer;
     int i;
 
-    /* Find an open entry */
     for(i = 0; i < MAX_OPEN_DIRS; ++i) {
         if(!opendirs[i])
             break;
@@ -590,7 +803,6 @@ int dc_gdbpacket(unsigned char * buffer)
     }
 
     command_2int_string_t *command = (command_2int_string_t *)buffer;
-    /* value0 = in_size, value1 = out_size, string = packet */
 
     in_size = ntohl(command->value0);
     out_size = ntohl(command->value1);
