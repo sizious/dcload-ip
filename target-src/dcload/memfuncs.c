@@ -273,78 +273,59 @@ int memcmp_32bit_eq(const void *str1, const void *str2, unsigned int count)
   return x ? -1 : 0;
 }
 
-// General-purpose memcpy function to call
-// After modifying dcload-ip accordingly, it can be safely assumed that all src
-// pointers are aligned to 8 bytes.
-// 'numbytes' is total number of bytes to copy.
+// General-purpose aligned memcpy function
+// Processes data in order from largest to smallest aligned chunks
 void * SH4_aligned_memcpy(void *dest, void *src, unsigned int numbytes)
 {
   void * returnval = dest;
-	unsigned int offset = 0;
+  unsigned int align = ((unsigned int)src | (unsigned int)dest);
 
-  if((char*)src == (char*)dest)
-  {
-    // Lol.
+  if (UNLIKELY((char*)src == (char*)dest))
     return returnval;
+
+  // Handle 8-byte aligned 32-byte blocks
+  if (!(align & 0x07) && numbytes >= 32) {
+    unsigned int blocks = numbytes >> 5;
+    memcpy_64bit_32Bytes(dest, src, blocks);
+    unsigned int done = blocks << 5;
+    dest = (char *)dest + done;
+    src = (char *)src + done;
+    numbytes -= done;
   }
 
-	while(numbytes)
-	{
-		if( // Check 8-byte alignment for 32-byte copy
-				( !( ((unsigned int)src | (unsigned int)dest) & 0x07) )
-				&&
-				(numbytes >= 32)
-	    )
-	  {
-	    memcpy_64bit_32Bytes(dest, src, numbytes >> 5);
-			offset = numbytes & -32;
-			dest = (char *)dest + offset;
-	    src = (char *)src + offset;
-			numbytes -= offset;
-	  }
-		else if( // Check 8-byte alignment for 64-bit copy
-//	  if( // Check 8-byte alignment for 64-bit copy
-	      ( !( ((unsigned int)src | (unsigned int)dest) & 0x07) )
-	      &&
-				(numbytes >= 8)
-	    )
-	  {
-	    memcpy_64bit(dest, src, numbytes >> 3);
-			offset = numbytes & -8;
-			dest = (char *)dest + offset;
-      src = (char *)src + offset;
-			numbytes -= offset;
-	  }
-		else if( // Check 4-byte alignment
-				( !( ((unsigned int)src | (unsigned int)dest) & 0x03) )
-				&&
-				(numbytes >= 4)
-			)
-		{
-			memcpy_32bit(dest, src, numbytes >> 2);
-			offset = numbytes & -4;
-			dest = (char *)dest + offset;
-      src = (char *)src + offset;
-			numbytes -= offset;
-		}
-		else if( // Check 2-byte alignment
-				( !( ((unsigned int)src | (unsigned int)dest) & 0x01) )
-				&&
-				(numbytes >= 2)
-			)
-		{
-			memcpy_16bit(dest, src, numbytes >> 1);
-			offset = numbytes & -2;
-			dest = (char *)dest + offset;
-      src = (char *)src + offset;
-			numbytes -= offset;
-		}
-		else if(numbytes) // No alignment? Well, that really stinks!
-		{
-			memcpy_8bit(dest, src, numbytes);
-			numbytes = 0;
-		}
-	}
+  // Handle remaining 8-byte aligned blocks
+  if (!(align & 0x07) && numbytes >= 8) {
+    unsigned int units = numbytes >> 3;
+    memcpy_64bit(dest, src, units);
+    unsigned int done = units << 3;
+    dest = (char *)dest + done;
+    src = (char *)src + done;
+    numbytes -= done;
+  }
+
+  // Handle 4-byte aligned blocks
+  if (!(align & 0x03) && numbytes >= 4) {
+    unsigned int units = numbytes >> 2;
+    memcpy_32bit(dest, src, units);
+    unsigned int done = units << 2;
+    dest = (char *)dest + done;
+    src = (char *)src + done;
+    numbytes -= done;
+  }
+
+  // Handle 2-byte aligned blocks
+  if (!(align & 0x01) && numbytes >= 2) {
+    unsigned int units = numbytes >> 1;
+    memcpy_16bit(dest, src, units);
+    unsigned int done = units << 1;
+    dest = (char *)dest + done;
+    src = (char *)src + done;
+    numbytes -= done;
+  }
+
+  // Handle any remaining unaligned bytes
+  if (numbytes)
+    memcpy_8bit(dest, src, numbytes);
 
   return returnval;
 }
