@@ -1,7 +1,8 @@
 #ifndef __MEMFUNCS_H__
 #define __MEMFUNCS_H__
 
-// See memfuncs.c file for details
+#define LIKELY(x)   __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
 void * memcpy_8bit(void *dest, const void *src, unsigned int len);
 void * memcpy_16bit(void *dest, const void *src, unsigned int len);
@@ -14,6 +15,15 @@ void * memset_zeroes_32bit(void *dest, unsigned int len);
 
 int memcmp_16bit_eq(const void *str1, const void *str2, unsigned int count);
 int memcmp_32bit_eq(const void *str1, const void *str2, unsigned int count);
+
+static inline int memcmp_eq_6(const void *a, const void *b)
+{
+	const unsigned int *a32 = (const unsigned int *)a;
+	const unsigned int *b32 = (const unsigned int *)b;
+	const unsigned short *a16 = (const unsigned short *)((const char *)a + 4);
+	const unsigned short *b16 = (const unsigned short *)((const char *)b + 4);
+	return !((a32[0] ^ b32[0]) | (*a16 ^ *b16));
+}
 
 void * SH4_aligned_memcpy(void *dest, void *src, unsigned int numbytes);
 

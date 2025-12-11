@@ -243,40 +243,34 @@ void * memset_zeroes_64bit(void *dest, unsigned int len)
   return dest;
 }
 
-// Equality-only version of memcmp_16bit
-// 'count' is number of sets of 16-bits (2 bytes), or total bytes to compare / 2
-// Returns 0 if equal, -1 if unequal (-1 is true in C)
+// Constant-time equality check for 16-bit aligned data
+// 'count' is number of sets of 16-bits (2 bytes)
+// Returns 0 if equal, -1 if unequal
 int memcmp_16bit_eq(const void *str1, const void *str2, unsigned int count)
 {
   const unsigned short *s1 = (unsigned short*)str1;
   const unsigned short *s2 = (unsigned short*)str2;
+  unsigned short x = 0;
 
   while (count--)
-  {
-    if (*s1++ != *s2++)
-    {
-      return -1;
-    }
-  }
-  return 0;
+    x |= *s1++ ^ *s2++;
+
+  return x ? -1 : 0;
 }
 
-// Equality-only version of memcmp_32bit
-// 'count' is number of sets of 32-bits (4 bytes), or total bytes to compare / 4
-// Returns 0 if equal, -1 if unequal (-1 is true in C)
+// Constant-time equality check for 32-bit aligned data
+// 'count' is number of sets of 32-bits (4 bytes)
+// Returns 0 if equal, -1 if unequal
 int memcmp_32bit_eq(const void *str1, const void *str2, unsigned int count)
 {
   const unsigned int *s1 = (unsigned int*)str1;
   const unsigned int *s2 = (unsigned int*)str2;
+  unsigned int x = 0;
 
   while (count--)
-  {
-    if (*s1++ != *s2++)
-    {
-      return -1;
-    }
-  }
-  return 0;
+    x |= *s1++ ^ *s2++;
+
+  return x ? -1 : 0;
 }
 
 // General-purpose memcpy function to call
