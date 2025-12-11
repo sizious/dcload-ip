@@ -73,7 +73,9 @@ typedef struct __attribute__ ((packed, aligned(4))) {
 
 #define PSEUDO_H_LEN 20
 
-// For is_odd, pass length%2 where datacount is length/2 (remember: integer divides)
+#define IP_UDP_PROTOCOL 17
+#define IP_ICMP_PROTOCOL 1
+
 unsigned short checksum(unsigned short *buf, int count, int is_odd);
 unsigned short checksum_udp(unsigned short *buf_pseudo, unsigned short *buf_data, int datacount, int is_odd);
 

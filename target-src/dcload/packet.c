@@ -1,65 +1,86 @@
 #include "packet.h"
 #include "memfuncs.h"
 
-// The two checksums here are different because the UDP one needs a "pseudo-header," while the IP one doesn't
+// IP checksum with 8-word loop unrolling and deferred carry folding
 unsigned short checksum(unsigned short *buf, int count, int is_odd)
 {
-	unsigned long sum = 0;
+	register unsigned long sum = 0;
+	register unsigned long t;
 
-	while (count--) {
+	// Process 8 words at a time for better pipeline utilization
+	while (count >= 8) {
+		t = buf[0]; sum += t;
+		t = buf[1]; sum += t;
+		t = buf[2]; sum += t;
+		t = buf[3]; sum += t;
+		t = buf[4]; sum += t;
+		t = buf[5]; sum += t;
+		t = buf[6]; sum += t;
+		t = buf[7]; sum += t;
+		buf += 8;
+		count -= 8;
+	}
+
+	// Handle remaining words
+	while (count--)
 		sum += *buf++;
-		if (sum & 0xffff0000) {
-			sum &= 0xffff;
-			sum++;
-		}
-	}
 
-	if(is_odd)
-	{
-		sum += (unsigned short)(*((unsigned char*)buf)); // The sum is a little-endian sum, so an odd byte will be an 8-bit int
+	// Handle odd byte
+	if (is_odd)
+		sum += (unsigned short)(*((unsigned char*)buf));
 
-		if (sum & 0xffff0000) {
-			sum &= 0xffff;
-			sum++;
-		}
-	}
+	// Fold 32-bit sum to 16 bits
+	while (sum >> 16)
+		sum = (sum & 0xffff) + (sum >> 16);
 
-	return ~(sum & 0xffff);
+	return ~sum;
 }
 
-// Pass odd as length%2 where datacount is length/2.
+// UDP checksum with unrolled pseudo-header and data loops
 unsigned short checksum_udp(unsigned short *buf_pseudo, unsigned short *buf_data, int datacount, int is_odd)
 {
-	unsigned long sum = 0;
-	int pseudocount = PSEUDO_H_LEN/2;
+	register unsigned long sum = 0;
+	register unsigned long t;
 
-	while (pseudocount--) {
-		sum += *buf_pseudo++;
-		if (sum & 0xffff0000) {
-			sum &= 0xffff;
-			sum++;
-		}
+	// Unroll pseudo-header (always 10 words = 20 bytes)
+	sum += buf_pseudo[0];
+	sum += buf_pseudo[1];
+	sum += buf_pseudo[2];
+	sum += buf_pseudo[3];
+	sum += buf_pseudo[4];
+	sum += buf_pseudo[5];
+	sum += buf_pseudo[6];
+	sum += buf_pseudo[7];
+	sum += buf_pseudo[8];
+	sum += buf_pseudo[9];
+
+	// Process data 8 words at a time
+	while (datacount >= 8) {
+		t = buf_data[0]; sum += t;
+		t = buf_data[1]; sum += t;
+		t = buf_data[2]; sum += t;
+		t = buf_data[3]; sum += t;
+		t = buf_data[4]; sum += t;
+		t = buf_data[5]; sum += t;
+		t = buf_data[6]; sum += t;
+		t = buf_data[7]; sum += t;
+		buf_data += 8;
+		datacount -= 8;
 	}
 
-	while (datacount--) {
+	// Handle remaining words
+	while (datacount--)
 		sum += *buf_data++;
-		if (sum & 0xffff0000) {
-			sum &= 0xffff;
-			sum++;
-		}
-	}
 
-	if(is_odd)
-	{
-		sum += (unsigned short)(*((unsigned char*)buf_data)); // The sum is a little-endian sum, so an odd byte will be an 8-bit int
+	// Handle odd byte
+	if (is_odd)
+		sum += (unsigned short)(*((unsigned char*)buf_data));
 
-		if (sum & 0xffff0000) {
-			sum &= 0xffff;
-			sum++;
-		}
-	}
+	// Fold 32-bit sum to 16 bits
+	while (sum >> 16)
+		sum = (sum & 0xffff) + (sum >> 16);
 
-	return ~(sum & 0xffff);
+	return ~sum;
 }
 
 void make_ether(unsigned char *dest, unsigned char *src, ether_header_t *ether)
