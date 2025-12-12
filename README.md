@@ -1,5 +1,5 @@
 
-# dcload-ip 2.0.2
+# dcload-ip 2.0.3
 
 A Dreamcast ethernet loader originally by [Andrew Kieschnick](http://napalm-x.thegypsy.com/andrewk/dc/). This program is part of [KallistiOS](http://gamedev.allusion.net/softprj/kos/).
 
@@ -43,7 +43,7 @@ Edit `Makefile.cfg` for your system and network and then run `make`.
 * The correct display is something like:
 
 ```
-  dcload-ip 2.0.2  <- name/version
+  dcload-ip 2.0.3  <- name/version
   Broadband Adapter (HIT-0400)  <- adapter driver in use  
   00:d0:de:ad:be:ef  <- dc hardware address  
   192.168.1.92  <- dc ip address  
