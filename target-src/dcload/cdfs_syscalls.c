@@ -53,7 +53,8 @@ int gdGdcReqCmd(int cmd, int *param)
 	int i;
 
 	switch (cmd) {
-	case 16: /* read sectors */
+	case 16: /* read sectors PIO */
+    case 17: /* read sectors DMA */
 
 		memcpy(command->id, CMD_CDFSREAD, 4);
 		command->value0 = htonl(param[0]);
