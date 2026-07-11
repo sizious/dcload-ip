@@ -35,6 +35,17 @@ struct TOC {
 	unsigned int dunno;
 };
 
+/* gdGdcReqCmd must return a GD request id that is >= 1 on success, 0
+   for failure, matching the real GD-ROM BIOS. */
+static unsigned short gd_next_request_id = 1;
+
+static int gd_next_req_id(void) {
+    if(++gd_next_request_id == 0)
+        gd_next_request_id = 1;
+
+    return (int)gd_next_request_id;
+}
+
 int gdGdcReqCmd(int cmd, int *param)
 {
 	command_3int_t * command = (command_3int_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
@@ -54,7 +65,7 @@ int gdGdcReqCmd(int cmd, int *param)
 		param[3] = 0;
 		gdStatus = 2;
 
-		return 0;
+		return gd_next_req_id();
 		break;
 	case 19: /* read toc */
 		toc = (struct TOC *)param[1];
@@ -64,15 +75,15 @@ int gdGdcReqCmd(int cmd, int *param)
 		toc->first = 0x41010000; /* first = track 1 */
 		toc->last = 0x41010000; /* last = track 1 */
 		gdStatus = 2;
-		return 0;
+		return gd_next_req_id();
 		break;
 	case 24: /* init disc */
 		gdStatus = 2;
-		return 0;
+		return gd_next_req_id();
 		break;
 	default:
 		gdStatus = 0;
-		return -1;
+		return 0;
 		break;
 	}
 
