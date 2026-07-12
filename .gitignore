@@ -6,8 +6,10 @@
 *.elf
 *.asm
 *.map
+*.cdi
 example-src/console-test
 example-src/exception-test
 example-src/gethostinfo
 target-src/dcload/dcload
 target-src/dcload/exception
+host-src/tool/dc-tool-ip
