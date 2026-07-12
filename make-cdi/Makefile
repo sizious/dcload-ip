@@ -4,21 +4,31 @@ CP		= cp
 MKISOFS		= genisoimage
 CAT		= cat
 TOUCH		= touch
-1ST_READ	= ../target-src/1st_read/1st_read.bin
 
-dctoolip: 1st_read.bin
-	/opt/toolchains/dc/bin/mkdcdisc -n $@ -e $< -N -o $@.cdi -v 3 -m -d romdisk
+# Path to the ELF that mkdcdisc expects
+LOADER_ELF = ../target-src/1st_read/loader.elf
 
+TARGET = dcload-ip
 
-1st_read.bin: $(1ST_READ)
-	$(CP) $(1ST_READ) 1st_read.bin
+# Default target
+all: $(TARGET)
 
+# Build CDI using the ELF (not 1st_read.bin)
+$(TARGET): $(LOADER_ELF)
+	/opt/toolchains/dc/bin/mkdcdisc \
+		-n $@ \
+		-e $< \
+		-N \
+		-o $@.cdi \
+		-v 3 \
+		-m
 
-$(1ST_READ):
+# Build the ELF via the sub-project
+$(LOADER_ELF):
 	cd ../target-src && make
 
+.PHONY: all clean
 
-.PHONY : clean
 clean:
-	rm -f dctoolip.cdi 1st_read.bin
-
+	rm -f $(TARGET).cdi
+	cd ../target-src && make clean
