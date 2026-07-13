@@ -56,7 +56,12 @@ static vuc * const g28 = REGC(0xa1000000);
 static vus * const g216 = REGS(0xa1000000);
 static vul * const g232 = REGL(0xa1000000);
 
+#define g2_write_8(address, value) *((volatile uint8_t *)(address)) = (value)
+#define g2_write_16(address, value) *((volatile uint16_t *)(address)) = (value)
 #define g2_write_32(address, value) *((volatile uint32_t *)(address)) = (value)
+#define g2_read_8(address) *((volatile uint8_t *)(address))
+#define g2_read_16(address) *((volatile uint16_t *)(address))
+#define g2_read_32(address) *((volatile uint32_t *)(address))
 
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
 static vuc * const nic8 = REGC(0xa1001700);
@@ -77,6 +82,8 @@ static vuc * const txdesc[4] = {
 	REGC(GAPS_TX_IO_AREA + 0x7000),
 	REGC(GAPS_TX_IO_AREA + 0x7800)
 };
+
+#define RTL_MEM                 (0x1840000)
 
 /* GAPS PCI stuff probably ought to be moved to another file... */
 #define GAPS_BASE 0xa1000000
@@ -383,25 +390,27 @@ int rtl_bb_init(void)
 	// The BBA uses the range 0x01840000-0x0184ffff for TX and RX (with usage above
 	// 0x01848000 apparently for GAPS DMA), plus the 2 bytes at 0x0183fffc for... something
 
-	/* Initialize the "GAPS" PCI glue controller. */
-
+    /* Initialize the "GAPS" PCI glue controller. */
 	// NOTE: Setting 0x5a14a500 turns off GAPS.
-	g232[0x1418/4] = 0x5a14a501;                /* M */
-	i = 10000;
+    g2_write_32(GAPS_BASE + 0x1418, 0x5a14a501);    /* M */
+    i = 10000;
 	// This delay is probably the part where the RealTek 8139C datasheet says to
 	// wait 2ms for the chip to powerup and load its config from its EEPROM
-	while ((!(g232[0x1418/4] & 1)) && (i > 0))
-		i--;
-	if (!(g232[0x1418/4] & 1)) { // timed out waiting for rtl8139c to init
-		return -1;
-	}
+    while(!(g2_read_32(GAPS_BASE + 0x1418) & 1) && i > 0)
+        i--;
 
-	g232[0x1420/4] = 0x01000000;
-	g232[0x1424/4] = 0x01000000;
-	g232[0x1428/4] = 0x01840000;                /* 32k SRAM Map Base (?) */
+    /* timed out waiting for rtl8139c to init */
+    if(!(g2_read_32(GAPS_BASE + 0x1418) & 1)) {
+        return -1;
+    }
+
+    g2_write_32(GAPS_BASE + 0x1420, 0x01000000);
+    g2_write_32(GAPS_BASE + 0x1424, 0x01000000);
+    g2_write_32(GAPS_BASE + 0x1428, RTL_MEM);       /* DMA Base */
 	/* Register offset 0x142c controls where the image area at GAPS offset 0x8000 (so 0x01848000) points to, which is used by DMA */
-	g232[0x1414/4] = 0x00000001; // Interrupt-related...? (Whatever this is, it gets 1 written to it a couple times, and gets a zero written to it in the same places where 0x1418 gets the turn-off code...)
-	g232[0x1434/4] = 0x00000001;
+    g2_write_32(GAPS_BASE + 0x1414, 0x00000001); // Interrupt-related...? (Whatever this is, it gets 1 written to it a couple times, and gets a zero written to it in the same places where 0x1418 gets the turn-off code...)
+    g2_write_32(GAPS_BASE + 0x1434, 0x00000001);
+
 	// There appears to be a register at offset 0x1410, which has 0x0c003000 in it. This appears to be a pretty random address in the syscall area.
 	// It doesn't seem to be used for anything, though, and it just seems to get read from in its unused function--it's never written to.
 	// Similarly, 0x1430 has 0x00000010 in it, who knows what for. This one doesn't even have an unused function for it.
@@ -414,60 +423,52 @@ int rtl_bb_init(void)
 	// It has a custom ven:dev ID, but the class ID in 0x1608 indicates a network controller (byte 0x160b = 0x02 = network controller, 0x160a = 0x00 = Ethernet controller)
 	// See PCI Local Bus Specification 2.2 (2.3 has all the 2.2 stuff in it and the RTL8139C uses 2.2)
 	// This is also documented in the RTL8139C's datasheet, under "PCI Configuration Space Registers"
-	g216[0x1606/2] = 0xf900; // PCI Status Register
-	g232[0x1630/4] = 0x00000000; // PCI BMAR
-	g28[0x163c] = 0x00; // Interrupt Line
-	g28[0x160d] = 0xf0; // Primary Latency Timer
-	g216[0x1604/2] |= 0x6; // PCI Command Register (note: Fast Back-to-Back is read-only 0 on this bridge)
-	// 0x1610 (BAR0, I/O BAR) reads back as 0x00000001, which is I/O Space Indicator
-	g232[0x1614/4] = 0x01000000; // BAR1 (Memory BAR)
-	// There are two extra regs here, though, that are GAPS-specific (0x1650 and 0x1654).
-	if(g28[0x1650] & 1) // ???
-	{
-		g216[0x1654/2] = (g216[0x1654/2] & 0xfffc) | 0x8000;
-	}
+    g2_write_16(GAPS_BASE + 0x1606, 0xf900);     /* PCI Status Register */
+    g2_write_32(GAPS_BASE + 0x1630, 0x00000000); /* PCI BMAR */
+    g2_write_8(GAPS_BASE + 0x163c, 0x00);        /* Interrupt Line */
+    g2_write_8(GAPS_BASE + 0x160d, 0xf0);        /* Primary Latency Timer */
 
-	// Apparently we do this again
-	g232[0x1414/4] = 0x00000001;
+    /* PCI Command Register (Fast Back-to-Back is read-only 0 on this bridge)
+       0x1610 (BAR0, I/O BAR) reads back as 0x00000001, which is I/O Space Indicator
+    */
+    g2_write_16(GAPS_BASE + 0x1604, g2_read_16(GAPS_BASE + 0x1604) | 0x6);
 
-	// Clear the GAPS area
-	memset_zeroes_64bit((void*)0x01840000, 32768/8);
-	CacheBlockPurge((void*)0x01840000, 32768/32); // Write back and invalidate the cache over that area since it's volatile
+    g2_write_32(GAPS_BASE + 0x1614, 0x01000000); /* BAR1 (Memory BAR) */
 
-	// do this weird dance
-	// Appears to set and check some magic numbers to know if it's being initted properly...?
-	if(g232[0x141c/4] == 0x41474553) // Hah, this is ASCII for 'SEGA' in little-endian
-	{
-		g232[0x141c/4] = 0x55aaff00;
+    /* There are two extra regs here that are GAPS-specific (0x1650 and 0x1654). */
+    if(g2_read_8(GAPS_BASE + 0x1650) & 0x1)
+    {
+        g2_write_16(GAPS_BASE + 0x1654, (g2_read_16(GAPS_BASE + 0x1654) & 0xfffc) | 0x8000);
+    }
 
-		if(g232[0x141c/4] == 0x55aaff00)
-		{
-			g232[0x141c/4] = 0xaa5500ff;
+    /* Apparently we do this again */
+    g2_write_32(GAPS_BASE + 0x1414, 0x00000001); /* Interrupt enable */
 
-			if(g232[0x141c/4] == 0xaa5500ff)
-			{
-				g232[0x141c/4] = 0x41474553;
-				// I think GAPS automatically pulls RSTB low for 120ns, which causes the
-				// EEPROM to autoload all the registers initially. So we don't need to
-				// worry about it.
-				rtl_init();
-			}
-			else
-			{
-				return -3;
-			}
-		}
-		else
-		{
-			return -2;
-		}
-	}
-	else
-	{
-		return -1;
-	}
+    /* Clear GAPS mem */
+	memset_zeroes_64bit((void*)RTL_MEM, 32768/8);
+	CacheBlockPurge((void*)RTL_MEM, 32768/32); // Write back and invalidate the cache over that area since it's volatile
 
-	return 0;
+    /* Another magic number sequence, possibly checking previous init. */
+    /* ASCII for 'SEGA' in little-endian */
+    if(g2_read_32(GAPS_BASE + 0x141c) == 0x41474553) {
+        g2_write_32(GAPS_BASE + 0x141c, 0x55aaff00);
+
+        if(g2_read_32(GAPS_BASE + 0x141c) == 0x55aaff00) {
+            g2_write_32(GAPS_BASE + 0x141c, 0xaa5500ff);
+
+            if(g2_read_32(GAPS_BASE + 0x141c) == 0xaa5500ff) {
+                g2_write_32(GAPS_BASE + 0x141c, 0x41474553);
+                /* I think GAPS automatically pulls RSTB low for 120ns, which
+                   causes the EEPROM to autoload all the registers initially.
+                   So we don't need to worry about it.
+                */
+                rtl_init();
+                return 0;
+            }
+        }
+    }
+
+    return -3;
 }
 
 void rtl_bb_start(void)
