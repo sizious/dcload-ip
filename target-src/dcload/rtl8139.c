@@ -3,6 +3,7 @@
 // actually documented in here now.
 // --Moopthehedgehog
 
+#include <stdint.h>
 #include <string.h>
 #include "packet.h"
 #include "net.h"
@@ -33,7 +34,7 @@ adapter_t adapter_bba = {
 	"Broadband Adapter (HIT-0400)",
 	{ 0 },		// Mac address
 	{ 0 },		// 2-byte alignment pad
-	rtl_bb_detect,
+	gaps_detect,
 	rtl_bb_init,
 	rtl_bb_start,
 	rtl_bb_stop,
@@ -55,6 +56,8 @@ static vuc * const g28 = REGC(0xa1000000);
 static vus * const g216 = REGS(0xa1000000);
 static vul * const g232 = REGL(0xa1000000);
 
+#define g2_write_32(address, value) *((volatile uint32_t *)(address)) = (value)
+
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
 static vuc * const nic8 = REGC(0xa1001700);
 static vus * const nic16 = REGS(0xa1001700);
@@ -75,8 +78,11 @@ static vuc * const txdesc[4] = {
 	REGC(GAPS_TX_IO_AREA + 0x7800)
 };
 
-int rtl_bb_detect(void)
-{
+/* GAPS PCI stuff probably ought to be moved to another file... */
+#define GAPS_BASE 0xa1000000
+
+/* Detect a GAPS PCI bridge */
+int gaps_detect(void) {
 	// This pointer's data is always aligned to 4 bytes--just look at the register address!
 	const char *str = (char*)REGC(0xa1001400);
 	if (!memcmp_32bit_eq(str, GAPSPCI_ID, 16/4))
@@ -84,15 +90,15 @@ int rtl_bb_detect(void)
 		global_bg_color = BBA_BG_COLOR;
 		installed_adapter = BBA_MODEL;
 
-		g232[0x1414/4] = 0x00000000; // Set this to 0 first thing
-		g232[0x1418/4] = 0x5a14a500; // Ensure GAPS is off
+        /* Set this to 0 first thing */
+        g2_write_32(GAPS_BASE + 0x1414, 0x00000000);
+        /* Turn GAPS off */
+        g2_write_32(GAPS_BASE + 0x1418, 0x5a14a501);
 
 		return 0;
 	}
 	else
-	{
 		return -1;
-	}
 }
 
 static void rtl_reset(void)
