@@ -59,6 +59,9 @@ static int rtl_bb_rx(void);
 #define g2_read_32(address) *((volatile uint32_t *)(address))
 
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
+#define NIC(ADDR) (GAPS_BASE + 0x1700 + (ADDR))
+
+/* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
 static vuc * const nic8 = REGC(0xa1001700);
 static vus * const nic16 = REGS(0xa1001700);
 static vul * const nic32 = REGL(0xa1001700);
@@ -105,28 +108,28 @@ int gaps_detect(void) {
 
 static void rtl_reset(void)
 {
-	/* Soft-reset the chip */
-	nic8[RT_CHIPCMD] = RT_CMD_RESET;
+    /* Soft-reset the chip */
+    g2_write_8(NIC(RT_CHIPCMD), RT_CMD_RESET);
 
-	/* Wait for it to come back */
-	while (nic8[RT_CHIPCMD] & RT_CMD_RESET);
+    /* Wait for it to come back */
+    while (g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RESET);
 }
 
 static void rtl_init(void)
 {
-	unsigned int tmp;
+    unsigned int tmp;
 
-	/* Read MAC address */
-	// Don't need to do anything with the eeprom if we're just reading it.
-	tmp = nic32[RT_IDR0];
-	rtl.mac[0] = tmp & 0xff;
-	rtl.mac[1] = (tmp >> 8) & 0xff;
-	rtl.mac[2] = (tmp >> 16) & 0xff;
-	rtl.mac[3] = (tmp >> 24) & 0xff;
-	tmp = nic32[RT_IDR0+1];
-	rtl.mac[4] = tmp & 0xff;
-	rtl.mac[5] = (tmp >> 8) & 0xff;
-	memcpy(adapter_bba.mac, rtl.mac, 6);
+    /* Read MAC address */
+    // Don't need to do anything with the eeprom if we're just reading it.
+    tmp = g2_read_32(NIC(RT_IDR0));
+    rtl.mac[0] = tmp & 0xff;
+    rtl.mac[1] = (tmp >> 8) & 0xff;
+    rtl.mac[2] = (tmp >> 16) & 0xff;
+    rtl.mac[3] = (tmp >> 24) & 0xff;
+    tmp = g2_read_32(NIC(RT_IDR0 + 4));
+    rtl.mac[4] = tmp & 0xff;
+    rtl.mac[5] = (tmp >> 8) & 0xff;
+    memcpy(adapter_bba.mac, rtl.mac, 6);
 
 	/* Soft-reset the chip to clear any garbage from power on */
 	rtl_reset();
