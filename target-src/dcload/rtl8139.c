@@ -51,11 +51,6 @@ static void rtl_init(void);
 static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n);
 static int rtl_bb_rx(void);
 
-// 8, 16, and 32 bit access to G2 addresses
-static vuc * const g28 = REGC(0xa1000000);
-static vus * const g216 = REGS(0xa1000000);
-static vul * const g232 = REGL(0xa1000000);
-
 #define g2_write_8(address, value) *((volatile uint8_t *)(address)) = (value)
 #define g2_write_16(address, value) *((volatile uint16_t *)(address)) = (value)
 #define g2_write_32(address, value) *((volatile uint32_t *)(address)) = (value)
@@ -508,7 +503,7 @@ int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: htt
 	__builtin_prefetch(copyback_pkt_base);
 
 	// Set GAPS DMA image offset pointer to relevant TX region
-	g232[0x142c/4] = (unsigned int)txdesc[rtl.cur_tx];
+	g2_write_32(GAPS_BASE + 0x142c, (unsigned int)txdesc[rtl.cur_tx]);
 
 	/* 8139 doesn't auto-pad */
 	if(len < 60) // This condition may look a little gnarly, but that's because it's meant for speed above all else.
@@ -643,8 +638,8 @@ static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n) // d
 	while((*(volatile unsigned int*)0xa05f688c) & 0x20U);
 
 	// Set GAPS DMA image offset pointer to relevant RX region
-	//--	g232[0x142c/4] = (unsigned int)src;
-	g232[0x142c/4] = (unsigned int)src - 2; // Yup, this works. So we can just use memcpy_32bit()
+	//--	g2_write_32(GAPS_BASE + 0x142c, (unsigned int)src);
+	g2_write_32(GAPS_BASE + 0x142c, (unsigned int)src - 2); // Yup, this works. So we can just use memcpy_32bit()
 
 	// NOWRAP
 	// Note: the +3 may mean we read some of the CRC for not-byte-multiple packets. That's fine: it doesn't cause us any problems.
