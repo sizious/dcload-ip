@@ -58,33 +58,47 @@ static int rtl_bb_rx(void);
 #define g2_read_16(address) *((volatile uint16_t *)(address))
 #define g2_read_32(address) *((volatile uint32_t *)(address))
 
+#define MEM_AREA_P1_BASE        (0x80000000)
+#define MEM_AREA_P2_BASE        (0xa0000000)
+
+#define RTL_MEM                 (0x01840000)
+
+#define RX_BUFFER_SHIFT         1 /* 0 : 8Kb, 1 : 16Kb, 2 : 32Kb, 3 : 64Kb */
+
+#define RX_BUFFER_LEN           (0x2000 << RX_BUFFER_SHIFT)
+
+#define TX_BUFFER_OFFSET        (RX_BUFFER_LEN + 0x2000)
+#define TX_BUFFER_LEN           (0x800)
+#define TX_NB_BUFFERS           4
+
+#define GAPS_BASE               (0x01000000 | MEM_AREA_P2_BASE)
+
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
 #define NIC(ADDR) (GAPS_BASE + 0x1700 + (ADDR))
 
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
-static vuc * const nic8 = REGC(0xa1001700);
-static vus * const nic16 = REGS(0xa1001700);
-static vul * const nic32 = REGL(0xa1001700);
+static vuc * const nic8 = REGC(NIC(0));
+static vus * const nic16 = REGS(NIC(0));
+static vul * const nic32 = REGL(NIC(0));
 
 /* 8, 16, and 32 bit access to the PCI MEMMAP space (configured by GAPS) */
-//static vuc * const mem8 = REGC(0xa1840000);
-//static vus * const mem16 = REGS(0xa1840000);
-static vul * const mem32 = REGL(0xa1840000);
+//static vuc *const mem8 = REGC(RTL_MEM | MEM_AREA_P2_BASE);
+//static vus *const mem16 = REGS(RTL_MEM | MEM_AREA_P2_BASE);
+static vul *const mem32 = REGL(RTL_MEM | MEM_AREA_P2_BASE);
 
-#define GAPS_RX_IO_AREA 0x81840000U
-#define GAPS_TX_IO_AREA 0x81840000U
+#define GAPS_RX_IO_AREA (RTL_MEM | MEM_AREA_P1_BASE)
+#define GAPS_TX_IO_AREA (RTL_MEM | MEM_AREA_P1_BASE)
 
-static vuc * const txdesc[4] = {
-	REGC(GAPS_TX_IO_AREA + 0x6000),
-	REGC(GAPS_TX_IO_AREA + 0x6800),
-	REGC(GAPS_TX_IO_AREA + 0x7000),
-	REGC(GAPS_TX_IO_AREA + 0x7800)
+/* TX buffer pointers */
+static vuc * const txdesc[TX_NB_BUFFERS] = {
+	REGC(GAPS_TX_IO_AREA + TX_BUFFER_OFFSET + (TX_BUFFER_LEN * 0)),
+	REGC(GAPS_TX_IO_AREA + TX_BUFFER_OFFSET + (TX_BUFFER_LEN * 1)),
+	REGC(GAPS_TX_IO_AREA + TX_BUFFER_OFFSET + (TX_BUFFER_LEN * 2)),
+	REGC(GAPS_TX_IO_AREA + TX_BUFFER_OFFSET + (TX_BUFFER_LEN * 3))
 };
 
-#define RTL_MEM                 (0x1840000)
+#define GAPS_DMA_AREA (GAPS_RX_IO_AREA | 0x8000)
 
-/* GAPS PCI stuff probably ought to be moved to another file... */
-#define GAPS_BASE 0xa1000000
 
 /* Detect a GAPS PCI bridge */
 int gaps_detect(void) {
@@ -134,12 +148,13 @@ static void rtl_init(void)
 	/* Soft-reset the chip to clear any garbage from power on */
 	rtl_reset();
 
-	/* Setup Rx and Tx buffers */
-	nic32[RT_RXBUF/4] = 0x01840000;
-	nic32[RT_TXADDR0/4 + 0] = 0x01846000;
-	nic32[RT_TXADDR0/4 + 1] = 0x01846800;
-	nic32[RT_TXADDR0/4 + 2] = 0x01847000;
-	nic32[RT_TXADDR0/4 + 3] = 0x01847800;
+    /* Setup RX buffer */
+    g2_write_32(NIC(RT_RXBUF), RTL_MEM);
+
+    /* Setup TX buffers */
+    for(tmp=0; tmp<TX_NB_BUFFERS; tmp++) {
+        g2_write_32(NIC(RT_TXADDR0 + (tmp*4)), RTL_MEM + (tmp* TX_BUFFER_LEN) + TX_BUFFER_OFFSET);
+    }
 
 	asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
 
@@ -605,7 +620,7 @@ int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: htt
 	}
 
 	// Copy packet over to RTL via GAPS while also accounting for dcload-ip's packet alignment offset
-	SH4_mem_to_pkt_X_movca_32((unsigned char*)0x81848000, copyback_pkt_base, len);
+	SH4_mem_to_pkt_X_movca_32((unsigned char*)GAPS_DMA_AREA, copyback_pkt_base, len);
 	// Technically this will prefetch beyond 1536 for packets between 1504 and 1514 in size, but that's not an issue.
 
 // Tx time end
@@ -648,8 +663,8 @@ static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n) // d
 	// Note: the +3 may mean we read some of the CRC for not-byte-multiple packets. That's fine: it doesn't cause us any problems.
 	//--	SH4_pkt_to_mem_X_movca_32(dest, (unsigned char*)0x01848000, n); // This takes full n now
 	//SH4_pkt_to_mem_X_movca_32_linear(dest, (unsigned char*)0x01848000, n + 2); // This takes full n now
-	memcpy_32bit(dest, (unsigned char*)0x81848000, (n + 2 + 3)/4); // Lol this is as fast as the asm functions
-	CacheBlockInvalidate((unsigned char*)0x81848000, (n + 2 + 31)/32); // Need to invalidate the src packet
+	memcpy_32bit(dest, (unsigned char*)GAPS_DMA_AREA, (n + 2 + 3)/4); // Lol this is as fast as the asm functions
+	CacheBlockInvalidate((unsigned char*)GAPS_DMA_AREA, (n + 2 + 31)/32); // Need to invalidate the src packet
 	CacheBlockWriteBack(dest, (2 + n + 31)/32);
 }
 

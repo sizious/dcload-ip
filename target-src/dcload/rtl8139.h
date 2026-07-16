@@ -259,11 +259,6 @@
 #define REGC(a) (volatile unsigned char *)(a)
 #define vuc volatile unsigned char
 
-/* Configuration definitions */
-// RTL8139 RX buffer size.
-#define RX_BUFFER_LEN        16384U
-//#define RX_BUFFER_LEN        32768U
-
 #define GAPSPCI_ID "GAPSPCI_BRIDGE_2"
 
 /* RTL8139C Config/Status info */
