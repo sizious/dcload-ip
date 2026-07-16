@@ -490,12 +490,12 @@ int rtl_bb_init(void)
 
 void rtl_bb_start(void)
 {
-	nic32[RT_RXCONFIG/4] |= 0x0000000a;
+	g2_write_32(NIC(RT_RXCONFIG), g2_read_32(NIC(RT_RXCONFIG)) | (RT_RXC_APM | RT_RXC_AB));
 }
 
 void rtl_bb_stop(void)
 {
-	nic32[RT_RXCONFIG/4] &= 0xfffffff5;
+    g2_write_32(NIC(RT_RXCONFIG), g2_read_32(NIC(RT_RXCONFIG)) & ~(RT_RXC_APM | RT_RXC_AB));
 }
 
 int rtl_bb_tx(unsigned char * pkt, int len) // pg. 15 in RTL8139C datasheet: http://realtek.info/pdf/rtl8139cp.pdf
@@ -783,9 +783,10 @@ static int rtl_bb_rx()
 		}
 
 		// Ack it
-		unsigned short i = nic16[RT_INTRSTATUS/2];
-		if (i & RT_INT_RX_ACK)
-			nic16[RT_INTRSTATUS/2] = RT_INT_RX_ACK;
+        unsigned short intr = g2_read_16(NIC(RT_INTRSTATUS));
+
+        if(intr & RT_INT_RX_ACK)
+            g2_write_16(NIC(RT_INTRSTATUS), RT_INT_RX_ACK);
 
 		processed++;
 
@@ -830,10 +831,10 @@ void rtl_bb_loop(int is_main_loop)
 	{
 
 		/* Check interrupt status */
-		if (nic16[RT_INTRSTATUS/2] != intr)
+		if (g2_read_16(NIC(RT_INTRSTATUS)) != intr)
 		{
-			intr = nic16[RT_INTRSTATUS/2];
-			nic16[RT_INTRSTATUS/2] = intr & ~RT_INT_RX_ACK;
+			intr = g2_read_16(NIC(RT_INTRSTATUS));
+            g2_write_16(NIC(RT_INTRSTATUS), intr & ~RT_INT_RX_ACK);
 		}
 
 		/* Did we receive some data? */
@@ -858,8 +859,8 @@ void rtl_bb_loop(int is_main_loop)
 			while (!(nic16[RT_MII_BMSR/2] & 0x20));
 
 			/* wait for the additional link change interrupt that is coming */
-			while (!(nic16[RT_INTRSTATUS/2] & RT_INT_RXFIFO_UNDERRUN));
-			nic16[RT_INTRSTATUS/2] = RT_INT_RXFIFO_UNDERRUN;
+			while (!(g2_read_16(NIC(RT_INTRSTATUS)) & RT_INT_RXFIFO_UNDERRUN));
+            g2_write_16(NIC(RT_INTRSTATUS), RT_INT_RXFIFO_UNDERRUN);
 
 			if (booted && (!running))
 			{
@@ -883,7 +884,7 @@ void rtl_bb_loop(int is_main_loop)
 		{
 			/* must clear Rx Buffer Overflow too for some reason */
 			// It's an errata (hardware bug/quirk), this needs to be done.
-			nic16[RT_INTRSTATUS/2] = RT_INT_RXBUF_OVERFLOW;
+			g2_write_16(NIC(RT_INTRSTATUS), RT_INT_RXBUF_OVERFLOW);
 		}
 
 		/* Rx Buffer overflow */
@@ -906,7 +907,7 @@ void rtl_bb_loop(int is_main_loop)
 			nic32[RT_RXCONFIG/4] = 0x0000f60a; // This should be whatever is set in init plus enabling packet reception (| 0x...a)
 
 			// clear interrupts
-			nic16[RT_INTRSTATUS/2] = 0xffff;
+            g2_write_16(NIC(RT_INTRSTATUS), 0xffff);
 	*/
 			// NetBSD, FreeBSD, and OpenBSD all just do a full re-init if this happens.
 			rtl_init();
