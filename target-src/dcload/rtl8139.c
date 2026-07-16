@@ -65,7 +65,15 @@ static int rtl_bb_rx(void);
 
 #define RX_BUFFER_SHIFT         1 /* 0 : 8Kb, 1 : 16Kb, 2 : 32Kb, 3 : 64Kb */
 
+#define RX_CONFIG_DEFAULT       (RT_ERTH(0) | RT_RXC_RXFTH(2) | \
+                                RT_RXC_RBLEN(RX_BUFFER_SHIFT) | RT_RXC_MXDMA(1) | \
+                                RT_RXC_WRAP)
+
 #define RX_BUFFER_LEN           (0x2000 << RX_BUFFER_SHIFT)
+
+/* Set IFG to NOT violate 802.3 standard, 32 byte DMA burst */
+#define TX_MAX_DMA_BURST        1 /* 2^(4+n) bytes from 0-7 (16b - 2Kb) */
+#define TX_CONFIG               ((TX_MAX_DMA_BURST<<8) | 0x03000000)
 
 #define TX_BUFFER_OFFSET        (RX_BUFFER_LEN + 0x2000)
 #define TX_BUFFER_LEN           (0x800)
@@ -162,33 +170,37 @@ static void rtl_init(void)
 	// reset it AGAIN...
 	rtl_reset();
 
-	// Another dance of some kind...
-	nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE;
-	if(nic8[RT_CHIPCMD] == RT_CMD_RX_ENABLE)
-	{
-		nic8[RT_CHIPCMD] = RT_CMD_TX_ENABLE;
-		if(nic8[RT_CHIPCMD] == RT_CMD_TX_ENABLE)
-		{
-			nic8[RT_CHIPCMD] = 0; // Disable RX and TX now...
-		}
-	}
+    /* Perform some magic enable/disable dance */
+    g2_write_8(NIC(RT_CHIPCMD), RT_CMD_RX_ENABLE);
+
+    if(g2_read_8(NIC(RT_CHIPCMD)) == RT_CMD_RX_ENABLE) {
+        g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE);
+
+        if(g2_read_8(NIC(RT_CHIPCMD)) == RT_CMD_TX_ENABLE) {
+            /* Disable RX and TX */
+            g2_write_8(NIC(RT_CHIPCMD), 0);
+        }
+    }
 
 	asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
 
-	// Yet another dance of some kind...
-	nic32[RT_MAR0/4 + 0] = 0x55aaff00;
-	nic32[RT_MAR0/4 + 1] = 0xaa5500ff;
+    /* Now a dance with the Multicast Register before Enabling */
+    g2_write_32(NIC(RT_MAR0), 0x55aaff00);
+    g2_write_32(NIC(RT_MAR4), 0xaa5500ff);
 
-	if((nic32[RT_MAR0/4 + 0] == 0x55aaff00) && (nic32[RT_MAR0/4 + 1] == 0xaa5500ff))
-	{
-		nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE;
-		nic32[RT_MAR0/4 + 0] = 0xffffffff;
-		nic32[RT_MAR0/4 + 1] = 0xffffffff;
-	}
+    if((g2_read_32(NIC(RT_MAR0)) == 0x55aaff00) && 
+       (g2_read_32(NIC(RT_MAR4)) == 0xaa5500ff)) {
+        /* Enable receive and transmit functions */
+        g2_write_8(NIC(RT_CHIPCMD), RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE);
+
+        g2_write_32(NIC(RT_MAR0), 0xffffffff);
+        g2_write_32(NIC(RT_MAR4), 0xffffffff);
+    }
 
 	asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
 
-	nic16[RT_INTRMASK/2] = 0; // Disable interrupts
+    /* Disable all interrupts */
+    g2_write_16(NIC(RT_INTRMASK), 0);
 /*
 		//
 		// Very strange initialization stuff. Maybe getting this crazy init sequence right doubles the RX transfer
@@ -331,69 +343,61 @@ static void rtl_init(void)
 // TODO tune twister seems like a useful thing
 // See https://github.com/torvalds/linux/blob/master/drivers/net/ethernet/realtek/8139too.c#L1481
 
-	/* Enable receive and transmit functions */
-	nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE;
+    /* Enable receive and transmit functions ... again*/
+    g2_write_8(NIC(RT_CHIPCMD), RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE);
 
-	/* Set Rx FIFO threshold to 16 bytes, Rx size to 16k+16, 1024 byte DMA burst */
-//	nic32[RT_RXCONFIG/4] = 0x00000e00; // (1<<7 = 0x80) for nowrap or bit 7 = 0 for wrap, 1024 byte dma burst (6<<8 = 0x600)
-	// Why only 16k + 16? let's do 32k + 16.
-	nic32[RT_RXCONFIG/4] = 0x00004980; // nowrap, 16k + 16, 32 byte DMA burst, 64 byte Rx threshold, Early Rx: none
-//	nic32[RT_RXCONFIG/4] = 0x00002980; // nowrap, 16k + 16, 32 byte DMA burst, 32 byte Rx threshold, Early Rx: none
-//	nic32[RT_RXCONFIG/4] = 0x00005180; // nowrap, 32k + 16, 32 byte DMA burst, 64 byte Rx threshold, Early Rx: none
+    /* Set Rx FIFO threshold to 64 bytes, Rx size to 16k+16, 32 byte DMA burst */
+    g2_write_32(NIC(RT_RXCONFIG), RX_CONFIG_DEFAULT);
 
-//	nic32[RT_RXCONFIG/4] = 0x00005100; // wrap, 32k + 16, 32 byte DMA burst, 64 byte Rx threshold, Early Rx: none
-//	nic32[RT_RXCONFIG/4] = 0x00004900; // wrap, 16k + 16, 32 byte DMA burst, 64 byte Rx threshold, Early Rx: none
+    /* Set IFG to NOT violate 802.3 standard, 32 byte DMA burst */
+    g2_write_32(NIC(RT_TXCONFIG), TX_CONFIG);
 
-	/* Set Tx 1024 byte DMA burst */
-	// Found a bug: this was 00000600 before. 1024 byte DMA burst is 0x600 (hex), not 600 (dec).
-	// See pgs. 20-21 of RTL8139 datasheet: http://realtek.info/pdf/rtl8139cp.pdf
-//>	nic32[RT_TXCONFIG/4] = 0x03000600; // Set IFG to NOT violate 802.3 standard, 1024 byte DMA burst
-	nic32[RT_TXCONFIG/4] = 0x03000100; // Set IFG to NOT violate 802.3 standard, 32 byte DMA burst
-
-	/* Enable writing to the config registers */
-	nic8[RT_CFG9346] = 0xc0;
+    /* Enable writing to the config registers */
+    g2_write_8(NIC(RT_CFG9346), 0xc0);
 
 	/* Disable power management (zeroes are otherwise default values) */
 	// and 	/* Set the driver-loaded bit (0x20) */
 	// LEDs are apparently meant to be set to 0b10. Maybe those pins are repurposed?
-	nic8[RT_CONFIG1] = (nic8[RT_CONFIG1] | 0x80 | 0x20) & 0xbf;
+    g2_write_8(NIC(RT_CONFIG1), (g2_read_8(NIC(RT_CONFIG1)) & 
+        ~(RT_CONFIG1_LED0)) | RT_CONFIG1_DVRLOAD | RT_CONFIG1_LED1);
 
-	/* Enable FIFO auto-clear */
-	nic8[RT_CONFIG4] |= 0x80;
+    /* Enable FIFO auto-clear */
+    g2_write_8(NIC(RT_CONFIG4), g2_read_8(NIC(RT_CONFIG4)) | RT_CONFIG4_RxFIFIOAC);
 
 	// Make internal FIFO address pointer increment downwards
 	// This apparently can be set without unlocking the EEPROM,
 	// but might as well keep it here with the others.
-	nic8[RT_CONFIG5] |= 0x04;
+    /* Disable Link-Down Power Saver - this may have not been intended based on the previous comment*/
+    g2_write_8(NIC(RT_CONFIG5), g2_read_8(NIC(RT_CONFIG5)) | RT_CONFIG5_LDPS);
 
-	/* Switch back to normal operation mode */
-	nic8[RT_CFG9346] = 0;
+    /* Switch back to normal operation mode */
+    g2_write_8(NIC(RT_CFG9346), 0);
 
-	/* Filter out all multicast packets */
-	nic32[RT_MAR0/4 + 0] = 0;
-	nic32[RT_MAR0/4 + 1] = 0;
+    /* Filter out all multicast packets */
+    g2_write_32(NIC(RT_MAR0), 0);
+    g2_write_32(NIC(RT_MAR4), 0);
 
-	/* Disable all multi-interrupts */
-	nic16[RT_MULTIINTR/2] = 0;
+    /* Disable all multi-interrupts */
+    g2_write_16(NIC(RT_MULTIINTR), 0);
 
 	/* clear all interrupts */
-	nic16[RT_INTRSTATUS/2] = 0xffff;
+    g2_write_16(NIC(RT_INTRSTATUS), 0xffff);
 
-	/* Reset RXMISSED counter */
-	nic32[RT_RXMISSED/4] = 0;
+    /* Reset RXMISSED counter */
+    g2_write_32(NIC(RT_RXMISSED), 0);
 
-	/* Enable RX/TX once more */
-	nic8[RT_CHIPCMD] = RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE;
+    /* Enable RX/TX once more */
+    g2_write_8(NIC(RT_CHIPCMD), RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE);
 
-	/* Enable auto-negotiation and restart that process */
-	nic16[RT_MII_BMCR/2] |= 0x9200;
+    /* Reset, Enable, and start auto-negotiation */
+    g2_write_16(NIC(RT_MII_BMCR), RT_MII_RESET | RT_MII_AN_ENABLE | RT_MII_AN_START);
 
 	/* Initialize status vars */
 	rtl.cur_tx = 0;
 	rtl.cur_rx = 0;
 
-	/* Enable receiving broadcast and physical match packets */
-	nic32[RT_RXCONFIG/4] |= 0x0000000a;
+    /* Enable receiving broadcast and physical match packets */
+    g2_write_32(NIC(RT_RXCONFIG), g2_read_32(NIC(RT_RXCONFIG)) | RT_RXC_APM | RT_RXC_AB);
 }
 
 int rtl_bb_init(void)
