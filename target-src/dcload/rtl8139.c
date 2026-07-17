@@ -85,7 +85,6 @@ static int rtl_bb_rx(void);
 #define NIC(ADDR) (GAPS_BASE + 0x1700 + (ADDR))
 
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
-static vus *const nic16 = REGS(NIC(0));
 static vul *const nic32 = REGL(NIC(0));
 
 /* 8, 16, and 32 bit access to the PCI MEMMAP space (configured by GAPS) */
@@ -274,7 +273,8 @@ static void rtl_init(void) {
         : // clobbers
         );
 
-        nic16[RT_INTRMASK/2] = 0x53; // Enable specific interrupts
+        // Enable specific interrupts
+        g2_write_16(NIC(RT_INTRMASK), RT_INT_RXFIFO_OVERFLOW | RT_INT_RXBUF_OVERFLOW | RT_INT_RX_ERR | RT_INT_RX_OK);
 
         asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
 
@@ -325,7 +325,8 @@ static void rtl_init(void) {
 
         asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
 
-        nic16[RT_INTRMASK/2] = 0; // Disable interrupts because we don't want them
+        // Disable interrupts because we don't want them
+        g2_write_16(NIC(RT_INTRMASK), 0);
         // Restore SR
         asm volatile ("ldc %[in], SR\n"
         : // outputs
@@ -742,7 +743,7 @@ static int rtl_bb_rx() {
         if(rtl.cur_rx >= RX_BUFFER_LEN) {
             // Prevent underflowing the RX buffer
             rtl.cur_rx %= RX_BUFFER_LEN;
-            nic16[RT_RXBUFTAIL/2] = 0x7ff0;
+            g2_write_16(NIC(RT_RXBUFTAIL), 0x7ff0);
             // According to the RTL8139C datasheet, 0xfff0 = 65520 is the default value of the register,
             // and the register cannot be written to before data has been read from the buffer for some
             // reason. So, presumably, we can just use that value here.
@@ -755,7 +756,7 @@ static int rtl_bb_rx() {
         }
         else {
             rtl.cur_rx %= RX_BUFFER_LEN;
-            nic16[RT_RXBUFTAIL/2] = rtl.cur_rx - 16;
+            g2_write_16(NIC(RT_RXBUFTAIL), rtl.cur_rx - 16);
             // Why 16? NetBSD and Linux do this, too. Status is 4, CRC appended is 4, what's the other 8?
             // Things don't work if this isn't 16, anyways (I tried changing it). Maybe this is 16 for DMA reasons?
             // RealTek does it here: https://www.cs.usfca.edu/~cruse/cs326f04/RTL8139_ProgrammersGuide.pdf
@@ -827,10 +828,11 @@ void rtl_bb_loop(int is_main_loop) {
                 disp_status("link change...");
             }
 
-            nic16[RT_MII_BMCR/2] = 0x9200;
+            /* Reset, Enable, and start auto-negotiation */
+            g2_write_16(NIC(RT_MII_BMCR), RT_MII_RESET | RT_MII_AN_ENABLE | RT_MII_AN_START);
 
             /* wait for valid link */
-            while(!(nic16[RT_MII_BMSR/2] & 0x20));
+            while(!(g2_read_16(NIC(RT_MII_BMSR)) & RT_MII_AN_COMPLETE));
 
             /* wait for the additional link change interrupt that is coming */
             while(!(g2_read_16(NIC(RT_INTRSTATUS)) & RT_INT_RXFIFO_UNDERRUN));
@@ -862,8 +864,8 @@ void rtl_bb_loop(int is_main_loop) {
         if(intr & RT_INT_RXBUF_OVERFLOW) {
 /*
             // Update CAPR
-            rtl.cur_rx = nic16[RT_RXBUFHEAD];
-            nic16[RT_RXBUFTAIL] = rtl.cur_rx - 16;
+            rtl.cur_rx = g2_read_16(NIC(RT_RXBUFHEAD));
+            g2_write_16(NIC(RT_RXBUFTAIL), rtl.cur_rx - 16);
             rtl.cur_rx = 0;
 
             // Disable receive
