@@ -29,27 +29,11 @@ static char uint_string_array[11] = {0};
 #endif
 // end TEMP
 
-// Pull together all the goodies
-adapter_t adapter_bba = {
-    "Broadband Adapter (HIT-0400)",
-    { 0 },      // Mac address
-    { 0 },      // 2-byte alignment pad
-    gaps_detect,
-    gaps_init,
-    rtl_bb_start,
-    rtl_bb_stop,
-    rtl_bb_loop,
-    rtl_bb_tx
-};
-
 static rtl_status_t rtl = {0};
 static volatile unsigned char rtl_link_up = 0;
 static volatile unsigned char rtl_is_copying = 0;
 
-static void rtl_reset(void);
 static void rtl_init(void);
-static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n);
-static int rtl_bb_rx(void);
 
 /* KOS API shim definitions */
 
@@ -88,7 +72,7 @@ static int rtl_bb_rx(void);
 #define GAPS_BASE               (0x01000000 | MEM_AREA_P2_BASE)
 
 /* Detect a GAPS PCI bridge */
-int gaps_detect(void) {
+static int gaps_detect(void) {
     // This pointer's data is always aligned to 4 bytes--just look at the register address!
     const char *str = (char *)REGC(0xa1001400);
     if(!memcmp_32bit_eq(str, GAPSPCI_ID, 16/4)) {
@@ -107,7 +91,7 @@ int gaps_detect(void) {
 }
 
 /* Initialize GAPS PCI bridge */
-int gaps_init(void) {
+static int gaps_init(void) {
     int i;
 
     // The BBA uses the range 0x01840000-0x0184ffff for TX and RX (with usage above
@@ -485,16 +469,16 @@ static void rtl_init(void) {
 }
 
 
-void rtl_bb_start(void) {
+static void rtl_bb_start(void) {
     g2_write_32(NIC(RT_RXCONFIG), g2_read_32(NIC(RT_RXCONFIG)) | (RT_RXC_APM | RT_RXC_AB));
 }
 
-void rtl_bb_stop(void) {
+static void rtl_bb_stop(void) {
     g2_write_32(NIC(RT_RXCONFIG), g2_read_32(NIC(RT_RXCONFIG)) & ~(RT_RXC_APM | RT_RXC_AB));
 }
 
 // pg. 15 in RTL8139C datasheet: http://realtek.info/pdf/rtl8139cp.pdf
-int rtl_bb_tx(unsigned char *pkt, int len) {
+static int rtl_bb_tx(unsigned char *pkt, int len) {
     // According to KOS source we gotta wait for G2 FIFO to be empty by checking
     // this bit before reading from/writing to G2. So do that here.
     while((*(volatile unsigned int *)0xa05f688c) & 0x20U);
@@ -666,7 +650,7 @@ static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n) {
     CacheBlockWriteBack(dest, (2 + n + 31)/32);
 }
 
-static int rtl_bb_rx() {
+static int rtl_bb_rx(void) {
     int processed;
     unsigned int rx_status;
     unsigned int rx_size, pkt_size, ring_offset;
@@ -791,7 +775,7 @@ static int rtl_bb_rx() {
     return processed;
 }
 
-void rtl_bb_loop(int is_main_loop) {
+static void rtl_bb_loop(int is_main_loop) {
     unsigned int intr = 0;
     unsigned int loop_start[2] = {0};
     unsigned int loop_measure[2] = {0};
@@ -915,3 +899,16 @@ void rtl_bb_loop(int is_main_loop) {
     }
     escape_loop = 0;
 }
+
+// Pull together all the goodies
+adapter_t adapter_bba = {
+    "Broadband Adapter (HIT-0400)",
+    { 0 },      // Mac address
+    { 0 },      // 2-byte alignment pad
+    gaps_detect,
+    gaps_init,
+    rtl_bb_start,
+    rtl_bb_stop,
+    rtl_bb_loop,
+    rtl_bb_tx
+};

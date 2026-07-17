@@ -268,11 +268,4 @@ typedef struct {
 	unsigned char  mac[6];                /* Mac address */
 } rtl_status_t;
 
-int gaps_detect(void);
-int gaps_init(void);
-void rtl_bb_start(void);
-void rtl_bb_stop(void);
-int rtl_bb_tx(unsigned char * pkt, int len);
-void rtl_bb_loop(int is_main_loop);
-
 #endif
