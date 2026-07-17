@@ -84,13 +84,8 @@ static int rtl_bb_rx(void);
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
 #define NIC(ADDR) (GAPS_BASE + 0x1700 + (ADDR))
 
-/* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
-static vul *const nic32 = REGL(NIC(0));
-
 /* 8, 16, and 32 bit access to the PCI MEMMAP space (configured by GAPS) */
-//static vuc *const mem8 = REGC(RTL_MEM | MEM_AREA_P2_BASE);
-//static vus *const mem16 = REGS(RTL_MEM | MEM_AREA_P2_BASE);
-static vul *const mem32 = REGL(RTL_MEM | MEM_AREA_P2_BASE);
+static uint32_t const rtl_mem = MEM_AREA_P2_BASE + RTL_MEM;
 
 #define GAPS_RX_IO_AREA (RTL_MEM | MEM_AREA_P1_BASE)
 #define GAPS_TX_IO_AREA (RTL_MEM | MEM_AREA_P1_BASE)
@@ -497,14 +492,15 @@ int rtl_bb_tx(unsigned char *pkt, int len) {
     // this bit before reading from/writing to G2. So do that here.
     while((*(volatile unsigned int *)0xa05f688c) & 0x20U);
 
-    while(!(nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x2000U)) {
+    while(!(g2_read_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx)) & RT_TX_HOST_OWNS)) {
         // While tx is not complete (checking OWN)
-        if(nic32[RT_TXSTATUS0/4 + rtl.cur_tx] & 0x40000000U) {
+        if(g2_read_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx)) & RT_TX_ABORTED) {
             // Check for abort
-            // Found another bug: (nic32[RT_TXSTATUS0/4 + rtl.cur_tx] |= 1; // <-- If abort, set descriptor size to 1)
+            // Found another bug: (g2_write_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx),
+            //                      g2_read_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx)) | 1); // <-- If abort, set descriptor size to 1)
             // |= the length to 1 doesn't do anything if the length is an odd number >= 1...
             // Should probably be RT_TXCONFIG register |= 1, which clears abort state and retransmits, see pg 21 of RTL8139C or pg 17 of RTL8139D datasheet
-            nic32[RT_TXCONFIG/4] |= 0x1;
+            g2_write_32(NIC(RT_TXCONFIG), g2_read_32(NIC(RT_TXCONFIG)) | 0x1);
         }
     }
 
@@ -631,9 +627,10 @@ int rtl_bb_tx(unsigned char *pkt, int len) {
     // Software writes don't impact the read-only bits.
     // Zeroing also sets Early FIFO TX threshold to 8 bytes.
     // Finally, writing to the status register triggers the packet send.
-    nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len | 0x20000; // Set Early TX to 64 bytes
-    //nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len | 0x10000; // Set Early TX to 32 bytes
-    //nic32[RT_TXSTATUS0/4 + rtl.cur_tx] = len;
+    /* Transmit from the current TX buffer */
+    g2_write_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx), len | 0x20000); // Set Early TX to 64 bytes
+    //g2_write_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx), len | 0x10000); // Set Early TX to 32 bytes
+    //g2_write_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx), len);
 
     rtl.cur_tx = (rtl.cur_tx + 1) % 4; // Move to next txdesc buffer
 
@@ -679,7 +676,7 @@ static int rtl_bb_rx() {
         // Use uncached area for this intentionally, in case of rtl_is_copying.
         // Don't want to accidentally cache an unfinished packet.
         // This also means we don't have to worry about invalidating a block holding the status byte. Nice!
-        rx_status = mem32[0x0000/4 + ring_offset/4];
+        rx_status = g2_read_32(rtl_mem + ring_offset);
         rx_size = (rx_status >> 16) & 0xffffU;
 
         /* apparently this means the rtl8139 is still copying */
@@ -876,7 +873,7 @@ void rtl_bb_loop(int is_main_loop) {
                 g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE | RT_CMD_RX_ENABLE); // Weirdly, keep spamming re-enable receive
 
             // Re-set RXCONFIG
-            nic32[RT_RXCONFIG/4] = 0x0000f60a; // This should be whatever is set in init plus enabling packet reception (| 0x...a)
+            g2_write_32(NIC(RT_RXCONFIG), 0x0000f60a); // This should be whatever is set in init plus enabling packet reception (| 0x...a)
 
             // clear interrupts
             g2_write_16(NIC(RT_INTRSTATUS), 0xffff);
