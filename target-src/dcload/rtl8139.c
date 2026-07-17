@@ -85,7 +85,6 @@ static int rtl_bb_rx(void);
 #define NIC(ADDR) (GAPS_BASE + 0x1700 + (ADDR))
 
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
-static vuc *const nic8 = REGC(NIC(0));
 static vus *const nic16 = REGS(NIC(0));
 static vul *const nic32 = REGL(NIC(0));
 
@@ -671,7 +670,7 @@ static int rtl_bb_rx() {
     processed = 0;
 
     /* While we have frames left to process... */
-    while(!(nic8[RT_CHIPCMD] & 1)) {
+    while(!(g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RX_BUF_EMPTY)) {
 
         /* Get frame size and status */
         // Don't need the % there for nowrap since it happens later.
@@ -868,11 +867,11 @@ void rtl_bb_loop(int is_main_loop) {
             rtl.cur_rx = 0;
 
             // Disable receive
-            nic8[RT_CHIPCMD] = RT_CMD_TX_ENABLE;
+            g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE);
 
             // Wait for it
-            while( !(nic8[RT_CHIPCMD] & RT_CMD_RX_ENABLE))
-                nic8[RT_CHIPCMD] = RT_CMD_TX_ENABLE | RT_CMD_RX_ENABLE; // Weirdly, keep spamming re-enable receive
+            while( !(g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RX_ENABLE))
+                g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE | RT_CMD_RX_ENABLE); // Weirdly, keep spamming re-enable receive
 
             // Re-set RXCONFIG
             nic32[RT_RXCONFIG/4] = 0x0000f60a; // This should be whatever is set in init plus enabling packet reception (| 0x...a)
