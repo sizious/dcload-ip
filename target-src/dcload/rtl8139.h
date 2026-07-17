@@ -269,7 +269,7 @@ typedef struct {
 } rtl_status_t;
 
 int gaps_detect(void);
-int rtl_bb_init(void);
+int gaps_init(void);
 void rtl_bb_start(void);
 void rtl_bb_stop(void);
 int rtl_bb_tx(unsigned char * pkt, int len);
