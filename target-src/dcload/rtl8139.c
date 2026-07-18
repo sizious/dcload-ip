@@ -15,19 +15,55 @@
 #include "memfuncs.h"
 #include "perfctr.h"
 
-// TEMP
-//#define LOOP_TIMING
+/* Performance Testing */
 //#define TX_LOOP_TIMING
 //#define RX_LOOP_TIMING
 //#define PKT_PROCESS_TIMING
 //#define FULL_TRIP_TIMING
 
-#ifdef LOOP_TIMING
-//#include "perfctr.h"
-#include "video.h"
-static char uint_string_array[11] = {0};
+#if defined(TX_LOOP_TIMING) || defined(FULL_TRIP_TIMING) || defined(RX_LOOP_TIMING) || defined(PKT_PROCESS_TIMING)
+    #include "video.h"
+    static char uint_string_array[11] = {0};
 #endif
-// end TEMP
+
+#define TIMING_START(var) uint64_t _##var = PMCR_RegRead(DCLOAD_PMCR);
+#define TIMING_PRINT(var, var2, line) uint64_t _##var2 = PMCR_RegRead(DCLOAD_PMCR); \
+                                    clear_lines(line, 24, global_bg_color); \
+                                    uint_to_string_dec((unsigned int)(_##var2 - _##var), (char*)uint_string_array); \
+                                    draw_string(30, line, uint_string_array, STR_COLOR);
+
+#ifdef TX_LOOP_TIMING
+    #define TX_LOOP_TIMING_START    TIMING_START(first_array)
+    #define TX_LOOP_TIMING_PRINT    TIMING_PRINT(first_array, second_array, 222)
+#else
+    #define TX_LOOP_TIMING_START
+    #define TX_LOOP_TIMING_PRINT
+#endif
+
+#ifdef FULL_TRIP_TIMING
+    #define FULL_TRIP_TIMING_START  TIMING_START(first_array1)
+    #define FULL_TRIP_TIMING_PRINT  TIMING_PRINT(first_array1, second_array1, 412)
+#else
+    #define FULL_TRIP_TIMING_START
+    #define FULL_TRIP_TIMING_PRINT
+#endif
+
+#ifdef RX_LOOP_TIMING
+    #define RX_LOOP_TIMING_START    TIMING_START(first_array)
+    #define RX_LOOP_TIMING_PRINT    TIMING_PRINT(first_array, second_array, 246)
+#else
+    #define RX_LOOP_TIMING_START
+    #define RX_LOOP_TIMING_PRINT
+#endif
+
+#ifdef PKT_PROCESS_TIMING
+    #define PKT_PROCESS_TIMING_START    asm volatile ("nop\n" : : : "memory"); \
+                                        TIMING_START(first_array2)
+    #define PKT_PROCESS_TIMING_PRINT    TIMING_PRINT(first_array2, second_array2, 270)
+#else
+    #define PKT_PROCESS_TIMING_START
+    #define PKT_PROCESS_TIMING_PRINT
+#endif
 
 static volatile unsigned char rtl_link_up = 0;
 static volatile unsigned char rtl_is_copying = 0;
@@ -512,10 +548,8 @@ static int rtl_bb_tx(unsigned char *pkt, int len) {
         }
     }
 
-// Tx time
-#ifdef TX_LOOP_TIMING
-    unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
-#endif
+    // Tx time
+    TX_LOOP_TIMING_START
 
     unsigned char *copyback_pkt_base = to_p1(&pkt[-2]); // copyback base in cached memory area
 
@@ -621,15 +655,8 @@ static int rtl_bb_tx(unsigned char *pkt, int len) {
     SH4_mem_to_pkt_X_movca_32((unsigned char *)GAPS_DMA_AREA, copyback_pkt_base, len);
     // Technically this will prefetch beyond 1536 for packets between 1504 and 1514 in size, but that's not an issue.
 
-// Tx time end
-#ifdef TX_LOOP_TIMING
-    unsigned long long int second_array = PMCR_RegRead(DCLOAD_PMCR);
-    unsigned int loop_difference = (unsigned int)(second_array - first_array);
-
-    clear_lines(222, 24, global_bg_color);
-    uint_to_string_dec(loop_difference, (char*)uint_string_array);
-    draw_string(30, 222, uint_string_array, STR_COLOR);
-#endif
+    // Tx time end
+    TX_LOOP_TIMING_PRINT
 
     // Set len (SIZE field), destructively zeroing out all other R/W settings. OWN needs to be cleared by software; it does here.
     // Software writes don't impact the read-only bits.
@@ -696,50 +723,28 @@ static int rtl_bb_rx(void) {
 
         pkt_size = rx_size - 4;
 
-// Full loop timing
-#ifdef FULL_TRIP_TIMING
-        unsigned long long int first_array1 = PMCR_RegRead(DCLOAD_PMCR);
-#endif
+        // Full loop timing
+        FULL_TRIP_TIMING_START
 
         if((rx_status & 1) && (pkt_size <= RX_PKT_BUF_SIZE)) {
             pkt = (unsigned char *)(GAPS_RX_IO_AREA + 0x0000 + ring_offset + 4); // + 4 to skip the status byte (DMA)
 
-// Rx time
-#ifdef RX_LOOP_TIMING
-            unsigned long long int first_array = PMCR_RegRead(DCLOAD_PMCR);
-#endif
+            // Rx time
+            RX_LOOP_TIMING_START
 
             pktcpy(raw_current_pkt, pkt, pkt_size); // SH4_pkt_to_mem() will shift it by 2 for current_pkt
 
-// Rx time end
-#ifdef RX_LOOP_TIMING
-            unsigned long long int second_array = PMCR_RegRead(DCLOAD_PMCR);
-            unsigned int loop_difference = (unsigned int)(second_array - first_array);
+            // Rx time end
+            RX_LOOP_TIMING_PRINT
 
-            clear_lines(246, 24, global_bg_color);
-            uint_to_string_dec(loop_difference, (char *)uint_string_array);
-            draw_string(30, 246, uint_string_array, STR_COLOR);
-#endif
-
-// Process time
-#ifdef PKT_PROCESS_TIMING
-            asm volatile ("nop\n" : : : "memory");
-            unsigned long long int  first_array2 = PMCR_RegRead(DCLOAD_PMCR);
-#endif
+            // Process time
+            PKT_PROCESS_TIMING_START
 
             //process_pkt(current_pkt);
             process_pkt(to_p1(current_pkt));
 
-// Process time end
-#ifdef PKT_PROCESS_TIMING
-            unsigned long long int second_array2 = PMCR_RegRead(DCLOAD_PMCR);
-            unsigned int loop_difference2 = (unsigned int)(second_array2 - first_array2);
-
-            clear_lines(270, 24, global_bg_color);
-            uint_to_string_dec(loop_difference2, (char *)uint_string_array);
-            draw_string(30, 270, uint_string_array, STR_COLOR);
-#endif
-
+            // Process time end
+            PKT_PROCESS_TIMING_PRINT
         }
 
         // Align next packet to 4-bytes (add 4 to account for transmit status; the 4 extra bytes included in rx_size are the CRC)
@@ -779,14 +784,7 @@ static int rtl_bb_rx(void) {
 
         processed++;
 
-#ifdef FULL_TRIP_TIMING
-        unsigned long long int second_array1 = PMCR_RegRead(DCLOAD_PMCR);
-        unsigned int loop_difference1 = (unsigned int)(second_array1 - first_array1);
-
-        clear_lines(412, 24, global_bg_color);
-        uint_to_string_dec(loop_difference1, (char *)uint_string_array);
-        draw_string(30, 412, uint_string_array, STR_COLOR);
-#endif
+        FULL_TRIP_TIMING_PRINT
     }
 
     return processed;
