@@ -14,6 +14,7 @@
 #include "dhcp.h"
 #include "memfuncs.h"
 #include "perfctr.h"
+#include "video.h"
 
 /* Performance Testing */
 //#define TX_LOOP_TIMING
@@ -22,7 +23,6 @@
 //#define FULL_TRIP_TIMING
 
 #if defined(TX_LOOP_TIMING) || defined(FULL_TRIP_TIMING) || defined(RX_LOOP_TIMING) || defined(PKT_PROCESS_TIMING)
-    #include "video.h"
     static char uint_string_array[11] = {0};
 #endif
 
@@ -71,6 +71,96 @@ static volatile unsigned char rtl_is_copying = 0;
 static void rtl_init(void);
 
 /* KOS API shim definitions */
+
+static void g2_memzero(unsigned char *copyback_pkt_base, unsigned int len) {
+    // So pad it.
+    //
+    // We absolutely need to pad this, otherwise prior packets can leak into the
+    // padding. It's called "EtherLeak," and the RTL8139 is apparently a poster
+    // child chipset for the issues that come from lacking auto-pad.
+
+    unsigned int copyback_pkt_offset_len = 2 + len;
+    unsigned int copyback_pkt_len_align4 = copyback_pkt_offset_len & -4; // relative to copyback packet base
+    unsigned int copyback_pkt_extras = copyback_pkt_offset_len - copyback_pkt_len_align4;
+    unsigned int copyback_pkt_extras_end = (copyback_pkt_offset_len + 3) & -4; // This is either equal to or 4 bytes greater than copyback_pkt_len_align4
+
+    // Mix in trailing zeros if there are 1, 2, or 3 extra bytes
+    // Using 4-byte alignment for best performance.
+    if(copyback_pkt_extras) {
+        unsigned int last_data = 0x00000000;
+
+        // Need the 4-byte-aligned offset to store this padding-mixed data
+        unsigned int output_offset = copyback_pkt_len_align4;
+
+        last_data |= copyback_pkt_base[copyback_pkt_len_align4++]; // 1 extra byte
+
+        if(copyback_pkt_len_align4 != (unsigned int)copyback_pkt_offset_len) {
+            last_data |= (unsigned int)(copyback_pkt_base[copyback_pkt_len_align4++]) << 8; // 2 extra bytes
+        }
+
+        if(copyback_pkt_len_align4 != (unsigned int)copyback_pkt_offset_len) {
+            last_data |= (unsigned int)(copyback_pkt_base[copyback_pkt_len_align4]) << 16; // 3 extra bytes
+        }
+
+        // One 4-byte write instead of up to 3x 1-byte writes. For uncached setups, this makes odd-size
+        // small packets take the same total time to copy to the NIC as multiple-of-4-sized packets,
+        // meaning this is all running as fast as possible.
+        *(unsigned int *)(copyback_pkt_base + output_offset) = last_data;
+    }
+
+    // Pad the rest of the packet with zeros, if more trailing zeroes need to be written beyond the mixed bytes
+    // The only time this won't be true for small packets is for one with 17 payload bytes.
+    if(copyback_pkt_extras_end < 64) {
+        // 2 unmodified bytes will end up being written to the RTL's TX buffer (since we just want 60 bytes, which offsets
+        // to 62, and 62 then 4-byte-aligns to 64. Offset everything back 2 bytes to undo the internal ethernet alignment
+        // for transmit results in bytes 65-66 getting copied unzeroed), but that's OK here. The RTL8139C will clobber them
+        // with the second half of a 4-byte CRC because it's been configured to append a CRC, anyways--not to mention we set
+        // a length parameter for transmit, which makes those bytes doubly irrelevant.
+
+        unsigned int zero_remain = 64 - copyback_pkt_extras_end;
+        unsigned int zeroing_top = (unsigned int)copyback_pkt_base + copyback_pkt_extras_end + zero_remain; // add zero_remain for pre-dec
+        zero_remain /= 4; // will equal 1, 2, 3, 4, or 5
+        unsigned int zero_data = 0;
+
+        asm volatile (
+            "clrs\n" // Align for parallelism (CO) - SH4a use "stc SR, Rn" instead with a dummy Rn
+            "dt %[size]\n\t" // Decrement and test size here once to prevent extra jump (EX 1)
+        ".align 2\n"
+        "1:\n\t"
+            // *--nextd = val
+            "mov.l %[data], @-%[out]\n\t" // (LS 1/1)
+            "bf.s 1b\n\t" // (BR 1/2)
+            " dt %[size]\n\t" // (--size) ? 0 -> T : 1 -> T (EX 1)
+            : [out] "+r" (zeroing_top), [size] "+&r" (zero_remain) // outputs
+            : [data] "r" (zero_data) // inputs
+            : "t", "memory" // clobbers
+        );
+        //
+        // GCC does a mediocre job of optimizing memset on SH4 for some reason.
+        // So, for reference, the above assembly just does this (except each loop takes only 2 cycles per iteration):
+        //
+        //          unsigned int zero_remain = (64 - copyback_pkt_extras_end) / 4;
+        //          unsigned int * zeroing_base = (unsigned int*)(copyback_pkt_base + copyback_pkt_extras_end);
+        //
+        //          while(zero_remain--)
+        //          {
+        //              *zeroing_base++ = 0;
+        //          }
+        //
+        // See DreamHAL for a complete set of similarly highly-optimized SH4 functions
+        //
+    }
+
+    // Synchronize zeroed out data with tx buffer
+    // Note that 60 bytes would be offset by 62, still within 2nd cache block
+    // But we write to 64 bytes... which is still within the 2nd cache block ;).
+    CacheBlockWriteBack((unsigned char *)(copyback_pkt_base + 32), 1);
+
+    // NOTE: The reason the minimum length is hardcoded to 60 is because the minimum
+    // frame size allowed is 46 bytes + 14 byte ethernet header. Well, it's actually 64,
+    // but the NIC is configured to auto-append a 4-byte CRC.
+}
+
 
 #define g2_write_8(address, value) *((volatile uint8_t *)(address)) = (value)
 #define g2_write_16(address, value) *((volatile uint16_t *)(address)) = (value)
@@ -250,6 +340,147 @@ static vuc *const txdesc[TX_NB_BUFFERS] = {
 
 #define GAPS_DMA_AREA (GAPS_RX_IO_AREA | 0x8000)
 
+/*
+    Very strange initialization stuff. Maybe getting this crazy init sequence right doubles the RX transfer
+    speed, like how getting the GAPS memory-mapping registers right doubled the TX transfer speed? No idea.
+    NOTE: Maybe these weird packets need to be sent via loopback mode?
+    All this doesn't appear to be totally necessary--at least, things seem to work well without it. Wonder what it's for.
+*/
+static void weird_extra_init(void) {
+    unsigned char *tx_weird = (unsigned char *)(0xa1840000 + 0x6000);
+    unsigned int tx_weird_iter = 0;
+
+    while(tx_weird_iter < 6)
+    {
+        tx_weird[tx_weird_iter] = 0xff; // broadcast mac
+        tx_weird_iter++;
+    }
+    // iter = 6
+    memcpy(&tx_weird[6], adapter_bba.mac, 6); // bba's mac
+    tx_weird_iter += 6; // iter = 12
+    tx_weird[12] = 0xea; // ethertype
+    tx_weird[13] = 0x5; // err, this makes ethertype 0xea05, since network data is BE... Although LE 0x5ea is 1514--GAPS security thing?
+    tx_weird_iter += 2; // iter = 14
+    // Now for the last 1500 of weird packet 1
+    while(tx_weird_iter < 1514)
+    {
+        tx_weird[tx_weird_iter] = 0x55 + (tx_weird_iter - 14); // weird packet 1 payload
+        tx_weird_iter++;
+    }
+    // iter = 1514
+
+    asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
+
+    // read back/check weird packet 1 payload (bytes)
+    tx_weird_iter = 14;
+    while(tx_weird_iter < 1514)
+    {
+        if(tx_weird[tx_weird_iter] == (unsigned char)(0x55 + (tx_weird_iter - 14)) )
+        {
+            tx_weird_iter++;
+        }
+        else
+        {
+            break;
+        }
+    }
+/*
+    if(tx_weird_iter != 1514)
+    {
+        uint_to_string(tx_weird_iter, (unsigned char *)uint_string_array);
+        draw_string(30, 30, uint_string_array, STR_COLOR);
+        uint_to_string(tx_weird[tx_weird_iter], (unsigned char *)uint_string_array);
+        draw_string(130, 30, uint_string_array, STR_COLOR);
+    }
+*/
+
+    asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
+
+    unsigned int temp_sr = 0;
+    unsigned int temp_sr2 = 0;
+    asm volatile (
+        "stc SR, %[out]\n\t"
+        "mov %[out], %[out2]\n\t"
+        // preserve S and T
+        "and #0x0f, %[out2]\n\t"
+        // clear IMASK
+        "shlr8 %[out]\n\t"
+        "shll8 %[out]\n\t"
+        // Put S and T back
+        "or %[out], %[out2]\n\t"
+        // Store SR for later
+        "stc SR, %[out]\n\t"
+        // Enable external interrupts
+        "ldc %[out2], SR\n"
+    : [out] "=&r" (temp_sr), [out2] "=z" (temp_sr2) // outputs
+    : // inputs
+    : // clobbers
+    );
+
+    // Enable specific interrupts
+    g2_write_16(NIC(RT_INTRMASK), RT_INT_RXFIFO_OVERFLOW | RT_INT_RXBUF_OVERFLOW | RT_INT_RX_ERR | RT_INT_RX_OK);
+
+    asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
+
+    // Now do it again...
+    tx_weird_iter = 0;
+    while(tx_weird_iter < 6)
+    {
+        tx_weird[tx_weird_iter] = 0xff; // broadcast mac
+        tx_weird_iter++;
+    }
+    // iter = 6
+    memcpy(&tx_weird[6], adapter_bba.mac, 6); // bba's mac
+    tx_weird_iter += 6; // iter = 12
+    tx_weird[12] = 0xea; // ethertype
+    tx_weird[13] = 0x5; // err, this makes ethertype 0xea05, since network data is BE... Although LE 0x5ea is 1514--GAPS security thing?
+    tx_weird_iter += 2; // iter = 14
+    // Now for the last 1500 of weird packet 2
+    while(tx_weird_iter < 1514)
+    {
+        tx_weird[tx_weird_iter] = 0x5a + (tx_weird_iter - 14); // weird packet 2 payload
+        tx_weird_iter++;
+    }
+    // iter = 1514
+
+    asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
+
+    // read back/check weird packet 2 payload (words)
+    tx_weird_iter = 14;
+    while(tx_weird_iter < 1514)
+    {
+        if( ((unsigned short*)tx_weird)[tx_weird_iter/2] == ( (unsigned char)(0x5a + (tx_weird_iter - 14)) | ( (unsigned short)((unsigned char)(0x5a + (tx_weird_iter - 13))) << 8) ) )
+        {
+            tx_weird_iter += 2;
+        }
+        else
+        {
+            break;
+        }
+    }
+/*
+    if(tx_weird_iter != 1514) {
+        uint_to_string(tx_weird_iter, (unsigned char *)uint_string_array);
+        draw_string(230, 30, uint_string_array, STR_COLOR);
+        uint_to_string(tx_weird[tx_weird_iter], (unsigned char *)uint_string_array);
+        draw_string(330, 30, uint_string_array, STR_COLOR);
+    }
+*/
+
+    asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
+
+    // Disable interrupts because we don't want them
+    g2_write_16(NIC(RT_INTRMASK), 0);
+    // Restore SR
+    asm volatile ("ldc %[in], SR\n"
+    : // outputs
+    : [in] "r" (temp_sr) // inputs
+    : "t" // clobbers
+    );
+
+    asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
+}
+
 static void rtl_reset(void) {
     /* Soft-reset the chip */
     g2_write_8(NIC(RT_CHIPCMD), RT_CMD_RESET);
@@ -320,149 +551,11 @@ static void rtl_init(void) {
 
     /* Disable all interrupts */
     g2_write_16(NIC(RT_INTRMASK), 0);
-/*
-        //
-        // Very strange initialization stuff. Maybe getting this crazy init sequence right doubles the RX transfer
-        // speed, like how getting the GAPS memory-mapping registers right doubled the TX transfer speed? No idea.
-        // NOTE: Maybe these weird packets need to be sent via loopback mode?
-        // All this doesn't appear to be totally necessary--at least, things seem to work well without it. Wonder what it's for.
-        //
 
-        unsigned char *tx_weird = (unsigned char *)(0xa1840000 + 0x6000);
-        unsigned int tx_weird_iter = 0;
+    //weird_extra_init();
 
-        while(tx_weird_iter < 6)
-        {
-            tx_weird[tx_weird_iter] = 0xff; // broadcast mac
-            tx_weird_iter++;
-        }
-        // iter = 6
-        memcpy(&tx_weird[6], adapter_bba.mac, 6); // bba's mac
-        tx_weird_iter += 6; // iter = 12
-        tx_weird[12] = 0xea; // ethertype
-        tx_weird[13] = 0x5; // err, this makes ethertype 0xea05, since network data is BE... Although LE 0x5ea is 1514--GAPS security thing?
-        tx_weird_iter += 2; // iter = 14
-        // Now for the last 1500 of weird packet 1
-        while(tx_weird_iter < 1514)
-        {
-            tx_weird[tx_weird_iter] = 0x55 + (tx_weird_iter - 14); // weird packet 1 payload
-            tx_weird_iter++;
-        }
-        // iter = 1514
-
-        asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
-
-        // read back/check weird packet 1 payload (bytes)
-        tx_weird_iter = 14;
-        while(tx_weird_iter < 1514)
-        {
-            if(tx_weird[tx_weird_iter] == (unsigned char)(0x55 + (tx_weird_iter - 14)) )
-            {
-                tx_weird_iter++;
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        if(tx_weird_iter != 1514)
-        {
-            uint_to_string(tx_weird_iter, (unsigned char *)uint_string_array);
-            draw_string(30, 30, uint_string_array, STR_COLOR);
-            uint_to_string(tx_weird[tx_weird_iter], (unsigned char *)uint_string_array);
-            draw_string(130, 30, uint_string_array, STR_COLOR);
-        }
-
-        asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
-
-        unsigned int temp_sr = 0;
-        unsigned int temp_sr2 = 0;
-        asm volatile (
-            "stc SR, %[out]\n\t"
-            "mov %[out], %[out2]\n\t"
-            // preserve S and T
-            "and #0x0f, %[out2]\n\t"
-            // clear IMASK
-            "shlr8 %[out]\n\t"
-            "shll8 %[out]\n\t"
-            // Put S and T back
-            "or %[out], %[out2]\n\t"
-            // Store SR for later
-            "stc SR, %[out]\n\t"
-            // Enable external interrupts
-            "ldc %[out2], SR\n"
-        : [out] "=&r" (temp_sr), [out2] "=z" (temp_sr2) // outputs
-        : // inputs
-        : // clobbers
-        );
-
-        // Enable specific interrupts
-        g2_write_16(NIC(RT_INTRMASK), RT_INT_RXFIFO_OVERFLOW | RT_INT_RXBUF_OVERFLOW | RT_INT_RX_ERR | RT_INT_RX_OK);
-
-        asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
-
-        // Now do it again...
-        tx_weird_iter = 0;
-        while(tx_weird_iter < 6)
-        {
-            tx_weird[tx_weird_iter] = 0xff; // broadcast mac
-            tx_weird_iter++;
-        }
-        // iter = 6
-        memcpy(&tx_weird[6], adapter_bba.mac, 6); // bba's mac
-        tx_weird_iter += 6; // iter = 12
-        tx_weird[12] = 0xea; // ethertype
-        tx_weird[13] = 0x5; // err, this makes ethertype 0xea05, since network data is BE... Although LE 0x5ea is 1514--GAPS security thing?
-        tx_weird_iter += 2; // iter = 14
-        // Now for the last 1500 of weird packet 2
-        while(tx_weird_iter < 1514)
-        {
-            tx_weird[tx_weird_iter] = 0x5a + (tx_weird_iter - 14); // weird packet 2 payload
-            tx_weird_iter++;
-        }
-        // iter = 1514
-
-        asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
-
-        // read back/check weird packet 2 payload (words)
-        tx_weird_iter = 14;
-        while(tx_weird_iter < 1514)
-        {
-            if( ((unsigned short*)tx_weird)[tx_weird_iter/2] == ( (unsigned char)(0x5a + (tx_weird_iter - 14)) | ( (unsigned short)((unsigned char)(0x5a + (tx_weird_iter - 13))) << 8) ) )
-            {
-                tx_weird_iter += 2;
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        if(tx_weird_iter != 1514)
-        {
-            uint_to_string(tx_weird_iter, (unsigned char *)uint_string_array);
-            draw_string(230, 30, uint_string_array, STR_COLOR);
-            uint_to_string(tx_weird[tx_weird_iter], (unsigned char *)uint_string_array);
-            draw_string(330, 30, uint_string_array, STR_COLOR);
-        }
-
-        asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
-
-        // Disable interrupts because we don't want them
-        g2_write_16(NIC(RT_INTRMASK), 0);
-        // Restore SR
-        asm volatile ("ldc %[in], SR\n"
-        : // outputs
-        : [in] "r" (temp_sr) // inputs
-        : "t" // clobbers
-        );
-
-        asm volatile ("nop\n" : : : "memory"); // Compiler barrier so that GCC doesn't get clever here
-*/
-
-// TODO tune twister seems like a useful thing
-// See https://github.com/torvalds/linux/blob/master/drivers/net/ethernet/realtek/8139too.c#L1481
+    // TODO tune twister seems like a useful thing
+    // See https://github.com/torvalds/linux/blob/master/drivers/net/ethernet/realtek/8139too.c#L1481
 
     /* Enable receive and transmit functions ... again*/
     g2_write_8(NIC(RT_CHIPCMD), RT_CMD_RX_ENABLE | RT_CMD_TX_ENABLE);
@@ -560,95 +653,11 @@ static int rtl_bb_tx(unsigned char *pkt, int len) {
 
     /* 8139 doesn't auto-pad */
     // This condition may look a little gnarly, but that's because it's meant for speed above all else.
+    /* All packets must be at least 60 bytes, pad them with null bytes if
+       they are not already of an appropriate size. */
     if(len < 60) {
-        // So pad it.
-        //
-        // We absolutely need to pad this, otherwise prior packets can leak into the
-        // padding. It's called "EtherLeak," and the RTL8139 is apparently a poster
-        // child chipset for the issues that come from lacking auto-pad.
-
-        unsigned int copyback_pkt_offset_len = 2 + len;
-        unsigned int copyback_pkt_len_align4 = copyback_pkt_offset_len & -4; // relative to copyback packet base
-        unsigned int copyback_pkt_extras = copyback_pkt_offset_len - copyback_pkt_len_align4;
-        unsigned int copyback_pkt_extras_end = (copyback_pkt_offset_len + 3) & -4; // This is either equal to or 4 bytes greater than copyback_pkt_len_align4
-
-        // Mix in trailing zeros if there are 1, 2, or 3 extra bytes
-        // Using 4-byte alignment for best performance.
-        if(copyback_pkt_extras) {
-            unsigned int last_data = 0x00000000;
-
-            // Need the 4-byte-aligned offset to store this padding-mixed data
-            unsigned int output_offset = copyback_pkt_len_align4;
-
-            last_data |= copyback_pkt_base[copyback_pkt_len_align4++]; // 1 extra byte
-
-            if(copyback_pkt_len_align4 != (unsigned int)copyback_pkt_offset_len) {
-                last_data |= (unsigned int)(copyback_pkt_base[copyback_pkt_len_align4++]) << 8; // 2 extra bytes
-            }
-
-            if(copyback_pkt_len_align4 != (unsigned int)copyback_pkt_offset_len) {
-                last_data |= (unsigned int)(copyback_pkt_base[copyback_pkt_len_align4]) << 16; // 3 extra bytes
-            }
-
-            // One 4-byte write instead of up to 3x 1-byte writes. For uncached setups, this makes odd-size
-            // small packets take the same total time to copy to the NIC as multiple-of-4-sized packets,
-            // meaning this is all running as fast as possible.
-            *(unsigned int *)(copyback_pkt_base + output_offset) = last_data;
-        }
-
-        // Pad the rest of the packet with zeros, if more trailing zeroes need to be written beyond the mixed bytes
-        // The only time this won't be true for small packets is for one with 17 payload bytes.
-        if(copyback_pkt_extras_end < 64) {
-            // 2 unmodified bytes will end up being written to the RTL's TX buffer (since we just want 60 bytes, which offsets
-            // to 62, and 62 then 4-byte-aligns to 64. Offset everything back 2 bytes to undo the internal ethernet alignment
-            // for transmit results in bytes 65-66 getting copied unzeroed), but that's OK here. The RTL8139C will clobber them
-            // with the second half of a 4-byte CRC because it's been configured to append a CRC, anyways--not to mention we set
-            // a length parameter for transmit, which makes those bytes doubly irrelevant.
-
-            unsigned int zero_remain = 64 - copyback_pkt_extras_end;
-            unsigned int zeroing_top = (unsigned int)copyback_pkt_base + copyback_pkt_extras_end + zero_remain; // add zero_remain for pre-dec
-            zero_remain /= 4; // will equal 1, 2, 3, 4, or 5
-            unsigned int zero_data = 0;
-
-            asm volatile (
-                "clrs\n" // Align for parallelism (CO) - SH4a use "stc SR, Rn" instead with a dummy Rn
-                "dt %[size]\n\t" // Decrement and test size here once to prevent extra jump (EX 1)
-            ".align 2\n"
-            "1:\n\t"
-                // *--nextd = val
-                "mov.l %[data], @-%[out]\n\t" // (LS 1/1)
-                "bf.s 1b\n\t" // (BR 1/2)
-                " dt %[size]\n\t" // (--size) ? 0 -> T : 1 -> T (EX 1)
-                : [out] "+r" (zeroing_top), [size] "+&r" (zero_remain) // outputs
-                : [data] "r" (zero_data) // inputs
-                : "t", "memory" // clobbers
-            );
-//
-// GCC does a mediocre job of optimizing memset on SH4 for some reason.
-// So, for reference, the above assembly just does this (except each loop takes only 2 cycles per iteration):
-//
-//          unsigned int zero_remain = (64 - copyback_pkt_extras_end) / 4;
-//          unsigned int * zeroing_base = (unsigned int*)(copyback_pkt_base + copyback_pkt_extras_end);
-//
-//          while(zero_remain--)
-//          {
-//              *zeroing_base++ = 0;
-//          }
-//
-// See DreamHAL for a complete set of similarly highly-optimized SH4 functions
-//
-        }
-
-        // Synchronize zeroed out data with tx buffer
-        // Note that 60 bytes would be offset by 62, still within 2nd cache block
-        // But we write to 64 bytes... which is still within the 2nd cache block ;).
-        CacheBlockWriteBack((unsigned char *)(copyback_pkt_base + 32), 1);
-
-        len = 60; // Finally, set length for transmit
-
-        // NOTE: The reason the minimum length is hardcoded to 60 is because the minimum
-        // frame size allowed is 46 bytes + 14 byte ethernet header. Well, it's actually 64,
-        // but the NIC is configured to auto-append a 4-byte CRC.
+        g2_memzero(copyback_pkt_base, len);
+        len = 60;
     }
 
     // Copy packet over to RTL via GAPS while also accounting for dcload-ip's packet alignment offset
