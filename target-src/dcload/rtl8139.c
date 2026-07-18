@@ -694,17 +694,12 @@ static void pktcpy(unsigned char *dest, unsigned char *src, unsigned int n) {
     CacheBlockWriteBack(dest, (2 + n + 31)/32);
 }
 
-static int rtl_bb_rx(void) {
-    int processed;
-    unsigned int rx_status;
-    unsigned int rx_size, pkt_size, ring_offset;
-    unsigned char *pkt;
-
-    processed = 0;
+static void bba_rx(void) {
+    uint32_t rx_status;
+    size_t pkt_size, ring_offset;
 
     /* While we have frames left to process... */
     while(!(g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RX_BUF_EMPTY)) {
-
         /* Get frame size and status */
         // Don't need the % there for nowrap since it happens later.
         ring_offset = rtl.cur_rx;
@@ -712,22 +707,22 @@ static int rtl_bb_rx(void) {
         // Don't want to accidentally cache an unfinished packet.
         // This also means we don't have to worry about invalidating a block holding the status byte. Nice!
         rx_status = g2_read_32(rtl_mem + ring_offset);
-        rx_size = (rx_status >> 16) & 0xffffU;
+        unsigned int rx_size = (rx_status >> 16) & 0xffff;
+        pkt_size = rx_size - 4;
 
         /* apparently this means the rtl8139 is still copying */
-        if(rx_size == 0xfff0U) {
+        if(rx_size == 0xfff0) {
             rtl_is_copying = 1; // Really don't want to run a DHCP renewal while data is in flight...
             break;
         }
         rtl_is_copying = 0;
 
-        pkt_size = rx_size - 4;
 
         // Full loop timing
         FULL_TRIP_TIMING_START
 
         if((rx_status & 1) && (pkt_size <= RX_PKT_BUF_SIZE)) {
-            pkt = (unsigned char *)(GAPS_RX_IO_AREA + 0x0000 + ring_offset + 4); // + 4 to skip the status byte (DMA)
+            unsigned char *pkt = (unsigned char *)(GAPS_RX_IO_AREA + 0x0000 + ring_offset + 4); // + 4 to skip the status byte (DMA)
 
             // Rx time
             RX_LOOP_TIMING_START
@@ -782,12 +777,10 @@ static int rtl_bb_rx(void) {
         if(intr & RT_INT_RX_ACK)
             g2_write_16(NIC(RT_INTRSTATUS), RT_INT_RX_ACK);
 
-        processed++;
 
         FULL_TRIP_TIMING_PRINT
     }
 
-    return processed;
 }
 
 static void rtl_bb_loop(int is_main_loop) {
@@ -820,8 +813,7 @@ static void rtl_bb_loop(int is_main_loop) {
 
         /* Did we receive some data? */
         if(intr & RT_INT_RX_ACK) {
-            //i = rtl_bb_rx();
-            rtl_bb_rx();
+            bba_rx();
         }
 
         /* link change */
