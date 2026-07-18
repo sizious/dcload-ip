@@ -259,13 +259,4 @@
 #define REGC(a) (volatile unsigned char *)(a)
 #define vuc volatile unsigned char
 
-#define GAPSPCI_ID "GAPSPCI_BRIDGE_2"
-
-/* RTL8139C Config/Status info */
-typedef struct {
-	unsigned short cur_rx;                /* Current Rx read ptr */
-	unsigned short cur_tx;                /* Current available Tx slot */
-	unsigned char  mac[6];                /* Mac address */
-} rtl_status_t;
-
 #endif

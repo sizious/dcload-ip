@@ -29,7 +29,6 @@ static char uint_string_array[11] = {0};
 #endif
 // end TEMP
 
-static rtl_status_t rtl = {0};
 static volatile unsigned char rtl_link_up = 0;
 static volatile unsigned char rtl_is_copying = 0;
 
@@ -75,7 +74,7 @@ static void rtl_init(void);
 static int gaps_detect(void) {
     // This pointer's data is always aligned to 4 bytes--just look at the register address!
     const char *str = (char *)REGC(0xa1001400);
-    if(!memcmp_32bit_eq(str, GAPSPCI_ID, 16/4)) {
+    if(!memcmp_32bit_eq(str, "GAPSPCI_BRIDGE_2", 16/4)) {
         global_bg_color = BBA_BG_COLOR;
         installed_adapter = BBA_MODEL;
 
@@ -124,12 +123,21 @@ static int gaps_init(void) {
 
     // Now configure the RTL8139's PCI configuration
 
-    // VEN:DEV is 11db:1234 (vendor code is "Sega Enterprises, LTD")
-    // The GAPS bridge is really just an MMU with a memory buffer that maps the RTL8139C to the Dreamcast's memory space,
-    // so these are actually the PCI configuration registers for the RTL8139, not GAPS (those are just the 0x1400 regs).
-    // It has a custom ven:dev ID, but the class ID in 0x1608 indicates a network controller (byte 0x160b = 0x02 = network controller, 0x160a = 0x00 = Ethernet controller)
-    // See PCI Local Bus Specification 2.2 (2.3 has all the 2.2 stuff in it and the RTL8139C uses 2.2)
-    // This is also documented in the RTL8139C's datasheet, under "PCI Configuration Space Registers"
+    /* VEN:DEV is 11db:1234 (vendor code is "Sega Enterprises, LTD")
+       The GAPS bridge is really just an MMU with a memory buffer that maps
+       the RTL8139C to the Dreamcast's memory space, so these are actually
+       the PCI configuration registers for the RTL8139, not GAPS (those are
+       just the 0x1400 regs).
+
+       It has a custom ven:dev ID, but the class ID in 0x1608 indicates a
+       network controller (byte 0x160b = 0x02 = network controller,
+       0x160a = 0x00 = Ethernet controller)
+
+       See PCI Local Bus Specification 2.2 (2.3 has all the 2.2 stuff in
+       it and the RTL8139C uses 2.2). This is also documented in the
+       RTL8139C's datasheet, under "PCI Configuration Space Registers"
+    */
+
     g2_write_16(GAPS_BASE + 0x1606, 0xf900);     /* PCI Status Register */
     g2_write_32(GAPS_BASE + 0x1630, 0x00000000); /* PCI BMAR */
     g2_write_8(GAPS_BASE + 0x163c, 0x00);        /* Interrupt Line */
@@ -177,11 +185,20 @@ static int gaps_init(void) {
     return -3;
 }
 
+/****************************************************************************/
+/* RTL8193C stuff */
+
+/* RTL8139C Config/Status info */
+struct {
+	unsigned short cur_rx;                /* Current Rx read ptr */
+	unsigned short cur_tx;                /* Current available Tx slot */
+	unsigned char  mac[6];                /* Mac address */
+} rtl = {0};
 
 /* 8, 16, and 32 bit access to the PCI I/O space (configured by GAPS) */
 #define NIC(ADDR) (GAPS_BASE + 0x1700 + (ADDR))
 
-/* 8, 16, and 32 bit access to the PCI MEMMAP space (configured by GAPS) */
+/* 8 and 32 bit access to the PCI MEMMAP space (configured by GAPS) */
 static uint32_t const rtl_mem = MEM_AREA_P2_BASE + RTL_MEM;
 
 #define GAPS_RX_IO_AREA (RTL_MEM | MEM_AREA_P1_BASE)
