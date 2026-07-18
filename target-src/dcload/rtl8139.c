@@ -614,6 +614,19 @@ static void rtl_init(void) {
     g2_write_32(NIC(RT_RXCONFIG), g2_read_32(NIC(RT_RXCONFIG)) | RT_RXC_APM | RT_RXC_AB);
 }
 
+static void rx_reset(void) {
+    rtl.cur_rx = g2_read_16(NIC(RT_RXBUFHEAD));
+    g2_write_16(NIC(RT_RXBUFTAIL), rtl.cur_rx - 16);
+
+    rtl.cur_rx = 0;
+    g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE);
+
+    while(!(g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RX_ENABLE))
+        g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE | RT_CMD_RX_ENABLE);
+
+    g2_write_32(NIC(RT_RXCONFIG), RX_CONFIG_DEFAULT | RT_RXC_APM | RT_RXC_AB);
+    g2_write_16(NIC(RT_INTRSTATUS), 0xffff);
+}
 
 static void rtl_bb_start(void) {
     g2_write_32(NIC(RT_RXCONFIG), g2_read_32(NIC(RT_RXCONFIG)) | (RT_RXC_APM | RT_RXC_AB));
@@ -786,10 +799,8 @@ static void bba_rx(void) {
         if(intr & RT_INT_RX_ACK)
             g2_write_16(NIC(RT_INTRSTATUS), RT_INT_RX_ACK);
 
-
         FULL_TRIP_TIMING_PRINT
     }
-
 }
 
 static void rtl_bb_loop(int is_main_loop) {
@@ -866,26 +877,8 @@ static void rtl_bb_loop(int is_main_loop) {
 
         /* Rx Buffer overflow */
         if(intr & RT_INT_RXBUF_OVERFLOW) {
-/*
-            // Update CAPR
-            rtl.cur_rx = g2_read_16(NIC(RT_RXBUFHEAD));
-            g2_write_16(NIC(RT_RXBUFTAIL), rtl.cur_rx - 16);
-            rtl.cur_rx = 0;
-
-            // Disable receive
-            g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE);
-
-            // Wait for it
-            while( !(g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RX_ENABLE))
-                g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE | RT_CMD_RX_ENABLE); // Weirdly, keep spamming re-enable receive
-
-            // Re-set RXCONFIG
-            g2_write_32(NIC(RT_RXCONFIG), 0x0000f60a); // This should be whatever is set in init plus enabling packet reception (| 0x...a)
-
-            // clear interrupts
-            g2_write_16(NIC(RT_INTRSTATUS), 0xffff);
-    */
             // NetBSD, FreeBSD, and OpenBSD all just do a full re-init if this happens.
+            //rx_reset();
             rtl_init();
         }
 
