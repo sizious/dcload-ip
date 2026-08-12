@@ -178,7 +178,8 @@ int dc_write(unsigned char * buffer)
 
     data = malloc(ntohl(command->value2));
 
-    recv_data(data, ntohl(command->value1), ntohl(command->value2), 1);
+    if(recv_data(data, ntohl(command->value1), ntohl(command->value2), 1) < 0)
+        return -1;
 
     // Check for exception messages. This compare is pretty quick, so it
     // shouldn't slow anything down unless someone is really pelting the console
