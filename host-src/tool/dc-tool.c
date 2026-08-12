@@ -518,7 +518,12 @@ int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int 
       if (retval > 0)
       {
         start = time_in_usec();
-        if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
+        /* Check if we were interrupted by an exit */
+        if (!(memcmp(buffer, CMD_EXIT, 4))) {
+            printf("Write interrupted by exit. Exiting immediately\n");
+            return -1;
+        }
+        else if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
         {
           if ( ((ntohl(((command_t *)buffer)->address) - dcaddr)/1024) >= ((total + 1024)/1024) )
           {
@@ -557,7 +562,12 @@ int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int 
         {
           start = time_in_usec();
 
-          if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
+          /* Check if we were interrupted by an exit */
+          if (!(memcmp(buffer, CMD_EXIT, 4))) {
+            printf("Write interrupted by exit. Exiting immediately\n");
+            return -1;
+          }
+          else if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
           {
             map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1024 ] = 1;
             /* printf("recv_data: got chunk for %p, %d bytes\n",
@@ -611,7 +621,12 @@ int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int 
       if (retval > 0)
       {
         start = time_in_usec();
-        if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
+        /* Check if we were interrupted by an exit */
+        if (!(memcmp(buffer, CMD_EXIT, 4))) {
+            printf("Write interrupted by exit. Exiting immediately\n");
+            return -1;
+        }
+        else if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
         {
           if ( ((ntohl(((command_t *)buffer)->address) - dcaddr)/1440) >= ((total + 1440)/1440) )
           {
@@ -649,7 +664,12 @@ int recv_data(void *data, unsigned int dcaddr, unsigned int total, unsigned int 
       {
         start = time_in_usec();
 
-        if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
+        /* Check if we were interrupted by an exit */
+        if (!(memcmp(buffer, CMD_EXIT, 4))) {
+            printf("Write interrupted by exit. Exiting immediately\n");
+            return -1;
+        }
+        else if (memcmp(((command_t *)buffer)->id, CMD_DONEBIN, 4))
         {
           map[ (ntohl(((command_t *)buffer)->address) - dcaddr)/1440 ] = 1;
           /* printf("recv_data: got chunk for %p, %d bytes\n",
@@ -1167,17 +1187,19 @@ int download(char *filename, unsigned int address,
 
     data = malloc(size);
 
-    recv_data(data, address, size, 0);
+    if(!recv_data(data, address, size, 0)) {
+        printf("Received %d bytes\n", size);
 
-    printf("Received %d bytes\n", size);
+        stime = starttime.tv_sec + starttime.tv_usec / 1000000.0;
+        etime = endtime.tv_sec + endtime.tv_usec / 1000000.0;
 
-    stime = starttime.tv_sec + starttime.tv_usec / 1000000.0;
-    etime = endtime.tv_sec + endtime.tv_usec / 1000000.0;
+        printf("Transferred at %f bytes / sec\n", (double) size / (etime - stime));
+        fflush(stdout);
 
-    printf("Transferred at %f bytes / sec\n", (double) size / (etime - stime));
-    fflush(stdout);
-
-    write(outputfd, data, size);
+        write(outputfd, data, size);
+    }
+    else
+        printf("Download failed\n");
 
     close(outputfd);
     free(data);
@@ -1242,7 +1264,7 @@ int do_console(char *path, char *isofile)
 	    CatchError(dc_fstat(buffer));
 	if (!(memcmp(buffer, CMD_WRITE_OLD, 4)))
 	    CatchError(dc_write(buffer));
-  if (!(memcmp(buffer, CMD_WRITE, 4)))
+    if (!(memcmp(buffer, CMD_WRITE, 4)))
 	    CatchError(dc_write(buffer));
 	if (!(memcmp(buffer, CMD_READ, 4)))
 	    CatchError(dc_read(buffer));
