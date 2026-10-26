@@ -579,6 +579,7 @@ int dc_gdbpacket(unsigned char * buffer)
 
     if (socket_fd == 0) {
 	printf( "waiting for gdb client connection...\n" );
+	fflush( stdout ); /* stdout may be fully buffered (e.g. pipe in an IDE) */
 	socket_fd = accept( gdb_server_socket, NULL, NULL );
 #ifdef __MINGW32__
 	if ( socket_fd != INVALID_SOCKET)
